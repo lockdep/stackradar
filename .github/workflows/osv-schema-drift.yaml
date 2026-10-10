@@ -1,0 +1,71 @@
+name: OSV Schema Drift
+
+# The OSV schema is vendored into the server image because osv.validator.ts
+# compiles it at process start — the sync worker must not depend on GitHub
+# being reachable. The cost of vendoring is drift, and drift here is silent:
+# a stale schema does not fail, it files conforming advisories as validation
+# warnings. This job is what makes that loud.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC. Upstream changes land as occasional additive PRs,
+    # so weekly is well inside the window where it still matters.
+    - cron: "0 6 * * 1"
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/src/schemas/osv-specifications/**"
+      - "server/scripts/sync-osv-schema.mjs"
+      - ".github/workflows/osv-schema-drift.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Check vendored OSV schema against upstream
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No install step: the script uses only node: builtins and fetch, so it
+      # runs against a bare checkout.
+      - name: Verify the vendored copy has not been hand-edited
+        run: node server/scripts/sync-osv-schema.mjs --verify
+
+      - name: Check for upstream drift
+        id: drift
+        env:
+          # Lifts the anonymous API rate limit; the script works without it.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node server/scripts/sync-osv-schema.mjs > drift.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat drift.txt
+
+      - name: Open or update the drift issue
+        # Only on the scheduled/manual run: on a pull request the failing step
+        # is the signal, and an issue would be noise.
+        if: steps.drift.outputs.exit_code != '0' && github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: "OSV schema drift: vendored copy is behind ossf/osv-schema"
+        run: |
+          BODY=$(printf '`pnpm osv-schema:sync` (in `server/`) vendors the upstream copy and updates the lock.\n\nNew upstream constraints can *raise* the validation-warning count — those are warnings, records are still ingested. See `server/src/osv-sync/README.md`.\n\n```\n%s\n```\n' "$(cat drift.txt)")
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+      - name: Fail if drifted
+        if: steps.drift.outputs.exit_code != '0'
+        run: exit 1

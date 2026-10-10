@@ -1,0 +1,18 @@
+# Secrets and VCS must never enter the build context
+.git
+.env
+.env.*
+
+# Installed in the deps stage; a host copy would clobber it
+node_modules
+.pnpm-store
+
+# Build output is produced inside the image
+dist
+coverage
+*.tsbuildinfo
+
+# Not needed to build
+Dockerfile
+.dockerignore
+docs

@@ -1,0 +1,100 @@
+{
+  "$comment": "Shared by server/tests/unit/db/finding-delta.test.ts and charts/tests/unit/score/delta.test.ts; scripts/check-cross-app-constants.mjs holds the two copies byte-equal, the server's is the source of truth. A finding is { key, vulnId, risk, kev, severity }; `expect` lists the vulnIds of each set in the order diffFindings returns them (risk DESC, ties in input order) and the nine numbers summariseDelta produces.",
+  "cases": [
+    {
+      "name": "two empty sets",
+      "from": [],
+      "to": [],
+      "expect": {
+        "resolved": [],
+        "introduced": [],
+        "unchanged": [],
+        "summary": { "resolved": 0, "introduced": 0, "unchanged": 0, "resolvedKev": 0, "introducedKev": 0, "resolvedHigh": 0, "riskBefore": 0, "riskAfter": 0, "riskChange": 0 }
+      }
+    },
+    {
+      "name": "identical sets are all unchanged, worst first",
+      "from": [
+        { "key": "apk|zlib|CVE-2024-2", "vulnId": "CVE-2024-2", "risk": 3.2, "kev": false, "severity": "medium" },
+        { "key": "apk|openssl|CVE-2024-1", "vulnId": "CVE-2024-1", "risk": 23.4, "kev": false, "severity": "high" }
+      ],
+      "to": [
+        { "key": "apk|openssl|CVE-2024-1", "vulnId": "CVE-2024-1", "risk": 23.4, "kev": false, "severity": "high" },
+        { "key": "apk|zlib|CVE-2024-2", "vulnId": "CVE-2024-2", "risk": 3.2, "kev": false, "severity": "medium" }
+      ],
+      "expect": {
+        "resolved": [],
+        "introduced": [],
+        "unchanged": ["CVE-2024-1", "CVE-2024-2"],
+        "summary": { "resolved": 0, "introduced": 0, "unchanged": 2, "resolvedKev": 0, "introducedKev": 0, "resolvedHigh": 0, "riskBefore": 27, "riskAfter": 27, "riskChange": 0 }
+      }
+    },
+    {
+      "name": "an upgrade resolves some, introduces others, keeps one; KEV and high-or-worse counted; severity case-insensitive",
+      "from": [
+        { "key": "deb|openssl|CVE-2023-1", "vulnId": "CVE-2023-1", "risk": 46.0, "kev": true, "severity": "critical" },
+        { "key": "deb|curl|CVE-2023-2", "vulnId": "CVE-2023-2", "risk": 12.5, "kev": false, "severity": "HIGH" },
+        { "key": "deb|zlib|CVE-2023-3", "vulnId": "CVE-2023-3", "risk": 2.0, "kev": false, "severity": "low" },
+        { "key": "deb|bash|CVE-2023-4", "vulnId": "CVE-2023-4", "risk": 8.0, "kev": false, "severity": "medium" }
+      ],
+      "to": [
+        { "key": "deb|zlib|CVE-2023-3", "vulnId": "CVE-2023-3", "risk": 2.0, "kev": false, "severity": "low" },
+        { "key": "deb|libc6|CVE-2024-10", "vulnId": "CVE-2024-10", "risk": 1.5, "kev": false, "severity": "unknown" },
+        { "key": "deb|curl|CVE-2024-9", "vulnId": "CVE-2024-9", "risk": 30.0, "kev": true, "severity": "high" }
+      ],
+      "expect": {
+        "resolved": ["CVE-2023-1", "CVE-2023-2", "CVE-2023-4"],
+        "introduced": ["CVE-2024-9", "CVE-2024-10"],
+        "unchanged": ["CVE-2023-3"],
+        "summary": { "resolved": 3, "introduced": 2, "unchanged": 1, "resolvedKev": 1, "introducedKev": 1, "resolvedHigh": 2, "riskBefore": 69, "riskAfter": 34, "riskChange": -35 }
+      }
+    },
+    {
+      "name": "the same advisory reached as a GHSA on one side and its CVE on the other is one finding (the identity is in the key)",
+      "from": [{ "key": "npm|lodash|CVE-2020-8203", "vulnId": "GHSA-p6mc-m468-83gw", "risk": 5.5, "kev": false, "severity": "high" }],
+      "to": [{ "key": "npm|lodash|CVE-2020-8203", "vulnId": "CVE-2020-8203", "risk": 5.5, "kev": false, "severity": "high" }],
+      "expect": {
+        "resolved": [],
+        "introduced": [],
+        "unchanged": ["GHSA-p6mc-m468-83gw"],
+        "summary": { "resolved": 0, "introduced": 0, "unchanged": 1, "resolvedKev": 0, "introducedKev": 0, "resolvedHigh": 0, "riskBefore": 6, "riskAfter": 6, "riskChange": 0 }
+      }
+    },
+    {
+      "name": "the same package name in two ecosystems is two findings",
+      "from": [{ "key": "npm|nginx|CVE-2021-1", "vulnId": "CVE-2021-1", "risk": 10.0, "kev": false, "severity": "medium" }],
+      "to": [{ "key": "apk|nginx|CVE-2021-1", "vulnId": "CVE-2021-1", "risk": 10.0, "kev": false, "severity": "medium" }],
+      "expect": {
+        "resolved": ["CVE-2021-1"],
+        "introduced": ["CVE-2021-1"],
+        "unchanged": [],
+        "summary": { "resolved": 1, "introduced": 1, "unchanged": 0, "resolvedKev": 0, "introducedKev": 0, "resolvedHigh": 0, "riskBefore": 10, "riskAfter": 10, "riskChange": 0 }
+      }
+    },
+    {
+      "name": "the aggregate is rounded to a whole number; equal risks keep input order",
+      "from": [
+        { "key": "pypi|a|CVE-1", "vulnId": "CVE-1", "risk": 0.4, "kev": false, "severity": "low" },
+        { "key": "pypi|b|CVE-2", "vulnId": "CVE-2", "risk": 0.4, "kev": false, "severity": "low" }
+      ],
+      "to": [{ "key": "pypi|c|CVE-3", "vulnId": "CVE-3", "risk": 0.2, "kev": false, "severity": "low" }],
+      "expect": {
+        "resolved": ["CVE-1", "CVE-2"],
+        "introduced": ["CVE-3"],
+        "unchanged": [],
+        "summary": { "resolved": 2, "introduced": 1, "unchanged": 0, "resolvedKev": 0, "introducedKev": 0, "resolvedHigh": 0, "riskBefore": 1, "riskAfter": 0, "riskChange": -1 }
+      }
+    },
+    {
+      "name": "a finding with no severity is resolved but not counted as high",
+      "from": [{ "key": "golang|x|CVE-9", "vulnId": "CVE-9", "risk": 20.0, "kev": false, "severity": null }],
+      "to": [],
+      "expect": {
+        "resolved": ["CVE-9"],
+        "introduced": [],
+        "unchanged": [],
+        "summary": { "resolved": 1, "introduced": 0, "unchanged": 0, "resolvedKev": 0, "introducedKev": 0, "resolvedHigh": 0, "riskBefore": 20, "riskAfter": 0, "riskChange": -20 }
+      }
+    }
+  ]
+}

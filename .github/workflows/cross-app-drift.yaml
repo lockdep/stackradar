@@ -1,0 +1,46 @@
+name: Cross-App Constant Drift
+
+# The apps are independent pnpm projects with no shared package, so a few
+# constants exist as deliberate copies: the client's RISK_BANDS / RiskRollup
+# mirror server/src/db/risk-model.ts and risk.ts, the client's PLAN_LIMITS
+# mirrors server/src/config/plans.ts, and the two migrators share one
+# advisory-lock key. Their headers say "must match the server" — this job is
+# what makes that a gate instead of a convention. The script is
+# dependency-free, so no install step is needed.
+#
+# The chart index (lockdep/stackradar-charts-index) and the landing site
+# (lockdep/stackradar-landing) carry their own copies of server files; their
+# CIs check out this repo and run the same kind of check from their side.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/src/db/risk-model.ts"
+      - "server/src/db/risk.ts"
+      - "server/src/config/plans.ts"
+      - "client/src/lib/risk.ts"
+      - "client/src/components/organization-settings/constants.ts"
+      - "server/src/db/migrate.ts"
+      - "client/scripts/migrate.mjs"
+      - "client/drizzle.config.ts"
+      - "scripts/check-cross-app-constants.mjs"
+      - ".github/workflows/cross-app-drift.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: "check-cross-app-constants"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check constant copies against the server
+        run: node scripts/check-cross-app-constants.mjs

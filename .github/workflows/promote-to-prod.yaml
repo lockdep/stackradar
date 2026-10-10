@@ -1,0 +1,223 @@
+# Production promotion.
+#
+# Nothing writes the production overlay automatically - build-push-app.yaml only
+# ever updates the development overlay. This workflow is the promotion gate: it
+# copies what development is currently pinned to - tag *and* digest - from
+# lockdep/stackradar-gitops-development (dev cluster) into apps/stack-radar/overlays/production
+# in lockdep/stackradar-gitops (prod cluster) and opens a PR there. Merging the
+# PR is the deploy; the prod cluster's ArgoCD does the rest (once
+# syncPolicy.automated.enabled is flipped on - see that repo's README).
+#
+# It promotes an artifact, not a tag. Development is pinned by digest, so what
+# reaches production is byte-identical to what has been running in development:
+# no rebuild in between, and no window in which a tag could be repointed under
+# it. That is not a theoretical concern here - on 2026-08-12 a reissued tag put
+# four-month-old code on a node in development, because a cached tag is never
+# re-resolved and nothing about a tag says which bits it names.
+#
+# It also drops the assumption that one tag names both images. build-push-app
+# builds client and server independently, so they routinely sit on different
+# commits; each is promoted at whatever digest it is actually on. A single
+# build_tag input could not express that, and failed its own existence check
+# whenever only one of the two had been rebuilt.
+#
+# Required secrets:
+#   GITOPS_DEVELOPMENT_TOKEN   - PAT with contents:read on
+#                                lockdep/stackradar-gitops-development (dev pins are read,
+#                                never written)
+#   GITOPS_PROD_TOKEN          - PAT with contents:write AND pull-requests:write
+#                                on lockdep/stackradar-gitops
+#   DIGITALOCEAN_ACCESS_TOKEN  - read access to the container registry, used to
+#                                verify the digests exist before opening the PR
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: registry.digitalocean.com/stack-radar
+  CLIENT_IMAGE: stack-radar-client
+  SERVER_IMAGE: stack-radar-server
+  YQ_VERSION: v4.53.3
+  KUSTOMIZE_VERSION: v5.8.1
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Checkout dev gitops repository (read-only, source of pins)
+        uses: actions/checkout@v6
+        with:
+          repository: lockdep/stackradar-gitops-development
+          token: ${{ secrets.GITOPS_DEVELOPMENT_TOKEN }}
+          path: stackradar-gitops-dev
+
+      - name: Checkout prod gitops repository (promotion target)
+        uses: actions/checkout@v6
+        with:
+          repository: lockdep/stackradar-gitops
+          token: ${{ secrets.GITOPS_PROD_TOKEN }}
+          path: stackradar-gitops-prod
+
+      - name: Install yq and kustomize
+        run: |
+          sudo curl -sSfL -o /usr/local/bin/yq \
+            "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
+          sudo chmod +x /usr/local/bin/yq
+          curl -sSfL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin kustomize
+          yq --version
+          kustomize version
+
+      - name: Read what development is pinned to
+        id: dev
+        working-directory: stackradar-gitops-dev/apps/stack-radar/overlays/development
+        run: |
+          set -euo pipefail
+
+          # Each field is assigned on its own line rather than interpolated
+          # straight into the $GITHUB_OUTPUT heredoc: a command substitution
+          # that fails inside an `echo` is swallowed, and a silently empty
+          # digest is the one thing the rest of this workflow must never see.
+          read_field() {
+            local name="$1" field="$2" got
+            got="$(yq "(.images[] | select(.name == \"${name}\")).${field}" kustomization.yaml)"
+            if [[ -z "$got" || "$got" == "null" ]]; then
+              echo "::error::development kustomization has no '${field}' for '${name}' - has build-push-app run since digest pinning was introduced?" >&2
+              return 1
+            fi
+            printf '%s' "$got"
+          }
+
+          CLIENT_TAG="$(read_field "stack-radar/client" newTag)"
+          CLIENT_DIGEST="$(read_field "stack-radar/client" digest)"
+          SERVER_TAG="$(read_field "stack-radar/server" newTag)"
+          SERVER_DIGEST="$(read_field "stack-radar/server" digest)"
+
+          {
+            echo "client_tag=${CLIENT_TAG}"
+            echo "client_digest=${CLIENT_DIGEST}"
+            echo "server_tag=${SERVER_TAG}"
+            echo "server_digest=${SERVER_DIGEST}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "client: ${CLIENT_TAG}@${CLIENT_DIGEST}"
+          echo "server: ${SERVER_TAG}@${SERVER_DIGEST}"
+
+      # The failure this guards against: production pinned to something the
+      # registry does not have, which ArgoCD reports as Healthy right up until
+      # the pods hit ImagePullBackOff. Not hypothetical - the production overlay
+      # has been pinned to a `v1.0.0` that was never pushed for its whole life.
+      - name: Verify both digests exist in the registry
+        run: |
+          set -euo pipefail
+          missing=0
+
+          check() {
+            local image="$1" digest="$2" manifests
+            # Captured before matching so that a doctl failure fails the step,
+            # instead of being read as "that digest is absent".
+            #
+            # JSON, not --format: doctl 1.167 renamed the table column to
+            # "Manifest Digest", and an unknown --format column silently falls
+            # back to printing every column - full rows that can never
+            # line-match a bare digest. The JSON field name is stable.
+            manifests="$(doctl registry repository list-manifests "$image" --output json | jq -r '.[].digest')"
+            if grep -qxF "$digest" <<<"$manifests"; then
+              echo "ok: ${image}@${digest}"
+            else
+              echo "MISSING: ${image}@${digest}"
+              missing=1
+            fi
+          }
+
+          check "${CLIENT_IMAGE}" "${{ steps.dev.outputs.client_digest }}"
+          check "${SERVER_IMAGE}" "${{ steps.dev.outputs.server_digest }}"
+
+          exit "$missing"
+
+      - name: Bump the production overlay
+        working-directory: stackradar-gitops-prod/apps/stack-radar/overlays/production
+        run: |
+          set -euo pipefail
+
+          # yq rather than `kustomize edit set image`: the latter reformats the
+          # whole kustomization and drops the comment block documenting which
+          # secrets production needs.
+          set_image() {
+            local name="$1" tag="$2" digest="$3" file=kustomization.yaml
+            yq -i "(.images[] | select(.name == \"${name}\")) |= (.newTag = \"${tag}\" | .digest = \"${digest}\")" "$file"
+
+            # yq is a no-op when the selector matches nothing - verify the write
+            # landed rather than opening a PR that changes nothing.
+            local got_tag got_digest
+            got_tag="$(yq "(.images[] | select(.name == \"${name}\")).newTag" "$file")"
+            got_digest="$(yq "(.images[] | select(.name == \"${name}\")).digest" "$file")"
+            if [[ "$got_tag" != "$tag" || "$got_digest" != "$digest" ]]; then
+              echo "::error::no images[] entry named '${name}' in ${file} (read back tag '${got_tag}', digest '${got_digest}')"
+              exit 1
+            fi
+            echo "Set ${name} to ${tag}@${digest}"
+          }
+
+          set_image "stack-radar/client" "${{ steps.dev.outputs.client_tag }}" "${{ steps.dev.outputs.client_digest }}"
+          set_image "stack-radar/server" "${{ steps.dev.outputs.server_tag }}" "${{ steps.dev.outputs.server_digest }}"
+
+      - name: Render the overlay to prove it still builds
+        working-directory: stackradar-gitops-prod
+        run: kustomize build apps/stack-radar/overlays/production > /dev/null
+
+      - name: Open promotion PR
+        working-directory: stackradar-gitops-prod
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PROD_TOKEN }}
+          CLIENT_TAG: ${{ steps.dev.outputs.client_tag }}
+          CLIENT_DIGEST: ${{ steps.dev.outputs.client_digest }}
+          SERVER_TAG: ${{ steps.dev.outputs.server_tag }}
+          SERVER_DIGEST: ${{ steps.dev.outputs.server_digest }}
+        run: |
+          set -euo pipefail
+          BRANCH="promote/${{ github.run_id }}"
+
+          if git diff --quiet; then
+            echo "Production already matches development (client ${CLIENT_TAG}, server ${SERVER_TAG}); nothing to promote."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add apps/stack-radar/overlays/production/kustomization.yaml
+          git commit -m "promote client ${CLIENT_TAG}, server ${SERVER_TAG} to production"
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --repo lockdep/stackradar-gitops \
+            --base main \
+            --head "$BRANCH" \
+            --title "Promote client ${CLIENT_TAG}, server ${SERVER_TAG} to production" \
+            --body "$(cat <<EOF
+          Promotes the images development is currently running to the production overlay.
+
+          | image | tag | digest |
+          |---|---|---|
+          | \`${CLIENT_IMAGE}\` | \`${CLIENT_TAG}\` | \`${CLIENT_DIGEST}\` |
+          | \`${SERVER_IMAGE}\` | \`${SERVER_TAG}\` | \`${SERVER_DIGEST}\` |
+
+          Both digests were verified present in \`${REGISTRY}\` before this PR was opened.
+
+          Pinned by digest, so production runs the exact images development has been
+          running - not a rebuild of the same commit, and not whatever a tag happens
+          to point at by the time ArgoCD syncs.
+
+          Merging this deploys to production once \`stack-radar-prod\` has automated sync enabled - until then, sync it manually in the prod cluster's ArgoCD after merging.
+
+          Triggered from [${{ github.workflow }} #${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}).
+          EOF
+          )"

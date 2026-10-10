@@ -1,0 +1,42 @@
+# gitleaks configuration for the public tree (open-source plan steps 09/12).
+#
+# `gitleaks dir .` must exit 0 on this repository. Everything below is a
+# documented fixture, not a credential: the Compose quickstart's public
+# evaluation key (the file says so in its header and `make quickstart`
+# rotates it), and the constants the test suites use in place of real keys.
+# Keep this list short and specific; a new finding is a question, not a
+# reason to widen it.
+
+title = "StackRadar public tree"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test suites: fixed keys and Stripe fixture ids, never real"
+paths = [
+  '''^server/tests/.*''',
+  '''^client/src/.*\.test\.tsx?$''',
+]
+
+[[allowlists]]
+description = "The Compose quickstart's public evaluation fixtures (rotated by `make quickstart`)"
+paths = [
+  '''^deploy/compose/docker-compose\.yml$''',
+  '''^dev/snapshot\.env$''',
+]
+regexes = [
+  '''0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef''',
+]
+matchCondition = "AND"
+
+[[allowlists]]
+description = "Self-hosting walkthrough: a curl against the quickstart with its fixture key"
+paths = [
+  '''^docs/self-hosting/docker-compose\.md$''',
+]
+regexTarget = "line"
+regexes = [
+  '''^\s*curl .*''',
+]
+matchCondition = "AND"

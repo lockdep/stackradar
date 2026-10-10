@@ -1,0 +1,736 @@
+/* =============================================================================
+   THEME — the single place where every colour in the dashboard is decided.
+   =============================================================================
+
+   Palette source: GitHub Primer (https://primer.style/foundations/color).
+   We copy Primer's values verbatim rather than hand-tuning our own, because
+   Primer's light and dark scales are already balanced for long reading sessions
+   on dense, data-heavy screens — exactly what this app is.
+
+   The file has three layers. To retheme the app you normally only touch LAYER 1.
+
+     LAYER 1  Primitives  — the raw palette, named after its source.
+                            Swap these values to adopt a different palette.
+     LAYER 2  Semantics   — what the app actually means: surface, ink, danger…
+                            Components only ever reference these.
+     LAYER 3  Bridge      — exposes LAYER 2 to Tailwind as utility classes
+                            (`bg-surface`, `text-ink-muted`, `border-danger-muted`).
+
+   RULES FOR NEW UI
+     · Never write a raw palette class (`text-red-400`, `bg-gray-50`,
+       `dark:bg-white/5`). Use a semantic token — it is already correct in both
+       themes, which is the whole point of this file.
+     · `dark:` should be needed almost never. If you reach for it, the token you
+       want is probably missing — add it here instead.
+     · Text on a `*-emphasis` fill uses `text-on-emphasis`. Text on a `*-subtle`
+       fill uses the matching `text-<family>`.
+
+   Dark mode is attribute-driven (`data-theme="dark"` on <html>, set before first
+   paint by the inline script in layout.tsx), not `prefers-color-scheme`, so an
+   explicit "light" choice wins over a dark OS preference.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   LAYER 1 — PRIMITIVES: GitHub Primer
+   Replace this block (and only this block) to adopt a different palette.
+
+   > [!IMPORTANT]
+   > These values are **generated**. Synced from @primer/primitives@11.9.0 — see scripts/sync-primer-tokens.mjs
+   >
+   > Don't hand-edit a hex here. `pnpm tokens:check` compares every primitive
+   > below against the Primer package and fails on any unexplained difference;
+   > `pnpm tokens:sync` rewrites them. A value we hold *away* from Primer needs
+   > a `pin` with a reason in `scripts/primer-token-map.mjs`, so the divergence
+   > is a recorded decision rather than a stale copy. Adding a primitive means
+   > adding its mapping entry too, or the check fails.
+   -------------------------------------------------------------------------- */
+
+:root {
+    /* ---- Primer light ---- */
+    --primer-l-canvas-default: #ffffff;
+    --primer-l-canvas-subtle: #f6f8fa;
+    --primer-l-canvas-inset: #eaeef2;
+    --primer-l-border-default: #d1d9e0;
+    --primer-l-border-emphasis: #818b98;
+    --primer-l-border-active: #fd8c73;
+    --primer-l-fg-default: #1f2328;
+    --primer-l-fg-secondary: #424a53;
+    --primer-l-fg-muted: #59636e;
+    --primer-l-fg-subtle: #818b98;
+    --primer-l-fg-on-emphasis: #ffffff;
+
+    --primer-l-accent-fg: #0969da;
+    --primer-l-accent-emphasis: #0969da;
+    --primer-l-accent-emphasis-hover: #0550ae;
+    --primer-l-accent-muted: rgba(84, 174, 255, 0.4);
+    --primer-l-accent-subtle: #ddf4ff;
+
+    --primer-l-success-fg: #1a7f37;
+    --primer-l-success-emphasis: #1f883d;
+    --primer-l-success-muted: rgba(74, 194, 107, 0.4);
+    --primer-l-success-subtle: #dafbe1;
+
+    --primer-l-attention-fg: #9a6700;
+    --primer-l-attention-emphasis: #9a6700;
+    --primer-l-attention-muted: rgba(212, 167, 44, 0.4);
+    --primer-l-attention-subtle: #fff8c5;
+
+    --primer-l-severe-fg: #bc4c00;
+    --primer-l-severe-emphasis: #bc4c00;
+    --primer-l-severe-muted: #fb8f4466;
+    --primer-l-severe-subtle: #fff1e5;
+
+    --primer-l-danger-fg: #d1242f;
+    --primer-l-danger-emphasis: #cf222e;
+    --primer-l-danger-emphasis-hover: #a40e26;
+    --primer-l-danger-muted: rgba(255, 129, 130, 0.4);
+    --primer-l-danger-subtle: #ffebe9;
+
+    --primer-l-done-fg: #8250df;
+    --primer-l-done-emphasis: #8250df;
+    --primer-l-done-muted: rgba(194, 151, 255, 0.4);
+    --primer-l-done-subtle: #fbefff;
+
+    --primer-l-neutral-emphasis: #59636e;
+    --primer-l-neutral-muted: #d1d9e0b3;
+    --primer-l-neutral-subtle: #818b981f;
+
+    /* ---- Primer data visualization ----
+       A separate namespace from the functional scales above, on purpose. Primer
+       tunes these for chart *marks*; `accent` means links and focus, `danger`
+       means error state, `severe` means severity. A plotted series is none of
+       those, and until 2026-07-25 the chart line was `accent-fg` — the same blue
+       as every link and focus ring on the page. See
+       `client/docs/primer-audit/T7-charts.md` § T7-2.
+
+       Only the hues actually in use, per the T4 precedent. Primer ships 17;
+       adding one means re-screening it against the card — see the dark note. */
+    --primer-l-data-blue-emphasis: #006edb;
+
+    /* ---- Primer display ----
+       Primer's third colour namespace, alongside the functional scales and
+       `data-*`. It exists for *identity* — labels, avatars, topic chips: colour
+       that answers "which one", not "what state". An organisation's chosen
+       colour is exactly that, which is why it comes from here rather than from
+       `accent`/`danger` (those mean something) or from `data-*` (tuned for
+       chart marks on a card, and re-screened per hue — see the dark note).
+
+       Only the `bgColor-emphasis` step, because the org avatar is one solid
+       fill in both themes. Primer tunes that step to carry `fgColor-onEmphasis`
+       white text and every hue clears it: 4.86–5.01:1 light, 6.10–6.27:1 dark.
+       That is what lets the avatar drop the `dark:` tint it used to hand-roll —
+       Primer has already darkened the dark step for us.
+
+       Eight hues, one per value of `ORG_COLORS`. That list is a **persisted
+       enum** (`organizations.color`, authored in
+       `server/src/db/schema/organizations.ts`), so adding a hue here is only
+       half the change. */
+    --primer-l-display-green-emphasis: #2c8141;
+    --primer-l-display-blue-emphasis: #006edb;
+    --primer-l-display-purple-emphasis: #894ceb;
+    --primer-l-display-orange-emphasis: #b8500f;
+    --primer-l-display-pink-emphasis: #ce2c85;
+    --primer-l-display-cyan-emphasis: #007b94;
+    --primer-l-display-indigo-emphasis: #5a61e7;
+    --primer-l-display-coral-emphasis: #d43511;
+
+    /* ---- Primer dark ---- */
+    --primer-d-canvas-default: #0d1117;
+    --primer-d-canvas-subtle: #161b22;
+    --primer-d-canvas-overlay: #151b23;
+    --primer-d-canvas-inset: #010409;
+    --primer-d-canvas-hover: #21262d;
+    --primer-d-border-default: #3d444d;
+    --primer-d-border-emphasis: #656c76;
+    --primer-d-border-active: #f78166;
+    --primer-d-fg-default: #f0f6fc;
+    --primer-d-fg-secondary: #c9d1d9;
+    --primer-d-fg-muted: #9198a1;
+    --primer-d-fg-subtle: #656c76;
+    --primer-d-fg-on-emphasis: #ffffff;
+
+    --primer-d-accent-fg: #4493f8;
+    --primer-d-accent-emphasis: #1f6feb;
+    --primer-d-accent-emphasis-hover: #388bfd;
+    --primer-d-accent-muted: #388bfd66;
+    --primer-d-accent-subtle: #388bfd1a;
+
+    --primer-d-success-fg: #3fb950;
+    --primer-d-success-emphasis: #238636;
+    --primer-d-success-muted: #2ea04366;
+    --primer-d-success-subtle: #2ea04326;
+
+    --primer-d-attention-fg: #d29922;
+    --primer-d-attention-emphasis: #9e6a03;
+    --primer-d-attention-muted: rgba(187, 128, 9, 0.4);
+    --primer-d-attention-subtle: #bb800926;
+
+    --primer-d-severe-fg: #db6d28;
+    --primer-d-severe-emphasis: #bd561d;
+    --primer-d-severe-muted: rgba(219, 109, 40, 0.4);
+    --primer-d-severe-subtle: #db6d281a;
+
+    --primer-d-danger-fg: #f85149;
+    --primer-d-danger-emphasis: #da3633;
+    --primer-d-danger-emphasis-hover: #f85149;
+    --primer-d-danger-muted: rgba(248, 81, 73, 0.4);
+    --primer-d-danger-subtle: #f851491a;
+
+    --primer-d-done-fg: #ab7df8;
+    --primer-d-done-emphasis: #8957e5;
+    --primer-d-done-muted: #ab7df866;
+    --primer-d-done-subtle: #ab7df826;
+
+    --primer-d-neutral-emphasis: #656c76;
+    --primer-d-neutral-muted: #3d444db3;
+    --primer-d-neutral-subtle: #656c7633;
+
+    /* ---- Primer data visualization ----
+       > [!IMPORTANT]
+       > Primer tunes its dark `--data-*` values against `--bgColor-default`
+       > (#0d1117), the page canvas. Our charts sit on `--surface-raised`, which in
+       > dark is `canvas-overlay` #151b23 — *lighter* than the canvas Primer
+       > assumed. Screening all 17 hues against #151b23, five drop below Primer's
+       > own 3:1 mark floor: **gray (2.79), green (2.84), orange (2.76),
+       > teal (2.80), yellow (2.88)**. Re-screen any hue added here against
+       > #151b23, never against #0d1117. See T7-8.
+
+       `blue` is in the safe set: 4.16:1 on the card. */
+    --primer-d-data-blue-emphasis: #0576ff;
+
+    /* ---- Primer display ----
+       Identity hues for org avatars; see the light block for why they come from
+       this namespace and not from `accent`/`danger`/`data-*`. Primer collapses
+       `coral` onto `red` in dark, so `--primer-d-display-coral-emphasis` and a
+       hypothetical red one would be the same value — coral is only a distinct
+       hue in light. */
+    --primer-d-display-green-emphasis: #2f6f37;
+    --primer-d-display-blue-emphasis: #005bd1;
+    --primer-d-display-purple-emphasis: #7730e8;
+    --primer-d-display-orange-emphasis: #984b10;
+    --primer-d-display-pink-emphasis: #ac2f74;
+    --primer-d-display-cyan-emphasis: #036a8c;
+    --primer-d-display-indigo-emphasis: #514ed4;
+    --primer-d-display-coral-emphasis: #c31328;
+}
+
+/* -----------------------------------------------------------------------------
+   LAYER 2a — SEMANTIC TOKENS: light
+   -------------------------------------------------------------------------- */
+
+:root {
+    color-scheme: light;
+
+    /* Surfaces — page, cards, subtle fills, hover fills.
+       The page canvas is `canvas-subtle`, not `canvas-default`, so that cards
+       on `--surface-raised` (#ffffff) genuinely lift off it. GitHub composes
+       its surfaces the same way: white Boxes on an #f6f8fa canvas. Keeping
+       both at #ffffff would leave light mode with no elevation model at all,
+       while dark mode has one — see docs/primer-audit/T1. */
+    --surface: var(--primer-l-canvas-subtle);
+    --surface-raised: var(--primer-l-canvas-default);
+    --surface-muted: var(--primer-l-canvas-subtle);
+    --surface-hover: var(--primer-l-canvas-inset);
+
+    /* Panels that float over `--backdrop` (the mobile nav drawer, and any future
+       slide-over). Distinct from `surface-raised`, which lifts *within* the page:
+       an overlay has the scrim between it and everything else, so it can step
+       further from the canvas than a card ever should. */
+    --surface-overlay: var(--primer-l-canvas-default);
+
+    /* Borders — hairlines, then input/emphasised borders */
+    --edge: var(--primer-l-border-default);
+    --edge-strong: var(--primer-l-border-emphasis);
+
+    /* The underline under a selected tab, and nothing else. Coral, not accent:
+       in Primer blue means link/focus, so the one indicator that sits directly
+       under a row of clickable labels is deliberately not blue. It is only
+       2.15:1 on the light canvas, so it must never be the sole signal — the
+       selected tab label also goes semibold. See docs/primer-audit/T5. */
+    --border-active: var(--primer-l-border-active);
+
+    /* Primary button fill — StackRadar blue, i.e. the accent family. GitHub
+       paints this green and keeps blue for links and selection; we depart from
+       Primer here on purpose, because blue is the brand and a green CTA reads
+       as "success" next to the status badges. Kept as its own role so a
+       future change is again one line. Reach for these two only through
+       `<Button variant="primary">`. */
+    --btn-primary: var(--primer-l-accent-emphasis);
+    --btn-primary-hover: var(--primer-l-accent-emphasis-hover);
+
+    /* Secondary (non-primary) button fill. Primer's secondary button is a
+       `canvas-subtle` fill with a `border-default` outline — the outline is
+       load-bearing, since the fill alone is a point or two off the surface it
+       sits on. Always pair `bg-btn-secondary` with `border border-edge`. */
+    --btn-secondary: var(--primer-l-canvas-subtle);
+    --btn-secondary-hover: var(--primer-l-canvas-inset);
+
+    /* The unfilled part of a progress bar, toggle, or stepper rail. Same value
+       as `--edge` today, but a different concept: `--edge` is a 1px hairline,
+       `--track` is a fill. See docs/primer-audit/T4. */
+    --track: var(--primer-l-border-default);
+
+    /* Text, most to least prominent */
+    --ink: var(--primer-l-fg-default);
+    --ink-secondary: var(--primer-l-fg-secondary);
+    --ink-muted: var(--primer-l-fg-muted);
+    --ink-faint: var(--primer-l-fg-subtle);
+
+    /* Text/icons that sit on any `*-emphasis` fill */
+    --on-emphasis: var(--primer-l-fg-on-emphasis);
+
+    /* Foreground of a selected segment in a segmented control (`ThemeToggle`),
+       where the fill is the only thing marking the selection. Deliberately
+       asymmetric: neutral in light, accent in dark, where a plain `--ink`
+       segment on `--surface-hover` reads as barely distinguishable from its
+       neighbours. One name, one decision.
+
+       The sidebar used to lean on this for the same reason. It no longer does —
+       since T5 an active nav item carries an accent indicator bar and a semibold
+       label, so the fill isn't load-bearing there and the label is plain `--ink`
+       in both themes. */
+    --nav-active-fg: var(--ink);
+
+    /* Accent — primary actions and links */
+    --accent: var(--primer-l-accent-fg);
+    --accent-emphasis: var(--primer-l-accent-emphasis);
+    --accent-emphasis-hover: var(--primer-l-accent-emphasis-hover);
+    --accent-muted: var(--primer-l-accent-muted);
+    --accent-subtle: var(--primer-l-accent-subtle);
+
+    /* Status families */
+    --danger: var(--primer-l-danger-fg);
+    --danger-emphasis: var(--primer-l-danger-emphasis);
+    --danger-emphasis-hover: var(--primer-l-danger-emphasis-hover);
+    --danger-muted: var(--primer-l-danger-muted);
+    --danger-subtle: var(--primer-l-danger-subtle);
+
+    --attention: var(--primer-l-attention-fg);
+    --attention-emphasis: var(--primer-l-attention-emphasis);
+    --attention-muted: var(--primer-l-attention-muted);
+    --attention-subtle: var(--primer-l-attention-subtle);
+
+    --success: var(--primer-l-success-fg);
+    --success-emphasis: var(--primer-l-success-emphasis);
+    --success-muted: var(--primer-l-success-muted);
+    --success-subtle: var(--primer-l-success-subtle);
+
+    --info: var(--primer-l-done-fg);
+    --info-emphasis: var(--primer-l-done-emphasis);
+    --info-muted: var(--primer-l-done-muted);
+    --info-subtle: var(--primer-l-done-subtle);
+
+    /* Primer has no `neutral-fg` role — `fg-muted` plays that part — but every
+       other family here has a bare foreground step, and `Badge` needs one to
+       stop substituting an `ink` token for its neutral variant. */
+    --neutral: var(--primer-l-fg-muted);
+    --neutral-emphasis: var(--primer-l-neutral-emphasis);
+    --neutral-muted: var(--primer-l-neutral-muted);
+    --neutral-subtle: var(--primer-l-neutral-subtle);
+
+    /* Vulnerability severity — the app's core vocabulary.
+       critical → danger, high → severe, medium → attention, low → neutral. */
+    --sev-critical: var(--primer-l-danger-fg);
+    --sev-critical-emphasis: var(--primer-l-danger-emphasis);
+    --sev-critical-muted: var(--primer-l-danger-muted);
+    --sev-critical-subtle: var(--primer-l-danger-subtle);
+
+    --sev-high: var(--primer-l-severe-fg);
+    --sev-high-emphasis: var(--primer-l-severe-emphasis);
+    --sev-high-muted: var(--primer-l-severe-muted);
+    --sev-high-subtle: var(--primer-l-severe-subtle);
+
+    --sev-medium: var(--primer-l-attention-fg);
+    --sev-medium-emphasis: var(--primer-l-attention-emphasis);
+    --sev-medium-muted: var(--primer-l-attention-muted);
+    --sev-medium-subtle: var(--primer-l-attention-subtle);
+
+    --sev-low: var(--primer-l-neutral-emphasis);
+    --sev-low-emphasis: var(--primer-l-neutral-emphasis);
+    --sev-low-muted: var(--primer-l-neutral-muted);
+    --sev-low-subtle: var(--primer-l-neutral-subtle);
+
+    /* ---- Organisation identity ----
+       The avatar fill for a user-chosen organisation colour. Named after the
+       **stored enum value**, not the hue it renders: `emerald` and `rose`
+       predate the move to Primer and now resolve to Primer's green and coral.
+       Renaming them would mean migrating `organizations.color`, so the mismatch
+       is deliberate and `src/lib/org-colors.ts` owns both the mapping and the
+       labels the picker actually shows.
+
+       This is the one family where colour carries no meaning — it identifies an
+       org, the way an avatar does. Everything else about it is ordinary: it is
+       an `*-emphasis` fill, so text on it is `text-on-emphasis`. */
+    --org-emerald: var(--primer-l-display-green-emphasis);
+    --org-blue: var(--primer-l-display-blue-emphasis);
+    --org-purple: var(--primer-l-display-purple-emphasis);
+    --org-orange: var(--primer-l-display-orange-emphasis);
+    --org-pink: var(--primer-l-display-pink-emphasis);
+    --org-cyan: var(--primer-l-display-cyan-emphasis);
+    --org-indigo: var(--primer-l-display-indigo-emphasis);
+    --org-rose: var(--primer-l-display-coral-emphasis);
+
+    /* Scrim behind modals and drawers — dark in both themes by design */
+    --backdrop: rgba(31, 35, 40, 0.5);
+
+    /* Elevation. Two steps, following Primer: `resting` for a card that sits on
+       the page, `floating` for anything that leaves it — menus, dialogs, popovers,
+       chart tooltips. Named `--elevation-*` here because LAYER 3 needs the
+       `--shadow-*` namespace to mint the Tailwind utility. */
+    --elevation-resting: 0 1px 0 rgba(31, 35, 40, 0.04);
+    --elevation-floating: 0 6px 12px -3px rgba(31, 35, 40, 0.12), 0 6px 18px 0 rgba(31, 35, 40, 0.12);
+
+    /* ---- Charts ----
+       Recharts reads these as raw CSS vars inside props, never as Tailwind
+       classes, so none of them get a LAYER 3 bridge entry. Contrast figures below
+       are measured against `--surface-raised` — the card the charts sit on, not
+       the page canvas. That distinction is load-bearing; see T7-8.
+
+       `--chart-series-muted` is the mark every plotted series wears today. It is
+       deliberately gray and deliberately low-chroma: on these screens colour means
+       *severity*, so the only hue inside a plot is the critical+high overlay, and
+       the gray is what makes that red read as the point. It is the same value as
+       `--sev-low`, so the Low sparkline and the volume series match by construction.
+
+       `--chart-series-1` is Primer's data blue (4.94:1 light, 4.16:1 dark) and is
+       **currently unused**. It was the mark for a single-series chart — the
+       workloads and components trend cards — until 2026-07-26, when spending a
+       second hue on series that carry no risk signal was judged to put too many
+       colours in one row of trend cards. It stays defined, and screened, for a
+       chart that is genuinely categorical rather than one more volume series; it is
+       not a default. Against the muted gray it clears CVD comfortably (ΔE 12.0
+       light / 8.4 dark under deuteranopia and protanopia; floor is 6, target 8).
+
+       The @primer/primitives@11.9.0 sync moved `neutral-emphasis` and with it the
+       muted mark: **6.11:1 light** (was 4.55) and **3.26:1 dark** (was 3.77). Both
+       still clear the 3:1 mark floor T7-8 works to, and the CVD separation above is
+       unchanged within a point. Anything that darkens dark `neutral-emphasis`
+       further does need re-screening — 3.26 is the tightest figure on this card. */
+    --chart-series-1: var(--primer-l-data-blue-emphasis);
+    --chart-series-muted: var(--primer-l-neutral-emphasis);
+
+    /* Axis lines, tick lines and the tooltip cursor. `--edge`, because these are
+       *lines* — the old `--chart-grid` was `canvas-inset`, a **surface** token, at
+       1.17:1 on the card: not a subtle gridline, an absent one (T7-3). The cursor
+       shares the token because a hover cursor is a transient axis; leaving it
+       unset gave every chart Recharts' raw `#ccc` default, which in dark measured
+       10.78:1 — brighter than the data (T7-6). */
+    --chart-axis: var(--edge);
+    --chart-grid: var(--edge);
+
+    /* Severity marks — a deliberate deviation from Primer's `data-*`, recorded in
+       T7-8. Two reasons: these four are *product vocabulary* (the same colours
+       identify severity in `VulnerabilitySquare`, `VulnerabilityBadge`, the
+       `StatPanel` dots and every table, so a sparkline that disagreed with the dot
+       20px above it would be worse than one that is off-palette), and the naive
+       `data-*` mapping draws three of its four series from the hues that fail on
+       our dark card — a strict downgrade, 3.77–6.86:1 here vs 2.76–4.19:1 there.
+
+       Named `--chart-sev-*` rather than pointing components at `--sev-*` directly
+       so that anyone changing severity colours can see these are also chart marks
+       bound by a 3:1 floor.
+
+       > [!WARNING]
+       > These four are **not** usable as a stacked or grouped series. critical↔high
+       > measures ΔE 0.9 (light) / 2.3 (dark) under deuteranopia against a floor of
+       > 6 — a severity-stacked area would be unreadable where the two bands meet.
+       > They work only as marks that never touch: one sparkline per labelled cell,
+       > which is exactly what `SeverityCards` renders. */
+    --chart-sev-critical: var(--sev-critical);
+    --chart-sev-high: var(--sev-high);
+    --chart-sev-medium: var(--sev-medium);
+    --chart-sev-low: var(--sev-low);
+}
+
+/* -----------------------------------------------------------------------------
+   LAYER 2b — SEMANTIC TOKENS: dark
+   -------------------------------------------------------------------------- */
+
+[data-theme='dark'] {
+    color-scheme: dark;
+
+    --surface: var(--primer-d-canvas-default);
+    --surface-raised: var(--primer-d-canvas-overlay);
+    --surface-muted: var(--primer-d-canvas-subtle);
+    --surface-hover: var(--primer-d-canvas-hover);
+
+    /* `canvas-subtle` (#161b22) and `canvas-overlay` (#151b23) are a point apart
+       in dark, so neither `surface-muted` nor `surface-raised` gives a drawer any
+       separation. Step down to the page canvas instead. */
+    --surface-overlay: var(--primer-d-canvas-default);
+
+    --edge: var(--primer-d-border-default);
+    --edge-strong: var(--primer-d-border-emphasis);
+    --border-active: var(--primer-d-border-active);
+
+    --btn-primary: var(--primer-d-accent-emphasis);
+    --btn-primary-hover: var(--primer-d-accent-emphasis-hover);
+
+    --btn-secondary: var(--primer-d-canvas-subtle);
+    --btn-secondary-hover: var(--primer-d-canvas-hover);
+
+    --track: var(--primer-d-border-default);
+
+    --ink: var(--primer-d-fg-default);
+    --ink-secondary: var(--primer-d-fg-secondary);
+    --ink-muted: var(--primer-d-fg-muted);
+    --ink-faint: var(--primer-d-fg-subtle);
+
+    --on-emphasis: var(--primer-d-fg-on-emphasis);
+
+    --nav-active-fg: var(--accent);
+
+    --accent: var(--primer-d-accent-fg);
+    --accent-emphasis: var(--primer-d-accent-emphasis);
+    --accent-emphasis-hover: var(--primer-d-accent-emphasis-hover);
+    --accent-muted: var(--primer-d-accent-muted);
+    --accent-subtle: var(--primer-d-accent-subtle);
+
+    --danger: var(--primer-d-danger-fg);
+    --danger-emphasis: var(--primer-d-danger-emphasis);
+    --danger-emphasis-hover: var(--primer-d-danger-emphasis-hover);
+    --danger-muted: var(--primer-d-danger-muted);
+    --danger-subtle: var(--primer-d-danger-subtle);
+
+    --attention: var(--primer-d-attention-fg);
+    --attention-emphasis: var(--primer-d-attention-emphasis);
+    --attention-muted: var(--primer-d-attention-muted);
+    --attention-subtle: var(--primer-d-attention-subtle);
+
+    --success: var(--primer-d-success-fg);
+    --success-emphasis: var(--primer-d-success-emphasis);
+    --success-muted: var(--primer-d-success-muted);
+    --success-subtle: var(--primer-d-success-subtle);
+
+    --info: var(--primer-d-done-fg);
+    --info-emphasis: var(--primer-d-done-emphasis);
+    --info-muted: var(--primer-d-done-muted);
+    --info-subtle: var(--primer-d-done-subtle);
+
+    --neutral: var(--primer-d-fg-muted);
+    --neutral-emphasis: var(--primer-d-neutral-emphasis);
+    --neutral-muted: var(--primer-d-neutral-muted);
+    --neutral-subtle: var(--primer-d-neutral-subtle);
+
+    --sev-critical: var(--primer-d-danger-fg);
+    --sev-critical-emphasis: var(--primer-d-danger-emphasis);
+    --sev-critical-muted: var(--primer-d-danger-muted);
+    --sev-critical-subtle: var(--primer-d-danger-subtle);
+
+    --sev-high: var(--primer-d-severe-fg);
+    --sev-high-emphasis: var(--primer-d-severe-emphasis);
+    --sev-high-muted: var(--primer-d-severe-muted);
+    --sev-high-subtle: var(--primer-d-severe-subtle);
+
+    --sev-medium: var(--primer-d-attention-fg);
+    --sev-medium-emphasis: var(--primer-d-attention-emphasis);
+    --sev-medium-muted: var(--primer-d-attention-muted);
+    --sev-medium-subtle: var(--primer-d-attention-subtle);
+
+    --sev-low: var(--primer-d-neutral-emphasis);
+    --sev-low-emphasis: var(--primer-d-neutral-emphasis);
+    --sev-low-muted: var(--primer-d-neutral-muted);
+    --sev-low-subtle: var(--primer-d-neutral-subtle);
+
+    /* Organisation identity — see the light block. Solid in both themes: Primer
+       darkens its own `display-*` emphasis step, so there is nothing left for a
+       `dark:` variant to say. */
+    --org-emerald: var(--primer-d-display-green-emphasis);
+    --org-blue: var(--primer-d-display-blue-emphasis);
+    --org-purple: var(--primer-d-display-purple-emphasis);
+    --org-orange: var(--primer-d-display-orange-emphasis);
+    --org-pink: var(--primer-d-display-pink-emphasis);
+    --org-cyan: var(--primer-d-display-cyan-emphasis);
+    --org-indigo: var(--primer-d-display-indigo-emphasis);
+    --org-rose: var(--primer-d-display-coral-emphasis);
+
+    --backdrop: rgba(1, 4, 9, 0.8);
+
+    /* Darker and larger than light, per Primer: on a `#0d1117` canvas a
+       black-alpha shadow tuned for white is effectively invisible. */
+    --elevation-resting: 0 1px 0 rgba(1, 4, 9, 0.85);
+    --elevation-floating: 0 6px 12px -3px rgba(1, 4, 9, 0.3), 0 6px 18px 0 rgba(1, 4, 9, 0.4);
+
+    /* Charts — see the light block for the reasoning behind every token here. */
+    --chart-series-1: var(--primer-d-data-blue-emphasis);
+    --chart-series-muted: var(--primer-d-neutral-emphasis);
+
+    --chart-axis: var(--edge);
+    --chart-grid: var(--edge);
+
+    --chart-sev-critical: var(--sev-critical);
+    --chart-sev-high: var(--sev-high);
+    --chart-sev-medium: var(--sev-medium);
+    --chart-sev-low: var(--sev-low);
+}
+
+/* -----------------------------------------------------------------------------
+   LAYER 2c — DERIVED CHART FILLS
+   Declared once, correct in both themes.
+   -------------------------------------------------------------------------- */
+
+/* Area fills are a 15% wash of the series' own mark colour.
+
+   This is a measured deviation from Primer, which specifies a flat `data-*-muted`
+   fill behind a 2px `-emphasis` outline. Primer's muted steps are tuned against
+   its #0d1117 canvas: on our lighter #151b23 card, dark `data-blue-muted`
+   (#001a47) collapses from 1.12:1 to **1.02:1** and the fill simply disappears,
+   so dark mode would render as a line chart while light rendered as an area one.
+   Deriving the wash from the mark instead holds every series at a uniform
+   1.18–1.27:1 in both themes — equal loudness across slots — and the fill can
+   never drift from the mark it belongs to. Same class of finding as T7-8: a Primer
+   value imported without checking which surface *we* put it on.
+
+   These live outside the light/dark blocks on purpose. A custom property's
+   `var()` references are substituted using the values on the element where it is
+   *declared*, and `:root` and `[data-theme='dark']` both match <html> — so one
+   declaration resolves against whichever theme is active. Restating them per
+   theme would only invite the two copies to drift.
+
+   The 15% is the dataviz spec's "series hue at ~10% opacity, a wash, never a
+   saturated block". Recharts' <Area> defaults `fillOpacity` to 0.6, so every
+   consumer must set `fillOpacity={1}` and let the token carry the alpha.
+
+   The `transparent` base plus the `@supports` guard are deliberate, and the
+   reason is only visible in the built CSS. Lightning CSS downlevels `color-mix()`
+   by emitting `--chart-*-fill: var(--chart-*)` as a fallback — the mark colour at
+   *full opacity*, a saturated slab, which is the one thing an area fill must never
+   be. It does this whether or not the declaration is already inside an
+   `@supports`, so the guard below does not remove that fallback; it demotes it.
+   The built cascade ends up:
+
+     :root                          transparent            ← no color-mix at all
+     @supports color-mix(in srgb)     var(--chart-*)       ← Lightning CSS, unwanted
+     @supports color-mix(in lab)        color-mix(…)       ← what we want
+
+   so the slab only reaches a browser that supports `color-mix(in srgb, …)` but not
+   `color-mix(in lab, …)`. That set is empty — every engine shipped srgb and lab
+   interpolation in the same release (Chrome 111, Safari 16.2, Firefox 113) — while
+   a browser with no `color-mix` at all now correctly gets *no fill* rather than a
+   slab. Primer's area is an outline plus a wash and the outline is the
+   load-bearing half, so degrading to a plain line chart is right.
+
+   If you remove the `transparent` base, the slab comes back for real browsers. */
+:root {
+    --chart-series-1-fill: transparent;
+    --chart-series-muted-fill: transparent;
+
+    --chart-sev-critical-fill: transparent;
+    --chart-sev-high-fill: transparent;
+    --chart-sev-medium-fill: transparent;
+    --chart-sev-low-fill: transparent;
+}
+
+@supports (color: color-mix(in srgb, red, red)) {
+    :root {
+        --chart-series-1-fill: color-mix(in srgb, var(--chart-series-1) 15%, transparent);
+        --chart-series-muted-fill: color-mix(in srgb, var(--chart-series-muted) 15%, transparent);
+
+        --chart-sev-critical-fill: color-mix(in srgb, var(--chart-sev-critical) 15%, transparent);
+        --chart-sev-high-fill: color-mix(in srgb, var(--chart-sev-high) 15%, transparent);
+        --chart-sev-medium-fill: color-mix(in srgb, var(--chart-sev-medium) 15%, transparent);
+        --chart-sev-low-fill: color-mix(in srgb, var(--chart-sev-low) 15%, transparent);
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   LAYER 3 — TAILWIND BRIDGE
+   Every token above becomes `bg-*`, `text-*`, `border-*`, `ring-*`, `fill-*`…
+   -------------------------------------------------------------------------- */
+
+@theme inline {
+    --color-surface: var(--surface);
+    --color-surface-raised: var(--surface-raised);
+    --color-surface-muted: var(--surface-muted);
+    --color-surface-hover: var(--surface-hover);
+    --color-surface-overlay: var(--surface-overlay);
+
+    --color-edge: var(--edge);
+    --color-edge-strong: var(--edge-strong);
+    --color-border-active: var(--border-active);
+
+    --color-btn-primary: var(--btn-primary);
+    --color-btn-primary-hover: var(--btn-primary-hover);
+    --color-btn-secondary: var(--btn-secondary);
+    --color-btn-secondary-hover: var(--btn-secondary-hover);
+    --color-track: var(--track);
+
+    --color-ink: var(--ink);
+    --color-ink-secondary: var(--ink-secondary);
+    --color-ink-muted: var(--ink-muted);
+    --color-ink-faint: var(--ink-faint);
+
+    --color-on-emphasis: var(--on-emphasis);
+    --color-nav-active-fg: var(--nav-active-fg);
+
+    --color-accent: var(--accent);
+    --color-accent-emphasis: var(--accent-emphasis);
+    --color-accent-emphasis-hover: var(--accent-emphasis-hover);
+    --color-accent-muted: var(--accent-muted);
+    --color-accent-subtle: var(--accent-subtle);
+
+    --color-danger: var(--danger);
+    --color-danger-emphasis: var(--danger-emphasis);
+    --color-danger-emphasis-hover: var(--danger-emphasis-hover);
+    --color-danger-muted: var(--danger-muted);
+    --color-danger-subtle: var(--danger-subtle);
+
+    --color-attention: var(--attention);
+    --color-attention-emphasis: var(--attention-emphasis);
+    --color-attention-muted: var(--attention-muted);
+    --color-attention-subtle: var(--attention-subtle);
+
+    --color-success: var(--success);
+    --color-success-emphasis: var(--success-emphasis);
+    --color-success-muted: var(--success-muted);
+    --color-success-subtle: var(--success-subtle);
+
+    --color-info: var(--info);
+    --color-info-emphasis: var(--info-emphasis);
+    --color-info-muted: var(--info-muted);
+    --color-info-subtle: var(--info-subtle);
+
+    --color-neutral: var(--neutral);
+    --color-neutral-emphasis: var(--neutral-emphasis);
+    --color-neutral-muted: var(--neutral-muted);
+    --color-neutral-subtle: var(--neutral-subtle);
+
+    --color-sev-critical: var(--sev-critical);
+    --color-sev-critical-emphasis: var(--sev-critical-emphasis);
+    --color-sev-critical-muted: var(--sev-critical-muted);
+    --color-sev-critical-subtle: var(--sev-critical-subtle);
+
+    --color-sev-high: var(--sev-high);
+    --color-sev-high-emphasis: var(--sev-high-emphasis);
+    --color-sev-high-muted: var(--sev-high-muted);
+    --color-sev-high-subtle: var(--sev-high-subtle);
+
+    --color-sev-medium: var(--sev-medium);
+    --color-sev-medium-emphasis: var(--sev-medium-emphasis);
+    --color-sev-medium-muted: var(--sev-medium-muted);
+    --color-sev-medium-subtle: var(--sev-medium-subtle);
+
+    --color-sev-low: var(--sev-low);
+    --color-sev-low-emphasis: var(--sev-low-emphasis);
+    --color-sev-low-muted: var(--sev-low-muted);
+    --color-sev-low-subtle: var(--sev-low-subtle);
+
+    --color-org-emerald: var(--org-emerald);
+    --color-org-blue: var(--org-blue);
+    --color-org-purple: var(--org-purple);
+    --color-org-orange: var(--org-orange);
+    --color-org-pink: var(--org-pink);
+    --color-org-cyan: var(--org-cyan);
+    --color-org-indigo: var(--org-indigo);
+    --color-org-rose: var(--org-rose);
+
+    --color-backdrop: var(--backdrop);
+
+    /* `shadow-resting` / `shadow-floating`. Tailwind owns the `--shadow-*`
+       namespace, which is why LAYER 2 calls these `--elevation-*`. */
+    --shadow-resting: var(--elevation-resting);
+    --shadow-floating: var(--elevation-floating);
+
+    --font-sans: var(--font-inter);
+    --font-mono: var(--font-jetbrains-mono);
+}

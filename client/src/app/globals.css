@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+/* All colour lives in theme.css — see the header there before adding any. */
+@import "./theme.css";
+
+/* Theme switching is attribute-driven: the pre-hydration script in layout.tsx
+   sets data-theme="light|dark" on <html>, so a "light" choice always wins
+   over a dark OS preference. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* One step past Tailwind's `2xl`. The sidebar takes 288px from `lg` up, so a
+   wide table has ~1180px at `2xl` and its last columns need a wider screen
+   still — see `HIDE_BELOW` in `components/ui/Table.tsx`. */
+@theme {
+  --breakpoint-3xl: 112rem;
+}
+
+/* Nesting indentation for the table-shaped trees (containers, dependency tree,
+   vulnerability paths). One scale for all three — set `--tree-level` on the
+   indented element rather than computing a pixel padding per component. */
+:root {
+  --tree-indent: 20px;
+}
+
+@utility tree-indent {
+  padding-left: calc(var(--tree-level, 0) * var(--tree-indent));
+}
+
+@keyframes spin-fast {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@utility animate-spin-fast {
+  animation: spin-fast 0.35s linear infinite;
+}
+
+/* The "waiting for the first container" radar — see `WaitingForFirstData`.
+
+   It is on this page for minutes, not the half-second a spinner is, so it is
+   built to be watched: a sweep that comes round on a slow four-second period
+   and rings that expand out of the centre, rather than anything that reads as
+   "busy". The whole thing is one element per keyframe below; nothing here
+   measures progress, because at this point in onboarding the control plane
+   genuinely does not know how far along the scanner is. */
+@keyframes radar-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes radar-ring {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.6;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* A blip lights up as the sweep crosses it. The delays in the component are
+   what line each one up with the sweep's own 4s period, so the two read as
+   cause and effect rather than two things animating near each other.
+
+   `transform` here is scale and nothing else, which is why the component
+   centres its blips with a negative margin rather than `-translate-x-1/2`: a
+   transform in a keyframe replaces the element's own transform outright, so a
+   translated blip would jump sideways for the whole flash and snap back. */
+@keyframes radar-blip {
+  0%, 100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  6% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@utility animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+}
+
+@utility animate-radar-ring {
+  animation: radar-ring 4s ease-out infinite;
+}
+
+@utility animate-radar-blip {
+  animation: radar-blip 4s linear infinite;
+}
+
+/* Reduced motion keeps the radar as a still diagram rather than swapping in a
+   different indicator: the copy next to it already says the page is checking on
+   its own, so nothing is lost by holding it still. The sweep is parked at a
+   readable angle and the blips are left lit, so the frozen frame still looks
+   like a radar that has found something. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-radar-sweep {
+    animation: none;
+    transform: rotate(45deg);
+  }
+
+  .animate-radar-ring {
+    animation: none;
+    opacity: 0.25;
+  }
+
+  .animate-radar-blip {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* Clicking a Recharts plot used to draw the browser's own blue focus ring around
+   it. Two different elements take the click, so it takes two rules:
+
+   1. The z-index portal layers — the <g> elements the marks are drawn into —
+      carry `tabindex="-1"`, which is still *click*-focusable. Click a mark and
+      the layer under the pointer takes focus; it spans the plot, so the ring
+      lands around the whole chart. Unconditional `outline: none` is right here:
+      `-1` means these are unreachable by keyboard, so the ring can never have
+      been telling a keyboard user where they are.
+
+   2. Click the empty space in a plot instead and focus goes to the root <svg>,
+      which Recharts gives `tabindex="0"` and `role="application"` when
+      `accessibilityLayer` is on (the default) so the tooltip can be stepped
+      through with arrow keys. That one *is* a real tab stop, so it keeps a ring
+      — `:focus-visible` is what separates the two, false on click and true on
+      Tab. Restated in `--accent` rather than left to Chrome's UA colour, which
+      is a blue we don't own and rounds the corners its own way. */
+.recharts-wrapper [tabindex="-1"]:focus {
+  outline: none;
+}
+
+.recharts-surface:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

@@ -1,0 +1,157 @@
+# StackRadar Community Edition — Docker Compose quickstart.
+#
+#   curl -LO https://raw.githubusercontent.com/lockdep/stackradar/main/deploy/compose/docker-compose.yml
+#   docker compose up -d
+#   open http://localhost:3000   →  admin@stackradar.local / admin  (you will be asked to change it)
+#
+# ┌──────────────────────────────────────────────────────────────────────────┐
+# │  EVALUATION ONLY. Every secret in this file is a PUBLIC FIXTURE: the    │
+# │  database password, the service key, the encryption key, the session   │
+# │  secret, the scanner key and the admin password are the same on every  │
+# │  machine that downloads this file. Anything that can reach port 3000   │
+# │  or 8080 can log in or upload SBOMs. Keep it on localhost (the ports   │
+# │  below bind 127.0.0.1), or run `make quickstart` from deploy/compose/  │
+# │  in the repo to replace every fixture with `openssl rand` output       │
+# │  BEFORE the first `docker compose up` (Postgres sets its password on   │
+# │  first start).                                                          │
+# └──────────────────────────────────────────────────────────────────────────┘
+#
+# Three containers, like Dependency-Track's two plus a database: Postgres,
+# the API server (which in the `monolith` topology also runs the job worker
+# and the OSV / EPSS / KEV sync schedule in-process), and the web client.
+# Both apps apply their own migrations at start-up (MIGRATE_ON_START) under
+# a shared advisory lock, so there is no migration step. The images are the
+# published ones from GHCR; nothing here builds from source, so the file
+# works without the repository. `STACKRADAR_TAG` pins a release
+# (`STACKRADAR_TAG=1.2.0 docker compose up -d`); dev/docker-compose.yml in
+# the repo runs the `:snapshot` build of main.
+#
+# What this cannot do: scan a cluster. The scanner is a Kubernetes agent,
+# so this file proves the platform with an SBOM you upload yourself (see
+# docs/self-hosting/docker-compose.md). To see your own cluster, use the
+# Helm chart, which installs the scanner alongside.
+#
+# Memory: the server's first start downloads and imports the OSV mirror for
+# the default ecosystem list (~1.2 GB compressed, 5–25 minutes depending on
+# your connection) in the background; the dashboard is usable meanwhile and
+# says so. Budget ~2 GB for the server during that import and ~2 GB for
+# Postgres with the default list. OSV_ECOSYSTEMS below trims or widens it.
+name: stackradar
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: stackradar
+      POSTGRES_PASSWORD: stackradar-fixture-db-password
+      POSTGRES_DB: stackradar
+    # The postgres:18 image keeps its data under /var/lib/postgresql (PGDATA
+    # is /var/lib/postgresql/18/docker); mounting the pre-18 path
+    # /var/lib/postgresql/data would leave the cluster outside the volume.
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stackradar -d stackradar"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+    # Uncomment to reach the database from the host (psql, Drizzle Studio):
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+
+  server:
+    image: ghcr.io/lockdep/stackradar-server:${STACKRADAR_TAG:-latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # `sslmode=prefer`: TLS if the server offers it, plaintext otherwise —
+      # this Postgres has no certificate and sits on the Compose network.
+      # The server refuses a production URL that says nothing about TLS.
+      DATABASE_URL: postgresql://stackradar:stackradar-fixture-db-password@postgres:5432/stackradar?sslmode=prefer
+      STACKRADAR_EDITION: community
+      TOPOLOGY: monolith
+      MIGRATE_ON_START: "true"
+      # Where the client is reachable from a browser; links in the UI and
+      # any webhook payloads point here.
+      APP_URL: http://localhost:3000
+      # Shared with the client (X-Internal-Key on every BFF → server call).
+      INTERNAL_SERVICE_KEY: stackradar-fixture-internal-service-key
+      # Encrypts scanner keys at rest so an admin can reveal them. 64 hex
+      # characters (`openssl rand -hex 32`); changing it later makes the
+      # stored keys unreadable, so set it once.
+      API_KEY_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      # The community edition's one cluster and the key that uploads to
+      # it, created at start-up. Compose has no scanner, so this is the key
+      # you upload an SBOM with (docs/self-hosting/docker-compose.md).
+      BOOTSTRAP_CLUSTER_ID: 8f6b0b7a-0c1e-4f6e-9a4b-2f3d1c0e5a71
+      BOOTSTRAP_CLUSTER_API_KEY: stackradar-fixture-bootstrap-scanner-key
+      # The OSV directories the mirror carries. Unset = the community
+      # default (Alpine, Debian, Ubuntu, Red Hat, Rocky Linux, AlmaLinux,
+      # SUSE, openSUSE, Go, npm, PyPI, Maven, RubyGems, crates.io, NuGet,
+      # Packagist, Pub, Hex). Add Chainguard and Wolfi if you run cgr.dev
+      # images; set `Alpine` alone for a 2-minute, 40 MB try-out.
+      # OSV_ECOSYSTEMS: Alpine,Debian,Ubuntu,npm
+      # Node's heap during the OSV import; the 2 GB limit below covers it.
+      NODE_OPTIONS: --max-old-space-size=1536
+    ports:
+      # The public API (what a scanner, or your curl, talks to). The image
+      # listens on 3001; 8080 is the port the docs use.
+      - "127.0.0.1:8080:3001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3001/api/health/ready >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      # Migrations plus the default organisation seed on an empty database.
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    restart: unless-stopped
+
+  client:
+    image: ghcr.io/lockdep/stackradar-client:${STACKRADAR_TAG:-latest}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      server:
+        condition: service_healthy
+    environment:
+      # The same database; this app's Auth.js tables live in its `auth` schema.
+      DATABASE_URL: postgresql://stackradar:stackradar-fixture-db-password@postgres:5432/stackradar?sslmode=prefer
+      STACKRADAR_EDITION: community
+      MIGRATE_ON_START: "true"
+      EXPRESS_API_URL: http://server:3001
+      INTERNAL_SERVICE_KEY: stackradar-fixture-internal-service-key
+      # Signs the session cookie (`openssl rand -base64 32`).
+      AUTH_SECRET: stackradar-fixture-auth-secret-change-me
+      # Auth.js cannot infer its origin behind Compose's port mapping;
+      # trusting the Host header is what a localhost install wants. Set
+      # AUTH_URL=https://your.host instead when you put it behind a domain.
+      AUTH_TRUST_HOST: "true"
+      # Local username/password sign-in and the first admin. The password
+      # is used exactly once: the first login forces a change. Locked out?
+      #   docker compose exec client node scripts/admin-reset-password.mjs admin@stackradar.local
+      AUTH_BOOTSTRAP_ADMIN_EMAIL: admin@stackradar.local
+      AUTH_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Optional sign-in providers; see docs/self-hosting/docker-compose.md.
+      # AUTH_OIDC_ISSUER: https://idp.example.com/realms/stackradar
+      # AUTH_OIDC_ID: stackradar
+      # AUTH_OIDC_SECRET: ...
+      # AUTH_GITHUB_ID: ...
+      # AUTH_GITHUB_SECRET: ...
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health/ready >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  postgres-data: {}
