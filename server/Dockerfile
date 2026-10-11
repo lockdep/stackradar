@@ -4,7 +4,7 @@
 # happens to resolve to that day. The base image is pinned by digest for the
 # same reason: `22-alpine` is a moving tag, so two builds of the same commit
 # could otherwise ship different base layers — and different CVEs.
-FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS base
+FROM node:22-alpine@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402 AS base
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
 
