@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "0.1.0",
+  "version": "0.2.0-snapshot",
   "private": true,
   "description": "StackRadar API server: SBOM ingest, OSV/EPSS/KEV mirror, matching and the job worker",
   "license": "AGPL-3.0-only",
