@@ -1,0 +1,220 @@
+name: Release
+
+# The one button that cuts a release (RELEASING.md). Modelled on
+# Dependency-Track's ci-release.yaml: run it, optionally with a version, and
+# it stamps the version, commits, tags, drafts the GitHub Release and bumps
+# the branch to the next snapshot. publish.yaml, started on the new tag,
+# builds and signs the images and un-drafts the release.
+#
+# Where it runs decides what it releases:
+#   main    -> the next minor (or whatever package.json says, minus -snapshot);
+#              main is bumped to <next minor>-snapshot afterwards.
+#   x.y.x   -> a bugfix of an older minor; the branch is bumped to the next
+#              patch snapshot. The version must belong to that branch.
+#
+# Everything is pushed with GITHUB_TOKEN under the github-actions[bot]
+# identity (DCO-signed like every other commit). A push made with that token
+# raises no push event, which is why publish.yaml is started explicitly and
+# why the snapshot bump runs no CI (the next real commit does).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (x.y.z or x.y.z-rc.1). Empty: the version in package.json without its -snapshot suffix."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# Two releases cut at once would race to push the same commit and tag.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # "Tests are green" asserted by running them on this exact commit, on the
+  # whole Tests workflow (both suites, lint, drift gates), not by looking up
+  # an earlier run.
+  tests:
+    name: Tests
+    uses: ./.github/workflows/ci-test.yaml
+
+  prepare:
+    name: Work out the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      next: ${{ steps.version.outputs.next }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      branch: ${{ steps.version.outputs.branch }}
+    steps:
+      # workflow_dispatch offers every branch and tag in the picker. A release
+      # cut from a feature branch would publish software that is not on main
+      # or a release branch.
+      - name: Refuse to release from anywhere but main or a release branch
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          case "${REF}" in
+            refs/heads/main) ;;
+            refs/heads/[0-9]*.[0-9]*.x) ;;
+            *)
+              echo "::error::Release must run on main or a release branch (x.y.x), but was dispatched on ${REF#refs/*/}."
+              exit 1 ;;
+          esac
+
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          BRANCH: ${{ github.ref_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          current="$(node -p 'require("./server/package.json").version')"
+          client="$(node -p 'require("./client/package.json").version')"
+          if [[ "${current}" != "${client}" ]]; then
+            echo "::error::server/package.json (${current}) and client/package.json (${client}) disagree; they ship under one version."
+            exit 1
+          fi
+
+          version="${INPUT_VERSION:-${current%-snapshot}}"
+
+          # Semver, no build metadata: '+' is not legal in an OCI tag.
+          if ! printf '%s' "${version}" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'${version}' is not of the form x.y.z or x.y.z-prerelease."
+            exit 1
+          fi
+
+          prerelease=false
+          case "${version}" in *-*) prerelease=true ;; esac
+
+          major="${version%%.*}"
+          rest="${version#*.}"
+          minor="${rest%%.*}"
+          patch="${rest#*.}"
+          patch="${patch%%-*}"
+
+          if [[ "${BRANCH}" == "main" ]]; then
+            # main is always the next minor.
+            next="${major}.$((minor + 1)).0-snapshot"
+          else
+            # A release branch only releases its own minor.
+            if [[ "${BRANCH}" != "${major}.${minor}.x" ]]; then
+              echo "::error::Branch ${BRANCH} can only release ${BRANCH%.x}.* versions, not ${version}."
+              exit 1
+            fi
+            next="${major}.${minor}.$((patch + 1))-snapshot"
+          fi
+
+          # A prerelease does not consume the number: main stays on the same
+          # snapshot so the stable release that follows has it.
+          if [[ "${prerelease}" == "true" ]]; then
+            next="${current}"
+          fi
+
+          # Through the API rather than `git ls-remote`: the checkout keeps no
+          # credentials, and an unauthenticated ls-remote against a private
+          # repository fails in a way that reads as "no such tag".
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/v${version}" >/dev/null 2>&1; then
+            echo "::error::Tag v${version} already exists. Released versions are immutable; release the next one."
+            exit 1
+          fi
+
+          {
+            echo "version=${version}"
+            echo "next=${next}"
+            echo "prerelease=${prerelease}"
+            echo "branch=${BRANCH}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing ${version} from ${BRANCH} (prerelease=${prerelease}); ${BRANCH} continues as ${next}."
+
+  release:
+    name: Tag v${{ needs.prepare.outputs.version }}
+    needs: [tests, prepare]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the version commits and the tag, create the draft release
+      actions: write # start publish.yaml on the tag
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      NEXT: ${{ needs.prepare.outputs.next }}
+      BRANCH: ${{ needs.prepare.outputs.branch }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare.outputs.branch }}
+          fetch-depth: 0 # --generate-notes needs the previous tag
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      # Order matters: the branch is pushed before anything is tagged. If
+      # someone landed a commit while the tests ran, the push is rejected,
+      # nothing has been tagged, and re-running is free.
+      - name: Set the version and commit
+        run: |
+          set -euo pipefail
+          node scripts/release-set-version.mjs "${VERSION}"
+          node scripts/release-set-version.mjs --check "${VERSION}"
+          git add server/package.json client/package.json .github/ISSUE_TEMPLATE/defect-report.yml
+          if git diff --staged --quiet; then
+            echo "Everything already carries ${VERSION}; nothing to commit."
+          else
+            git commit -s -m "prepare-release: set version to ${VERSION}"
+          fi
+          git push origin "HEAD:${BRANCH}"
+
+      - name: Tag
+        run: |
+          set -euo pipefail
+          git tag -a "v${VERSION}" -m "v${VERSION}"
+          git push origin "v${VERSION}"
+
+      # Drafted here, filled in and published by publish.yaml once the images
+      # exist, so a release is never visible without its artifacts. The notes
+      # come from the merged pull requests' labels (.github/release.yml).
+      - name: Draft the GitHub Release
+        run: |
+          set -euo pipefail
+          args=(--target "${BRANCH}" --title "${VERSION}" --generate-notes --draft)
+          [[ "${PRERELEASE}" == "true" ]] && args+=(--prerelease)
+          gh release create "v${VERSION}" "${args[@]}"
+
+      # A tag pushed with GITHUB_TOKEN raises no push event, so publish.yaml
+      # has to be started by hand, on the tag it should publish.
+      - name: Start the publish workflow
+        run: gh workflow run publish.yaml --ref "v${VERSION}"
+
+      # Dependency-Track's prepare-iteration: the branch moves on to the next
+      # snapshot so a build from it never carries a released number.
+      - name: Set the next snapshot version
+        if: needs.prepare.outputs.prerelease == 'false'
+        run: |
+          set -euo pipefail
+          node scripts/release-set-version.mjs "${NEXT}"
+          git add server/package.json client/package.json
+          git commit -s -m "prepare-iteration: set version to ${NEXT}"
+          git push origin "HEAD:${BRANCH}"
+
+      - name: Summarise
+        run: |
+          {
+            echo "## Releasing \`${VERSION}\`"
+            echo
+            echo "Tagged \`v${VERSION}\` on \`${BRANCH}\`; the branch continues as \`${NEXT}\`."
+            echo "[publish.yaml](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/workflows/publish.yaml) is building, signing and attaching the images;"
+            echo "the [draft release](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}) is published when it finishes."
+          } >> "$GITHUB_STEP_SUMMARY"

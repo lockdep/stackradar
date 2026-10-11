@@ -36,16 +36,32 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 # Pinned by version AND checksum — the worker feeds their output into rows
 # every tenant's suggestions read, so "whatever the mirror served today" is
 # not an acceptable provenance for either binary.
+#
+# TARGETARCH is set by BuildKit per platform, so one Dockerfile builds the
+# amd64 and arm64 images the release publishes (publish.yaml); each
+# architecture verifies its own checksum. The checksums come from
+# https://get.helm.sh/helm-v<ver>-linux-<arch>.tar.gz.sha256sum and
+# https://github.com/anchore/syft/releases/download/v<ver>/syft_<ver>_checksums.txt
+# and all four move together when either version is bumped.
 FROM base AS tools
+ARG TARGETARCH
 ENV HELM_VERSION=3.22.0 \
-    HELM_SHA256=1e4ab49e429626cf6c6958d914248b78c9730803c2751b87627e171dc800e7bb \
+    HELM_SHA256_AMD64=1e4ab49e429626cf6c6958d914248b78c9730803c2751b87627e171dc800e7bb \
+    HELM_SHA256_ARM64=f14e804dfee240f55525b667488fe9adca349e63e00c9af634c0beb1421ac310 \
     SYFT_VERSION=1.54.0 \
-    SYFT_SHA256=54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860
-RUN wget -q "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" -O /tmp/helm.tgz && \
+    SYFT_SHA256_AMD64=54a87372498168b2d033e876fd41fa4e8035b872699e525a57046e1f2f09c860 \
+    SYFT_SHA256_ARM64=ee6d4566373a05b344bc6b5f1706f14419bf9338ba39ff686e247deefe9b8818
+RUN set -eu; \
+    case "${TARGETARCH:-amd64}" in \
+      amd64) HELM_SHA256="$HELM_SHA256_AMD64"; SYFT_SHA256="$SYFT_SHA256_AMD64" ;; \
+      arm64) HELM_SHA256="$HELM_SHA256_ARM64"; SYFT_SHA256="$SYFT_SHA256_ARM64" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    wget -q "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${TARGETARCH:-amd64}.tar.gz" -O /tmp/helm.tgz && \
     echo "${HELM_SHA256}  /tmp/helm.tgz" | sha256sum -c - && \
     tar -xzf /tmp/helm.tgz -C /tmp && \
-    install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm && \
-    wget -q "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_amd64.tar.gz" -O /tmp/syft.tgz && \
+    install -m 0755 "/tmp/linux-${TARGETARCH:-amd64}/helm" /usr/local/bin/helm && \
+    wget -q "https://github.com/anchore/syft/releases/download/v${SYFT_VERSION}/syft_${SYFT_VERSION}_linux_${TARGETARCH:-amd64}.tar.gz" -O /tmp/syft.tgz && \
     echo "${SYFT_SHA256}  /tmp/syft.tgz" | sha256sum -c - && \
     tar -xzf /tmp/syft.tgz -C /tmp syft && \
     install -m 0755 /tmp/syft /usr/local/bin/syft

@@ -1,0 +1,445 @@
+name: Publish
+
+# Builds and publishes a release: the two images for linux/amd64 and
+# linux/arm64 under `:<version>`, `:<major>.<minor>` and (for the highest
+# stable version) `:latest`, each signed with cosign, with a CycloneDX SBOM
+# of each image and a checksums file attached to the GitHub Release that
+# release.yaml drafted, which is then published. Modelled on Dependency-Track's
+# ci-publish.yaml and _meta-build.yaml; the immutability guard and the
+# attestation checks are the scanner's (lockdep/stackradar-scanner).
+#
+# Runs on a tag and only on a tag. release.yaml pushes the tag with
+# GITHUB_TOKEN, which raises no push event, and starts this workflow
+# explicitly on the tag ref; a tag pushed from a laptop arrives through the
+# push trigger. Dispatch it the same way, on the tag, to retry a run that
+# failed before it pushed anything.
+#
+# Nothing here bumps a version: package.json already carries the tag's
+# version (release.yaml committed it), and the workflow refuses to continue
+# if it does not, so the version syft reads out of the image is the one on
+# the tin.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  SERVER_IMAGE: ghcr.io/lockdep/stackradar-server
+  CLIENT_IMAGE: ghcr.io/lockdep/stackradar-client
+  # The SBOM generator for the attached files. The images also carry
+  # BuildKit's SPDX attestation per platform; this is the human-facing copy.
+  SYFT_VERSION: v1.54.0
+
+permissions:
+  contents: read
+
+# A release must never be cancelled halfway: a run that pushed one image but
+# not the other leaves a version half-published, and the immutability guard
+# then blocks the retry.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the draft release when a hand-pushed tag has none
+      packages: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      latest: ${{ steps.version.outputs.latest }}
+      previous: ${{ steps.version.outputs.previous }}
+    steps:
+      - name: Refuse to run off a tag
+        if: github.ref_type != 'tag'
+        run: |
+          echo "::error::Publish must run on a tag, but was dispatched on ${GITHUB_REF}. Run the Release workflow to make one."
+          exit 1
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # the previous tag decides `latest` and the migration diff
+
+      - name: Resolve and validate the version
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+
+          # Semver minus build metadata: '+' is not legal in an OCI tag.
+          if ! printf '%s' "${version}" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::Tag '${TAG}' is not of the form v<major>.<minor>.<patch>[-prerelease]."
+            exit 1
+          fi
+
+          prerelease=false
+          case "${version}" in *-*) prerelease=true ;; esac
+
+          # Both apps must already carry this version: it is what SERVER_VERSION
+          # reports and what syft reads out of the image.
+          node scripts/release-set-version.mjs --check "${version}" || {
+            echo "::error::package.json does not carry ${version}. Release through release.yaml, or run scripts/release-set-version.mjs before tagging."
+            exit 1
+          }
+
+          # `latest` (the image tag and the GitHub Release flag) follows the
+          # highest stable version, so a bugfix of an older minor released
+          # from its x.y.x branch never repoints it backwards.
+          highest="$(git tag --list 'v*' | sed 's/^v//' | grep -Ev -- '-' | sort -V | tail -n1)"
+          latest=false
+          if [[ "${prerelease}" == "false" && "${highest}" == "${version}" ]]; then
+            latest=true
+          fi
+
+          # The previous tag, for the migration diff in the notes.
+          previous="$(git describe --tags --abbrev=0 "${TAG}^" 2>/dev/null || true)"
+
+          {
+            echo "version=${version}"
+            echo "prerelease=${prerelease}"
+            echo "latest=${latest}"
+            echo "previous=${previous}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Publishing ${version} (prerelease=${prerelease}, latest=${latest}, previous=${previous:-none})"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A published version is a promise about specific bytes. Overwriting one
+      # would invalidate every signature and digest a user has recorded, so a
+      # re-run for an existing version is an error rather than an update.
+      - name: Refuse to overwrite a published version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          conflict=0
+          for image in "${SERVER_IMAGE}" "${CLIENT_IMAGE}"; do
+            if docker buildx imagetools inspect "${image}:${VERSION}" >/dev/null 2>&1; then
+              echo "::error::${image}:${VERSION} is already published. Released versions are immutable."
+              conflict=1
+            fi
+          done
+          if [[ "${conflict}" -ne 0 ]]; then
+            echo "::error::To ship a change, release the next version instead of reusing this one."
+            exit 1
+          fi
+
+      # release.yaml drafts the release before it starts this workflow. A tag
+      # pushed by hand has none yet, so make the same draft here; the publish
+      # job fills it in either way.
+      - name: Ensure a draft release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" --json isDraft --jq .isDraft >/dev/null 2>&1; then
+            echo "Release ${TAG} exists."
+            exit 0
+          fi
+          args=(--title "${VERSION}" --generate-notes --draft)
+          [[ "${PRERELEASE}" == "true" ]] && args+=(--prerelease)
+          gh release create "${TAG}" "${args[@]}"
+
+  build:
+    name: Build ${{ matrix.component }}
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign keyless signing via GitHub Actions OIDC
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, client]
+    env:
+      IMAGE: ghcr.io/lockdep/stackradar-${{ matrix.component }}
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # arm64 is built through QEMU. kind on Apple silicon is where a large
+      # share of evaluators run the quickstart, and an amd64-only image fails
+      # there with `exec format error`.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `latest` and the rolling {{major}}.{{minor}} alias are for stable
+      # releases only; metadata-action already withholds the alias from a
+      # prerelease, and `latest` additionally follows the highest version.
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: |
+            latest=${{ needs.verify.outputs.latest }}
+          tags: |
+            type=semver,pattern={{version}},value=v${{ env.VERSION }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.title=stackradar-${{ matrix.component }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.vendor=StackRadar
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.component }}
+          target: runner
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The server reports its commit alongside its version (lib/server-version.ts).
+          build-args: ${{ matrix.component == 'server' && format('GIT_SHA={0}', github.sha) || '' }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          provenance: mode=max
+          sbom: true
+
+      # BuildKit's attestations live in the image index, not as cosign `.att`
+      # artifacts, so they are checked with the tool that reads them. The
+      # platform check is what makes "multi-arch" a verified claim.
+      - name: Verify platforms and attestations
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          ref="${IMAGE}@${DIGEST}"
+          for platform in linux/amd64 linux/arm64; do
+            docker buildx imagetools inspect "${ref}" --format '{{json .Manifest}}' \
+              | python3 -c "import json,sys; m=json.load(sys.stdin); ps={p['platform']['os']+'/'+p['platform']['architecture'] for p in m['manifests'] if 'platform' in p}; sys.exit(0 if '${platform}' in ps else 1)" \
+              || { echo "::error::${ref} has no ${platform} manifest"; exit 1; }
+          done
+          docker buildx imagetools inspect "${ref}" --format '{{json .Provenance}}' \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert any("SLSA" in json.dumps(v) for v in d.values()), "no SLSA provenance"'
+          docker buildx imagetools inspect "${ref}" --format '{{json .SBOM}}' \
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); assert any("SPDX" in json.dumps(v) for v in d.values()), "no SBOM attestation"'
+          echo "amd64 and arm64 present; provenance and SBOM attestations present."
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4.1.2
+
+      # Keyless: the certificate binds the image to this workflow at this tag,
+      # so there is no signing key to store, rotate or leak. RELEASING.md has
+      # the matching `cosign verify`.
+      - name: Sign with cosign
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      # We are an SBOM product; shipping our own is table stakes
+      # (Dependency-Track attaches bom.json to every release). One CycloneDX
+      # document per image, of the amd64 manifest: the two platforms differ
+      # only in the architecture of the helm and syft binaries, and the
+      # per-platform SPDX attestation above covers the rest.
+      - name: Install syft
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin "${SYFT_VERSION}"
+          syft version
+
+      - name: Generate the SBOM
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          COMPONENT: ${{ matrix.component }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          syft "registry:${IMAGE}@${DIGEST}" --platform linux/amd64 \
+            -o "cyclonedx-json@1.6=out/stackradar-${COMPONENT}-${VERSION}.cdx.json" --quiet
+          python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(sys.argv[1], 'CycloneDX', d['specVersion'], len(d.get('components', [])), 'components')" \
+            "out/stackradar-${COMPONENT}-${VERSION}.cdx.json"
+          printf '%s %s@%s\n' "${COMPONENT}" "${IMAGE}" "${DIGEST}" > "out/digest-${COMPONENT}.txt"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.component }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 7
+
+  # Trivy on the pushed images, into code scanning. Deliberately not in the
+  # publish job's `needs`: a scanner outage must not strand a version whose
+  # images are already pushed behind the immutability guard.
+  scan:
+    name: Scan ${{ matrix.component }}
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [server, client]
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-${{ matrix.component }}
+          path: out
+
+      - name: Resolve the pushed digest
+        id: digest
+        run: echo "ref=$(cut -d' ' -f2 "out/digest-${{ matrix.component }}.txt")" >> "$GITHUB_OUTPUT"
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ steps.digest.outputs.ref }}
+          format: sarif
+          output: trivy-${{ matrix.component }}.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+
+      - uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-${{ matrix.component }}.sarif
+          category: trivy-${{ matrix.component }}
+
+  publish:
+    name: Publish the release
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # release notes, assets, un-draft
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      PREVIOUS: ${{ needs.verify.outputs.previous }}
+      LATEST: ${{ needs.verify.outputs.latest }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: out
+          merge-multiple: true
+
+      # Dependency-Track's checksums.txt hashes its jars; our artifacts are
+      # images, so the digests come first and the attached files after.
+      - name: Write checksums.txt
+        run: |
+          set -euo pipefail
+          cd out
+          {
+            echo "# Images (multi-arch index digests)"
+            for c in server client; do cut -d' ' -f2 "digest-${c}.txt"; done
+            echo
+            echo "# SHA256 of the attached files"
+            sha256sum ./*.cdx.json
+          } > checksums.txt
+          cat checksums.txt
+
+      # The notes a self-hoster reads before upgrading (docs/self-hosting/upgrading.md
+      # promises them): the images and how to verify them, whether the release
+      # carries a schema migration (computed from the migration directories,
+      # not remembered), then the generated notes from the pull requests'
+      # labels (.github/release.yml).
+      - name: Compose the release notes
+        run: |
+          set -euo pipefail
+          server_digest="$(cut -d' ' -f2 out/digest-server.txt)"
+          client_digest="$(cut -d' ' -f2 out/digest-client.txt)"
+
+          if [[ -n "${PREVIOUS}" ]]; then
+            range="${PREVIOUS}..${TAG}"
+          else
+            range="${TAG}"
+          fi
+          server_migrations="$(git diff --name-only --diff-filter=A "${range}" -- 'server/drizzle/*.sql' | sed 's|^server/drizzle/||' || true)"
+          client_migrations="$(git diff --name-only --diff-filter=A "${range}" -- 'client/drizzle/*.sql' | sed 's|^client/drizzle/||' || true)"
+
+          {
+            echo "## Images"
+            echo
+            echo "| Image | Digest |"
+            echo "|:--|:--|"
+            echo "| \`${SERVER_IMAGE}:${VERSION}\` | \`${server_digest#*@}\` |"
+            echo "| \`${CLIENT_IMAGE}:${VERSION}\` | \`${client_digest#*@}\` |"
+            echo
+            echo "Built for \`linux/amd64\` and \`linux/arm64\`, signed with cosign (keyless). Verify with:"
+            echo
+            echo '```sh'
+            echo "cosign verify \\"
+            echo "  --certificate-identity-regexp '^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish.yaml@refs/tags/${TAG}\$' \\"
+            echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com \\"
+            echo "  ${SERVER_IMAGE}:${VERSION}"
+            echo '```'
+            echo
+            echo "The attached \`stackradar-*-${VERSION}.cdx.json\` files are CycloneDX SBOMs of each image; \`checksums.txt\` lists the digests and the files' hashes."
+            echo
+            echo "## Schema migrations"
+            echo
+            if [[ -z "${PREVIOUS}" ]]; then
+              echo "First release: a new install applies the whole migration chain on first start."
+            elif [[ -z "${server_migrations}${client_migrations}" ]]; then
+              echo "None since ${PREVIOUS}. This release rolls back by setting the previous tag."
+            else
+              echo "This release applies new migrations at start-up (\`MIGRATE_ON_START\`). **Take a backup first** ([upgrading.md](https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/docs/self-hosting/upgrading.md)); a migrated database does not roll back by setting the previous tag."
+              echo
+              if [[ -n "${server_migrations}" ]]; then
+                echo "Server:"; echo
+                for f in ${server_migrations}; do printf -- "- \`%s\`\n" "${f}"; done
+                echo
+              fi
+              if [[ -n "${client_migrations}" ]]; then
+                echo "Client (\`auth\` schema):"; echo
+                for f in ${client_migrations}; do printf -- "- \`%s\`\n" "${f}"; done
+                echo
+              fi
+            fi
+            echo
+            echo "## Upgrading"
+            echo
+            echo "- Helm: \`helm upgrade stackradar oci://ghcr.io/lockdep/helm-charts/stackradar -n stackradar -f my-values.yaml --set server.image.tag=${VERSION},client.image.tag=${VERSION}\` until the chart's \`appVersion\` moves to ${VERSION}."
+            echo "- Docker Compose: \`docker compose pull && docker compose up -d\`, or \`STACKRADAR_TAG=${VERSION} docker compose up -d\` to pin it."
+            echo
+            echo "---"
+            echo
+            gh release view "${TAG}" --json body --jq .body
+          } > notes.md
+          cat notes.md
+
+      - name: Update and publish the release
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" --clobber out/checksums.txt out/*.cdx.json
+          gh release edit "${TAG}" --notes-file notes.md
+          gh release edit "${TAG}" --draft=false --latest="${LATEST}"
+          echo "Published ${TAG}: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"

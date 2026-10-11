@@ -120,6 +120,12 @@ cloud directory is a conversation to have in the issue first.
 * Avoid new dependencies for things that are trivial to write or are in
   the standard library.
 * Do not mix unrelated whitespace or formatting changes into a change.
+* The pull request title becomes a line in the release notes, under the
+  category its label selects (`breaking change`, `enhancement`, `defect`,
+  `dependencies`; see [`.github/release.yml`](.github/release.yml)).
+  Write it for the person upgrading, and say in it when the change carries
+  a migration or needs a manual step. Maintainers apply the labels;
+  [RELEASING.md](RELEASING.md) is the release process.
 * Commits must be [signed off](https://git-scm.com/docs/git-commit#Documentation/git-commit.txt--s)
   (`git commit -s`) to indicate agreement with the
   [Developer Certificate of Origin](https://developercertificate.org/).

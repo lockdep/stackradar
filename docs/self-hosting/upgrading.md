@@ -31,10 +31,14 @@ that exists: migrations are forward-only.
 
 Server and client ship together under one version; the chart's
 `appVersion` names the pair it was tested with and its `image.tag`
-defaults to it. Image tags: `:<version>` is immutable, `:latest` is the
-newest release, `:snapshot` is `main`. Pin a version in production and
-move it on purpose. A tag from an application major the chart does not
-support fails the render rather than the pods.
+defaults to it. Image tags: `:<version>` is immutable, `:<major>.<minor>`
+follows the newest patch of that minor, `:latest` is the newest release,
+`:snapshot` is `main`. Pin a version in production and move it on
+purpose. A tag from an application major the chart does not support fails
+the render rather than the pods. Every release is signed; the
+[release notes](https://github.com/lockdep/stackradar/releases) carry the
+image digests and the `cosign verify` command, and say whether the
+release applies schema migrations.
 
 ## Helm
 

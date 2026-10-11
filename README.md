@@ -138,10 +138,14 @@ version:
 | `ghcr.io/lockdep/stackradar-server` | The API, the job worker and the OSV / EPSS / KEV sync schedule. In the default `monolith` topology all three run in one process. |
 | `ghcr.io/lockdep/stackradar-client` | The web UI (Next.js), which also keeps its Auth.js tables in the `auth` schema of the same database. |
 
-Tags: `:<version>` is immutable, `:latest` is the newest release, `:snapshot`
-is the last merge to `main` ([`dev/docker-compose.yml`](dev/docker-compose.yml)
-runs that one). Images are signed with Cosign (keyless) from the build
-workflow. The scanner agent is a separate image and chart from
+Tags: `:<version>` is immutable, `:<major>.<minor>` follows the newest
+patch of that minor, `:latest` is the newest release, `:snapshot` is the
+last merge to `main` ([`dev/docker-compose.yml`](dev/docker-compose.yml)
+runs that one). Releases are built for `linux/amd64` and `linux/arm64`,
+signed with Cosign (keyless), and carry a CycloneDX SBOM of each image on
+the [GitHub Release](https://github.com/lockdep/stackradar/releases);
+[RELEASING.md](RELEASING.md) has the verification commands and the pin
+recommendations. The scanner agent is a separate image and chart from
 [lockdep/stackradar-scanner](https://github.com/lockdep/stackradar-scanner).
 
 ## Deploying on Kubernetes with Helm

@@ -267,11 +267,17 @@ docker build -t stackradar-server:local server/
 docker build -t stackradar-client:local --target runner client/
 ```
 
-Both Dockerfiles are multi-stage on `node:22-alpine`, pinned by digest.
-The server image listens on 3001 and the client on 3000; both run as a
-non-root user with a read-only root filesystem in the chart. CI
-(`.github/workflows/build-push-app.yaml`) builds the same way and pushes
-`ghcr.io/lockdep/stackradar-server` and `-client`, signed with Cosign.
+Both Dockerfiles are multi-stage on `node:22-alpine`, pinned by digest,
+and build for `linux/amd64` and `linux/arm64` (the server's `tools` stage
+picks the `helm` and `syft` binaries and their checksums by `TARGETARCH`;
+`docker buildx build --platform linux/arm64 …` builds the other one). The
+server image listens on 3001 and the client on 3000; both run as a
+non-root user with a read-only root filesystem in the chart. CI builds
+the same way: `.github/workflows/build-push-app.yaml` pushes the
+`:snapshot` tag of `ghcr.io/lockdep/stackradar-server` and `-client` from
+every merge to `main`, and `publish.yaml` the versioned, multi-arch tags
+from a release tag. Both sign with Cosign. [RELEASING.md](RELEASING.md)
+is the release process.
 
 To run your local build in the quickstart, override the two image names
 with a second Compose file:

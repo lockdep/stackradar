@@ -14,8 +14,6 @@ on:
     paths:
       - "client/**"
       - "server/**"
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       build_client:
@@ -33,12 +31,12 @@ env:
   CLIENT_IMAGE: stack-radar-client
   SERVER_IMAGE: stack-radar-server
   # The public images (open-source plan step 07): what the Compose
-  # quickstart and the Helm chart pull. One build, pushed to both
-  # registries under one digest. Tag policy follows Dependency-Track's:
-  # `:<version>` and `:latest` on a published release, `:snapshot` from
-  # main. The cloud keeps consuming the DOCR copies until its gitops image
-  # names are retargeted. A first push creates the GHCR package *private*;
-  # it has to be made public once in the package's settings.
+  # quickstart and the Helm chart pull. This workflow only ever pushes
+  # their `:snapshot` tag, the last merge to main, which dev/docker-compose.yml
+  # runs. The versioned tags (`:<version>`, `:<major>.<minor>`, `:latest`)
+  # are publish.yaml's, built from a release tag for amd64 and arm64 and
+  # never rebuilt (RELEASING.md). The same build is pushed to DOCR under its
+  # commit sha for the development cluster, which tracks main.
   GHCR_CLIENT_IMAGE: ghcr.io/lockdep/stackradar-client
   GHCR_SERVER_IMAGE: ghcr.io/lockdep/stackradar-server
   YQ_VERSION: v4.53.3
@@ -53,8 +51,8 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v4
         id: filter
-        # Manual and release runs pick their targets explicitly, so there is no
-        # diff base to filter against.
+        # Manual runs pick their targets explicitly, so there is no diff base
+        # to filter against.
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         with:
           filters: |
@@ -66,7 +64,6 @@ jobs:
   build-client:
     needs: detect-changes
     if: |
-      github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.build_client) ||
       needs.detect-changes.outputs.client == 'true'
     runs-on: ubuntu-latest
@@ -112,12 +109,11 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
             type=raw,value=build-${{ github.run_number }},enable={{is_default_branch}}
 
-      # The public tags only: no branch, PR or build-number tags on GHCR.
+      # `:snapshot` only. No branch, PR or build-number tags on GHCR, and no
+      # versioned tags: those are publish.yaml's and are immutable once pushed.
       - name: Extract public metadata for Client
         id: ghcr
         uses: docker/metadata-action@v6
@@ -126,9 +122,6 @@ jobs:
           flavor: latest=false
           tags: |
             type=raw,value=snapshot,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
       - name: Build and push Client image
         id: build
@@ -163,7 +156,6 @@ jobs:
   build-server:
     needs: detect-changes
     if: |
-      github.event_name == 'release' ||
       (github.event_name == 'workflow_dispatch' && inputs.build_server) ||
       needs.detect-changes.outputs.server == 'true'
     runs-on: ubuntu-latest
@@ -210,12 +202,11 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
             type=raw,value=build-${{ github.run_number }},enable={{is_default_branch}}
 
-      # The public tags only: no branch, PR or build-number tags on GHCR.
+      # `:snapshot` only. No branch, PR or build-number tags on GHCR, and no
+      # versioned tags: those are publish.yaml's and are immutable once pushed.
       - name: Extract public metadata for Server
         id: ghcr
         uses: docker/metadata-action@v6
@@ -224,9 +215,6 @@ jobs:
           flavor: latest=false
           tags: |
             type=raw,value=snapshot,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
 
       - name: Build and push Server image
         id: build

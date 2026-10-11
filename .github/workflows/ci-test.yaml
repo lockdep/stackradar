@@ -17,6 +17,11 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # release.yaml runs this whole file as its first job, so "tests are green"
+  # is asserted by running them on the commit being released, not by looking
+  # up an earlier run that may not exist (a push made with GITHUB_TOKEN
+  # raises no push event, so the commit after a release has none).
+  workflow_call:
 
 permissions:
   contents: read
