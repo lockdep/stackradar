@@ -1,0 +1,51 @@
+name: Dead Exports (knip)
+
+# Each app carries a knip.json tuned to its shape (Next.js app-router entries
+# for the client, package.json script entries for the server's worker and
+# sync CLIs; `ignoreExportsUsedInFile` because neither app is a library).
+# A knip finding is an export, file or dependency nothing references — the
+# refactor debt this repo just paid down once; this job keeps it paid.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "client/**"
+      - ".github/workflows/dead-exports.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  knip:
+    name: "knip (${{ matrix.app }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [server, client]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # No `version`: pnpm/action-setup reads the app's `packageManager`
+      # field, so the lockfile and the CI pnpm never disagree.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ${{ matrix.app }}/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: ${{ matrix.app }}/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for dead exports
+        run: pnpm knip

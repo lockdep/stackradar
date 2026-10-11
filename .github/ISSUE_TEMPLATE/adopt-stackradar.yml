@@ -1,0 +1,68 @@
+name: Adopt StackRadar
+description: Let us know your organisation runs StackRadar.
+title: organization_name has adopted StackRadar
+labels: [ "adopt-stackradar" ]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! StackRadar ships no telemetry, so this is how we learn who runs it, and
+        an entry in the adopters list is more help than you might think.
+
+        Check the current list:
+        https://github.com/lockdep/stackradar/blob/main/ADOPTERS.md
+  - type: input
+    id: org-name
+    attributes:
+      label: Organisation Name
+      description: Name of the organisation.
+      placeholder: ex. Acme AS
+    validations:
+      required: true
+  - type: input
+    id: org-url
+    attributes:
+      label: Organisation Website
+      description: A link to the organisation's website.
+      placeholder: ex. https://example.com/
+    validations:
+      required: false
+  - type: input
+    id: org-logo
+    attributes:
+      label: Organisation Logo (optional)
+      description: A link to the organisation's logo.
+      placeholder: ex. https://avatars.githubusercontent.com/u/…
+    validations:
+      required: false
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition
+      options:
+        - Community Edition (self-hosted)
+        - StackRadar Cloud
+        - Both
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: How is your organisation using StackRadar?
+      description: Two or three sentences on how StackRadar fits into what you do. Roughly how many clusters, if you can say.
+      placeholder: We run it beside each production cluster and triage from the Fixes page every Monday.
+    validations:
+      required: false
+  - type: textarea
+    id: content-links
+    attributes:
+      label: Want to link blog posts or talks? Share them here.
+      description: Links to anything public that shows how you use StackRadar.
+  - type: checkboxes
+    id: existing-entry
+    attributes:
+      label: Update entry
+      options:
+        - label: Check this box if you want to update an existing entry.
+          required: false

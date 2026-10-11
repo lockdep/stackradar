@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stackradar.io/contracts/match-endpoint/v1",
+  "title": "POST /internal/match — 200 response, contract version 1",
+  "$comment": "Contract version 1. Fields are added, never renamed or removed, without bumping the version in $id and title and updating both apps' tests (server: tests/integration/match/endpoint.test.ts; charts: tests/fixtures/contract.test.ts). additionalProperties is false on purpose: an added field must land here first.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["serverVersion", "matchedAt", "sync", "findings"],
+  "properties": {
+    "serverVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "server/package.json version, plus '+<short git sha>' when the image was built with GIT_SHA."
+    },
+    "matchedAt": { "type": "string", "format": "date-time" },
+    "sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["osvSyncedAt", "epssScoreDate", "kevCatalogVersion"],
+      "properties": {
+        "osvSyncedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the OSV mirror was last brought up to date: the latest of the incremental poll, the full refresh and the initial import."
+        },
+        "epssScoreDate": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "The FIRST.org score date of the EPSS file last applied."
+        },
+        "kevCatalogVersion": {
+          "type": ["string", "null"],
+          "description": "CISA's catalogVersion of the KEV catalogue last applied."
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component", "vulnId", "findingIdentity", "aliases", "summary", "severityLevel",
+        "cvssScore", "epssScore", "epssPercentile", "kevListedAt", "publishedAt", "risk",
+        "packageName", "packageVersion", "purl", "purlType", "fixedVersion", "confidence"
+      ],
+      "properties": {
+        "component": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index into the request's components: the primary of the collapsed set."
+        },
+        "vulnId": { "type": "string", "minLength": 1 },
+        "findingIdentity": {
+          "type": "string",
+          "minLength": 1,
+          "description": "vulnerabilities.finding_identity: the CVE this is, or '#<vulnId>' when it stands alone."
+        },
+        "aliases": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Every other id the finding is known by, sorted: the OSV aliases of every advisory in the collapsed set plus the folded advisories' own ids. Never contains vulnId."
+        },
+        "summary": { "type": ["string", "null"] },
+        "severityLevel": { "type": "string", "enum": ["critical", "high", "medium", "low", "unknown"] },
+        "cvssScore": { "type": ["number", "null"], "minimum": 0, "maximum": 10 },
+        "epssScore": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "epssPercentile": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "kevListedAt": { "type": ["string", "null"], "format": "date-time" },
+        "publishedAt": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "When the advisory was published, per OSV: the earliest 'published' across the collapsed set's records. Null when no record in the set carries one."
+        },
+        "risk": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "vulnerabilities.risk_score, the generated column (ADR 0005). Never recomputed by the caller."
+        },
+        "packageName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The source package for deb / rpm / apk (rule 4 in server/src/db/findings.ts); the component's name otherwise."
+        },
+        "packageVersion": { "type": ["string", "null"] },
+        "purl": { "type": ["string", "null"], "description": "The request component's purl, verbatim." },
+        "purlType": {
+          "type": ["string", "null"],
+          "description": "The purl type as the matcher normalises it (lower-cased, 'go' → 'golang'); null without a parseable purl."
+        },
+        "fixedVersion": { "type": ["string", "null"] },
+        "confidence": { "type": "string", "enum": ["exact", "fuzzy"] }
+      }
+    }
+  }
+}

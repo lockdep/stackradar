@@ -1,0 +1,36 @@
+name: Cloud Boundary
+
+# `server/src/cloud/` and `client/src/cloud/` are source-available under the
+# StackRadar Cloud Licence; the rest of the repository is AGPL-3.0-only. The
+# script checks that every file under a cloud directory carries the SPDX
+# header and nothing outside does, that each cloud directory has its
+# LICENSE, and that the AGPL core imports the cloud only at the designated
+# mount points (`edition.isCloud` gates). Dependency-free.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/src/**"
+      - "server/tests/**"
+      - "client/src/**"
+      - "scripts/check-cloud-boundary.mjs"
+      - ".github/workflows/cloud-boundary.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: "check-cloud-boundary"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the licence boundary
+        run: node scripts/check-cloud-boundary.mjs

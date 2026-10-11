@@ -1,0 +1,58 @@
+name: Primer Token Drift
+
+# LAYER 1 of the client's `src/app/theme.css` is generated from
+# `@primer/primitives` by `client/scripts/sync-primer-tokens.mjs`. Drift here is
+# silent: a hand-edited value or a primitives bump that renames a token does
+# not fail any build, it just ships a wrong colour. `pnpm tokens:check`
+# (the same script with no flags) exits non-zero on drift — this job is what
+# makes that a gate instead of a convention.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "client/src/app/theme.css"
+      - "client/src/lib/brand.ts"
+      - "client/scripts/sync-primer-tokens.mjs"
+      - "client/scripts/primer-token-map.mjs"
+      - "client/package.json"
+      - "client/pnpm-lock.yaml"
+      - ".github/workflows/primer-token-drift.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: "tokens:check (${{ matrix.app }})"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [client]
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # No `version`: pnpm/action-setup reads the app's `packageManager`
+      # field, so the lockfile and the CI pnpm never disagree.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: ${{ matrix.app }}/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: ${{ matrix.app }}/pnpm-lock.yaml
+
+      # The script reads token files out of node_modules/@primer/primitives,
+      # so it needs a real install, not a bare checkout.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check theme.css against @primer/primitives
+        run: pnpm tokens:check

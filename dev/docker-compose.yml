@@ -1,0 +1,14 @@
+# The quickstart on the `:snapshot` images — what CI pushes from every merge
+# to main — for anyone working on StackRadar who wants the whole product up
+# without building it (Dependency-Track keeps the same file under dev/).
+#
+#   docker compose -f dev/docker-compose.yml up -d
+#
+# Everything else, fixtures included, is deploy/compose/docker-compose.yml
+# verbatim: this file only pins the tag through snapshot.env, which Compose
+# reads when interpolating the included file. Local source builds are the
+# per-app `pnpm dev` against the root docker-compose.yml's Postgres, not
+# this.
+include:
+  - path: ../deploy/compose/docker-compose.yml
+    env_file: snapshot.env

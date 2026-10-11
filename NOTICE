@@ -1,0 +1,27 @@
+StackRadar
+Copyright (C) 2026 LockDep
+
+The source code in this repository is licensed under the GNU Affero General
+Public License, version 3 only (see LICENSE), except for the files under
+server/src/cloud/ and client/src/cloud/, which are licensed under the
+StackRadar Cloud Licence in their respective LICENSE files.
+
+The licence covers the code, not the name. "StackRadar", "LockDep" and the
+StackRadar logo are trademarks of LockDep. You may run, modify and redistribute
+the software under its licence, but you may not use the StackRadar name or logo
+to identify a modified version, a fork or a hosted service in a way that
+suggests it is provided or endorsed by LockDep. Describe such a version as
+"based on StackRadar". The AGPL separately requires modified versions to carry
+prominent notices stating that they have been changed (section 5a).
+
+Third-party material carried in this repository:
+
+* server/src/schemas/osv-specifications/osv.schema.json is the OSV schema
+  from https://github.com/ossf/osv-schema, Apache License 2.0; the commit it
+  was taken from is recorded in osv.schema.lock.json next to it.
+* client/src/app/theme.css is generated from GitHub's Primer Primitives
+  (https://github.com/primer/primitives), MIT License, by
+  client/scripts/sync-primer-tokens.mjs.
+
+Everything the applications depend on at runtime is listed, with its licence,
+in each app's pnpm-lock.yaml (`pnpm licenses list` prints the summary).

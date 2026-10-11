@@ -1,0 +1,23 @@
+# Categories for the generated release notes (`gh release create
+# --generate-notes`, step 14's release workflow). Driven by the labels
+# CONTRIBUTING.md asks for; an unlabelled PR lands under Other Changes.
+changelog:
+  exclude:
+    labels:
+    - adopt-stackradar
+  categories:
+  - title: Breaking Changes 🚨
+    labels:
+    - breaking change
+  - title: Enhancements 🚀
+    labels:
+    - enhancement
+  - title: Bug Fixes 🐛
+    labels:
+    - defect
+  - title: Dependency Updates 🤖
+    labels:
+    - dependencies
+  - title: Other Changes
+    labels:
+    - "*"

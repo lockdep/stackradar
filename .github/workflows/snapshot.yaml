@@ -1,0 +1,209 @@
+# Snapshot build of main.
+#
+# Every merge to main builds the two application images once and pushes
+# them as `ghcr.io/lockdep/stackradar-{server,client}:snapshot`, signed with
+# cosign (keyless), which dev/docker-compose.yml runs. Versioned tags come
+# from publish.yaml, built from a release tag and never rebuilt
+# (RELEASING.md). A pull request only builds: nothing is pushed and no
+# secret is needed, so a fork gets the same check as the maintainers.
+#
+# The maintainers' development environment deploys the snapshot from its
+# own repository: the last job sends it a repository_dispatch carrying the
+# commit and the two digests, and that repository's workflow does the rest.
+# Without the GITOPS_DEVELOPMENT_TOKEN secret the job says so and exits 0,
+# so a fork is never blocked by someone else's deployment.
+name: Snapshot
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "client/**"
+      - "server/**"
+      - ".github/workflows/snapshot.yaml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "client/**"
+      - "server/**"
+  workflow_dispatch:
+    inputs:
+      build_client:
+        description: "Build and push the client image"
+        type: boolean
+        default: true
+      build_server:
+        description: "Build and push the server image"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  CLIENT_IMAGE: ghcr.io/lockdep/stackradar-client
+  SERVER_IMAGE: ghcr.io/lockdep/stackradar-server
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      client: ${{ steps.filter.outputs.client }}
+      server: ${{ steps.filter.outputs.server }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        # Manual runs pick their targets explicitly, so there is no diff base
+        # to filter against.
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        with:
+          filters: |
+            client:
+              - 'client/**'
+            server:
+              - 'server/**'
+
+  build:
+    needs: detect-changes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: client
+            context: ./client
+            target: runner
+            changed: ${{ needs.detect-changes.outputs.client }}
+            requested: ${{ inputs.build_client }}
+          - component: server
+            context: ./server
+            target: ""
+            changed: ${{ needs.detect-changes.outputs.server }}
+            requested: ${{ inputs.build_server }}
+    name: build (${{ matrix.component }})
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      needs.detect-changes.outputs.client == 'true' ||
+      needs.detect-changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # the public GHCR images
+      id-token: write # cosign keyless signing via GitHub Actions OIDC
+    # The digest is the promotable identity of this build; everything
+    # downstream pins on it rather than re-deriving a tag.
+    outputs:
+      client_digest: ${{ steps.out.outputs.client_digest }}
+      server_digest: ${{ steps.out.outputs.server_digest }}
+
+    steps:
+      - name: Decide whether this component builds
+        id: go
+        env:
+          CHANGED: ${{ matrix.changed }}
+          REQUESTED: ${{ matrix.requested }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "build=${REQUESTED}" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=${CHANGED}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.go.outputs.build == 'true'
+        uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        if: steps.go.outputs.build == 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        if: steps.go.outputs.build == 'true' && github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `:snapshot` only. No branch, PR or build-number tags, and no versioned
+      # tags: those are publish.yaml's and are immutable once pushed.
+      - name: Image metadata
+        if: steps.go.outputs.build == 'true'
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/lockdep/stackradar-${{ matrix.component }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=snapshot,enable={{is_default_branch}}
+
+      - name: Build (and on main, push) the image
+        if: steps.go.outputs.build == 'true'
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          target: ${{ matrix.target }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+
+      - name: Install cosign
+        if: steps.go.outputs.build == 'true' && github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+
+      # Keyless signing: the certificate binds the image to this workflow at
+      # this commit, so there is no signing key to store, rotate or leak.
+      - name: Sign the image (cosign, keyless)
+        if: steps.go.outputs.build == 'true' && github.event_name != 'pull_request'
+        env:
+          IMAGE: ghcr.io/lockdep/stackradar-${{ matrix.component }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Record the digest
+        id: out
+        if: steps.go.outputs.build == 'true' && github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: echo "${{ matrix.component }}_digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+  notify-deployment:
+    name: notify the maintainers' development deployment
+    needs: build
+    runs-on: ubuntu-latest
+    if: |
+      always() &&
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'lockdep/stackradar' &&
+      needs.build.result == 'success'
+    steps:
+      - name: Dispatch to the deployment repository
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_DEVELOPMENT_TOKEN }}
+          CLIENT_DIGEST: ${{ needs.build.outputs.client_digest }}
+          SERVER_DIGEST: ${{ needs.build.outputs.server_digest }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN}" ]]; then
+            echo "GITOPS_DEVELOPMENT_TOKEN is not set: no deployment to notify."
+            exit 0
+          fi
+          if [[ -z "${CLIENT_DIGEST}${SERVER_DIGEST}" ]]; then
+            echo "Nothing was pushed; nothing to deploy."
+            exit 0
+          fi
+          gh api --method POST repos/lockdep/stackradar-gitops-development/dispatches \
+            -f event_type=app-snapshot \
+            -f "client_payload[sha]=${GITHUB_SHA}" \
+            -f "client_payload[client_digest]=${CLIENT_DIGEST}" \
+            -f "client_payload[server_digest]=${SERVER_DIGEST}"
+          echo "Dispatched app-snapshot for ${GITHUB_SHA::7}"

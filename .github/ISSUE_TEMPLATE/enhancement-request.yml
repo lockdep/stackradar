@@ -1,0 +1,57 @@
+name: Enhancement Request
+description: File an enhancement request
+labels: [ "enhancement" ]
+body:
+- type: markdown
+  attributes:
+    value: |
+      Thank you for helping make StackRadar better!
+
+      **Please do not ask questions here.**
+      If you want to bounce an idea around or wonder whether what you want makes sense,
+      [GitHub Discussions](https://github.com/lockdep/stackradar/discussions) is the place;
+      the [contributing guidelines](https://github.com/lockdep/stackradar/blob/main/CONTRIBUTING.md#asking-questions)
+      say where and how.
+
+      One enhancement per issue, please.
+- type: textarea
+  id: behavior-current
+  attributes:
+    label: Current Behavior
+    description: |-
+      Describe the current behaviour you observed, and what you are trying to do that it gets in the way of.
+      Consider providing screenshots, log output and other supplementary data.
+
+      *Files and images can be included via drag and drop into this text field.*
+  validations:
+    required: true
+- type: textarea
+  id: behavior-proposed
+  attributes:
+    label: Proposed Behavior
+    description: >-
+      Describe how you expect StackRadar to behave instead.
+      Please include *why* you want the new behaviour: the use case and the value it has for you.
+  validations:
+    required: true
+- type: dropdown
+  id: edition
+  attributes:
+    label: Edition
+    description: >-
+      Where would you use it?
+    options:
+    - Community Edition (self-hosted)
+    - StackRadar Cloud
+    - Both
+  validations:
+    required: true
+- type: checkboxes
+  id: checklist
+  attributes:
+    label: Checklist
+    options:
+    - label: I have read and understand the [contributing guidelines](https://github.com/lockdep/stackradar/blob/main/CONTRIBUTING.md#filing-issues)
+      required: true
+    - label: I have checked the [existing issues](https://github.com/lockdep/stackradar/issues) for whether this enhancement was already requested
+      required: true

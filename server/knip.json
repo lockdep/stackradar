@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "project": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mjs"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["pino-pretty"]
+}

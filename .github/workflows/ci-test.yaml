@@ -1,0 +1,135 @@
+name: Tests
+
+# The pull-request gate: both apps' test suites, formatting and lint, and the
+# dependency-free drift checks that keep the two apps and the vendored OSV
+# schema honest. The image builds (snapshot.yaml, push disabled on a
+# PR) and the per-area gates (dead-exports, primer-token-drift,
+# cloud-boundary, cross-app-drift) run beside this; this one is the status
+# the README badge shows.
+#
+# The server suite runs against a real PostgreSQL 18 started by
+# Testcontainers (tests/setup/global-setup.ts), so it needs the runner's
+# Docker daemon and takes a few minutes; nothing is mocked.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  # release.yaml runs this whole file as its first job, so "tests are green"
+  # is asserted by running them on the commit being released, not by looking
+  # up an earlier run that may not exist (a push made with GITHUB_TOKEN
+  # raises no push event, so the commit after a release has none).
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  server:
+    name: "server (build + test, ${{ matrix.edition }})"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      # The cloud edition is the superset of the surface; the community
+      # edition is what a self-hosted install runs. Cloud-only suites skip
+      # themselves under community (`describe.skipIf(!edition.isCloud)`), so
+      # the second leg is the one that catches a community-only regression.
+      matrix:
+        edition: [cloud, community]
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v6
+
+      # No `version`: pnpm/action-setup reads the app's `packageManager`
+      # field, so the lockfile and the CI pnpm never disagree.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: server/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: server/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check (prettier)
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type-check and build
+        run: pnpm build
+
+      - name: Test (Testcontainers PostgreSQL)
+        run: pnpm test
+        env:
+          CI: "true"
+          STACKRADAR_EDITION: ${{ matrix.edition }}
+
+  client:
+    name: "client (lint + test)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: client/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: client/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check (prettier)
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Test
+        run: pnpm test
+        env:
+          CI: "true"
+
+  drift:
+    name: "drift gates"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # All three run on bare node from a bare checkout: no install step.
+      - name: Licence boundary (server/src/cloud, client/src/cloud)
+        run: node scripts/check-cloud-boundary.mjs
+
+      - name: Constant copies shared by the two apps
+        run: node scripts/check-cross-app-constants.mjs
+
+      - name: Vendored OSV schema has not been hand-edited
+        run: node server/scripts/sync-osv-schema.mjs --verify

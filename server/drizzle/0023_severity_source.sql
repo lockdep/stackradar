@@ -1,0 +1,2 @@
+ALTER TABLE "vulnerabilities" ADD COLUMN "severity_source" varchar(100);--> statement-breakpoint
+CREATE INDEX "vulnerabilities_severity_source_idx" ON "vulnerabilities" USING btree ("severity_source") WHERE "vulnerabilities"."severity_source" IS NOT NULL;

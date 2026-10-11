@@ -1,0 +1,2 @@
+ALTER TABLE "signup_attributions" ADD COLUMN "analytics_signup_sent_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "signup_attributions" ADD COLUMN "analytics_cluster_sent_at" timestamp with time zone;

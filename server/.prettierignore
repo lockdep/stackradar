@@ -1,0 +1,8 @@
+# Generated or vendored: owned by a script, checked by its own drift gate.
+drizzle/
+src/schemas/osv-specifications/
+dist/
+coverage/
+node_modules/
+pnpm-lock.yaml
+tests/fixtures/

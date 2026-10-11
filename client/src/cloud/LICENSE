@@ -1,0 +1,80 @@
+StackRadar Cloud Licence
+========================
+
+Copyright (c) 2026 Lockdep AS. All rights reserved.
+
+Everything in this directory (`client/src/cloud/`) is **source-available**
+under this licence and is **not** covered by the GNU Affero General Public
+License that applies to the rest of this repository (see the `LICENSE` file at
+the repository root, whose exception clause names this directory). Each file
+carries the header `SPDX-License-Identifier: LicenseRef-StackRadar-Cloud`.
+
+This licence is modelled on the PolyForm Shield License 1.0.0
+(https://polyformproject.org/licenses/shield/1.0.0/), which it follows in
+substance: you may use the software for anything except competing with the
+licensor by providing the software, or a product or service built on it, to
+others as a hosted or managed service.
+
+## Permission
+
+The licensor grants you a copyright licence to use, copy, modify and run the
+software, and a patent licence to the extent the licensor's patents would be
+infringed by doing so, in each case for any purpose **except** the one named
+under "Limitation". You may also distribute the software and your changes to
+it, under this same licence and with this file and the file headers intact.
+
+## Limitation
+
+You may not use the software, or anything derived from it, to provide a
+product or service to others — hosted, managed, embedded or otherwise — that
+offers the same or substantially similar functionality to StackRadar Cloud
+(https://app.stackradar.io) or to any other product or service the licensor
+offers using this software. Running the software for your own organisation's
+use, including on infrastructure you operate, and evaluating or modifying it
+for that purpose, is permitted.
+
+## Contributions
+
+The licensor does not accept external contributions to the files under this
+licence. Pull requests that change them will be closed; the AGPL part of the
+repository is where contributions are welcome.
+
+## Notices
+
+You must keep this file and the SPDX header on every file under this licence
+in every copy you make or distribute.
+
+## No Other Rights
+
+These terms do not allow you to sublicense or transfer any of your licences to
+anyone else, or prevent the licensor from granting licences to anyone else.
+These terms do not imply any other licences.
+
+## Patent Defense
+
+If you make any written claim that the software infringes or contributes to
+infringement of any patent, your patent licence for the software granted under
+these terms ends immediately.
+
+## Violations
+
+The first time you are notified in writing that you have violated any of these
+terms, or done anything with the software not covered by your licences, your
+licences can nonetheless continue if you come into full compliance with these
+terms, and take practical steps to correct past violations, within 32 days of
+receiving notice. Otherwise, all your licences end immediately.
+
+## No Liability
+
+As far as the law allows, the software comes as is, without any warranty or
+condition, and the licensor will not be liable to you for any damages arising
+out of these terms or the use or nature of the software, under any kind of
+legal claim.
+
+## Definitions
+
+The "licensor" is Lockdep AS, the entity offering these terms. The "software"
+is the software the licensor makes available under these terms, including any
+portion of it. "You" refers to the individual or entity agreeing to these
+terms. "Use" means anything you do with the software requiring one of your
+licences.

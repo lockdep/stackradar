@@ -1,0 +1,33 @@
+{
+  "$comment": "Version-ordering parity fixture. Two identical copies: charts/tests/fixtures/version-order.json (charts/src/worker/select/versions.ts) and server/tests/fixtures/version-conformance/version-order.json (server/src/lib/image-tags.ts); scripts/check-cross-app-constants.mjs holds them byte-equal. `pairs` are [a, op, b] with op one of '<', '=', '>' or '?' (incomparable) for compareTags. `newest` is what newestVersion picks from a list (the charts side's addition; the server test reads only `pairs`).",
+  "pairs": [
+    ["1.0.0", "<", "1.0.1"],
+    ["1.0.0", "<", "1.1.0"],
+    ["1.0.0", "<", "2.0.0"],
+    ["0.9.9", "<", "1.0.0"],
+    ["0.9.0", "<", "0.10.0"],
+    ["0.10.0", "<", "0.99.0"],
+    ["17.11.3", "<", "28.0.5"],
+    ["2.0.0", ">", "1.2.3"],
+    ["28.0.5", ">", "28.0.1"],
+    ["v1.2.3", "=", "1.2.3"],
+    ["1.2.3", "=", "1.2.3"],
+    ["1.2.3-rc.1", "?", "1.2.3"],
+    ["1.0.0-alpha", "?", "1.0.0"],
+    ["1.0.0-beta.2", "?", "1.0.0-beta.11"],
+    ["1.2", "?", "1.2.3"],
+    ["latest", "?", "1.2.3"],
+    ["1.2.3-r2", "?", "1.2.3"],
+    ["20.18-slim", "?", "20.18"]
+  ],
+  "newest": [
+    { "versions": ["1.2.3", "1.10.0", "1.9.9"], "expect": "1.10.0" },
+    { "versions": ["28.0.5", "28.0.1", "19.3.0", "17.11.3"], "expect": "28.0.5" },
+    { "versions": ["17.11.3", "19.3.0", "28.0.1", "28.0.5"], "expect": "28.0.5" },
+    { "versions": ["2.0.0-rc.1", "1.9.0"], "expect": "1.9.0" },
+    { "versions": ["v1.0.0", "v1.0.1"], "expect": "v1.0.1" },
+    { "versions": ["1.0.0-beta"], "expect": null },
+    { "versions": ["latest"], "expect": null },
+    { "versions": [], "expect": null }
+  ]
+}

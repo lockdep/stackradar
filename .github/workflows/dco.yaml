@@ -1,0 +1,46 @@
+name: DCO
+
+# CONTRIBUTING.md asks for every commit to be signed off
+# (`git commit -s`, the Developer Certificate of Origin). This job is what
+# makes that a gate instead of a request: it reads every commit the pull
+# request adds and fails naming the first one without a Signed-off-by
+# trailer. Fixing it is `git rebase --signoff main` and a force-push;
+# the message says so.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Need the base commit to enumerate the PR's own commits.
+          fetch-depth: 0
+
+      - name: Every commit carries a Signed-off-by trailer
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for sha in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            if ! git show -s --format=%B "$sha" | grep -qiE '^Signed-off-by: .+ <.+@.+>$'; then
+              echo "::error::Commit $(git show -s --format='%h %s' "$sha") is not signed off."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo
+            echo "Add the trailer to every commit with:  git rebase --signoff $BASE  and force-push."
+            echo "See CONTRIBUTING.md § Pull requests."
+            exit 1
+          fi
+          echo "All commits are signed off."

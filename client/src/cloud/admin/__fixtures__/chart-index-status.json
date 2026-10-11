@@ -1,0 +1,556 @@
+{
+  "generatedAt": "2026-09-06T07:44:47.672Z",
+  "schedules": [
+    {
+      "name": "pipeline",
+      "tasks": ["select", "render", "prune"],
+      "cron": "15 4 * * *",
+      "nextAt": "2026-09-07T04:15:00.000Z"
+    },
+    {
+      "name": "daily",
+      "tasks": ["match", "score"],
+      "cron": "0 7 * * *",
+      "nextAt": "2026-09-07T07:00:00.000Z"
+    },
+    {
+      "name": "trending",
+      "tasks": ["trending"],
+      "cron": "30 7 * * *",
+      "nextAt": "2026-09-07T07:30:00.000Z"
+    }
+  ],
+  "tasks": [
+    {
+      "task": "select",
+      "lastRun": {
+        "id": "03feec50-af6d-46e5-8e6c-0027d8206082",
+        "task": "select",
+        "startedAt": "2026-09-06T06:44:47.672Z",
+        "finishedAt": null,
+        "ok": null,
+        "error": null,
+        "stats": {},
+        "helmVersion": null,
+        "syftVersion": null,
+        "serverVersion": null,
+        "sync": null,
+        "durationMs": null
+      },
+      "lastOkAt": null,
+      "last24h": {
+        "ok": 0,
+        "failed": 0,
+        "unfinished": 1
+      }
+    },
+    {
+      "task": "render",
+      "lastRun": {
+        "id": "f3d27b28-d53b-4b29-91e1-1dadb12d54f4",
+        "task": "render",
+        "startedAt": "2026-09-06T05:44:47.672Z",
+        "finishedAt": "2026-09-06T05:44:52.672Z",
+        "ok": false,
+        "error": "helm: boom",
+        "stats": {
+          "failed": 1,
+          "refsSeen": 9,
+          "rendered": 2,
+          "imagesNew": 2,
+          "candidates": 3,
+          "refsRefused": 1,
+          "refsResolved": 8,
+          "refsUnresolved": 0
+        },
+        "helmVersion": null,
+        "syftVersion": null,
+        "serverVersion": null,
+        "sync": null,
+        "durationMs": 5000
+      },
+      "lastOkAt": null,
+      "last24h": {
+        "ok": 0,
+        "failed": 1,
+        "unfinished": 0
+      }
+    },
+    {
+      "task": "prune",
+      "lastRun": null,
+      "lastOkAt": null,
+      "last24h": {
+        "ok": 0,
+        "failed": 0,
+        "unfinished": 0
+      }
+    },
+    {
+      "task": "inventory",
+      "lastRun": {
+        "id": "5f1a9798-cef4-4679-bde7-ad9c93613b35",
+        "task": "inventory",
+        "startedAt": "2026-09-06T07:29:47.672Z",
+        "finishedAt": "2026-09-06T07:34:47.672Z",
+        "ok": true,
+        "error": null,
+        "stats": {
+          "done": 97,
+          "failed": 2,
+          "bytesGz": 18400000,
+          "candidates": 100,
+          "interrupted": 0,
+          "rateLimited": 1,
+          "componentsTotal": 41230
+        },
+        "helmVersion": null,
+        "syftVersion": "1.42.1",
+        "serverVersion": null,
+        "sync": null,
+        "durationMs": 300000
+      },
+      "lastOkAt": "2026-09-06T07:34:47.672Z",
+      "last24h": {
+        "ok": 1,
+        "failed": 0,
+        "unfinished": 0
+      }
+    },
+    {
+      "task": "match",
+      "lastRun": {
+        "id": "da2a0032-8191-48b8-9b86-49a52adc876f",
+        "task": "match",
+        "startedAt": "2026-09-06T07:43:47.672Z",
+        "finishedAt": "2026-09-06T07:44:47.672Z",
+        "ok": true,
+        "error": null,
+        "stats": {},
+        "helmVersion": null,
+        "syftVersion": null,
+        "serverVersion": "1.0.0+test",
+        "sync": {
+          "osvSyncedAt": "2026-09-02T04:31:10.000Z",
+          "epssScoreDate": "2026-09-01",
+          "kevCatalogVersion": "2026.09.01"
+        },
+        "durationMs": 60000
+      },
+      "lastOkAt": "2026-09-06T07:44:47.672Z",
+      "last24h": {
+        "ok": 1,
+        "failed": 0,
+        "unfinished": 0
+      }
+    },
+    {
+      "task": "score",
+      "lastRun": {
+        "id": "75627861-2972-4d03-b892-d7a0dbacd346",
+        "task": "score",
+        "startedAt": "2026-09-06T07:44:47.831Z",
+        "finishedAt": "2026-09-06T07:44:47.860Z",
+        "ok": true,
+        "error": null,
+        "stats": {
+          "deltas": 1,
+          "sampled": 5,
+          "versions": 5,
+          "deployedImages": 4
+        },
+        "helmVersion": "v3.16.0",
+        "syftVersion": "1.42.1-test",
+        "serverVersion": "1.0.0+test",
+        "sync": {
+          "osvSyncedAt": "2026-09-02T04:31:10.000Z",
+          "epssScoreDate": "2026-09-01",
+          "kevCatalogVersion": "2026.09.01"
+        },
+        "durationMs": 29
+      },
+      "lastOkAt": "2026-09-06T07:44:47.860Z",
+      "last24h": {
+        "ok": 2,
+        "failed": 0,
+        "unfinished": 0
+      }
+    },
+    {
+      "task": "trending",
+      "lastRun": null,
+      "lastOkAt": null,
+      "last24h": {
+        "ok": 0,
+        "failed": 0,
+        "unfinished": 0
+      }
+    }
+  ],
+  "recentRuns": [
+    {
+      "id": "75627861-2972-4d03-b892-d7a0dbacd346",
+      "task": "score",
+      "startedAt": "2026-09-06T07:44:47.831Z",
+      "finishedAt": "2026-09-06T07:44:47.860Z",
+      "ok": true,
+      "error": null,
+      "stats": {
+        "deltas": 1,
+        "sampled": 5,
+        "versions": 5,
+        "deployedImages": 4
+      },
+      "helmVersion": "v3.16.0",
+      "syftVersion": "1.42.1-test",
+      "serverVersion": "1.0.0+test",
+      "sync": {
+        "osvSyncedAt": "2026-09-02T04:31:10.000Z",
+        "epssScoreDate": "2026-09-01",
+        "kevCatalogVersion": "2026.09.01"
+      },
+      "durationMs": 29
+    },
+    {
+      "id": "da2a0032-8191-48b8-9b86-49a52adc876f",
+      "task": "match",
+      "startedAt": "2026-09-06T07:43:47.672Z",
+      "finishedAt": "2026-09-06T07:44:47.672Z",
+      "ok": true,
+      "error": null,
+      "stats": {},
+      "helmVersion": null,
+      "syftVersion": null,
+      "serverVersion": "1.0.0+test",
+      "sync": {
+        "osvSyncedAt": "2026-09-02T04:31:10.000Z",
+        "epssScoreDate": "2026-09-01",
+        "kevCatalogVersion": "2026.09.01"
+      },
+      "durationMs": 60000
+    },
+    {
+      "id": "5f1a9798-cef4-4679-bde7-ad9c93613b35",
+      "task": "inventory",
+      "startedAt": "2026-09-06T07:29:47.672Z",
+      "finishedAt": "2026-09-06T07:34:47.672Z",
+      "ok": true,
+      "error": null,
+      "stats": {
+        "done": 97,
+        "failed": 2,
+        "bytesGz": 18400000,
+        "candidates": 100,
+        "interrupted": 0,
+        "rateLimited": 1,
+        "componentsTotal": 41230
+      },
+      "helmVersion": null,
+      "syftVersion": "1.42.1",
+      "serverVersion": null,
+      "sync": null,
+      "durationMs": 300000
+    },
+    {
+      "id": "03feec50-af6d-46e5-8e6c-0027d8206082",
+      "task": "select",
+      "startedAt": "2026-09-06T06:44:47.672Z",
+      "finishedAt": null,
+      "ok": null,
+      "error": null,
+      "stats": {},
+      "helmVersion": null,
+      "syftVersion": null,
+      "serverVersion": null,
+      "sync": null,
+      "durationMs": null
+    },
+    {
+      "id": "f3d27b28-d53b-4b29-91e1-1dadb12d54f4",
+      "task": "render",
+      "startedAt": "2026-09-06T05:44:47.672Z",
+      "finishedAt": "2026-09-06T05:44:52.672Z",
+      "ok": false,
+      "error": "helm: boom",
+      "stats": {
+        "failed": 1,
+        "refsSeen": 9,
+        "rendered": 2,
+        "imagesNew": 2,
+        "candidates": 3,
+        "refsRefused": 1,
+        "refsResolved": 8,
+        "refsUnresolved": 0
+      },
+      "helmVersion": null,
+      "syftVersion": null,
+      "serverVersion": null,
+      "sync": null,
+      "durationMs": 5000
+    },
+    {
+      "id": "696c1400-6c14-4d00-a884-c8e6923f3eee",
+      "task": "score",
+      "startedAt": "2026-09-05T07:44:47.672Z",
+      "finishedAt": "2026-09-05T07:44:47.672Z",
+      "ok": true,
+      "error": null,
+      "stats": {},
+      "helmVersion": null,
+      "syftVersion": null,
+      "serverVersion": "1.0.0+test",
+      "sync": {
+        "osvSyncedAt": "2026-08-31T04:31:00.000Z",
+        "epssScoreDate": "2026-08-30",
+        "kevCatalogVersion": "2026.08.30"
+      },
+      "durationMs": 0
+    },
+    {
+      "id": "4d0d32d9-49ea-4a42-b088-e610c50167a1",
+      "task": "score",
+      "startedAt": "2026-09-03T07:44:47.672Z",
+      "finishedAt": "2026-09-03T07:44:47.672Z",
+      "ok": true,
+      "error": null,
+      "stats": {},
+      "helmVersion": null,
+      "syftVersion": null,
+      "serverVersion": "1.0.0+test",
+      "sync": {
+        "osvSyncedAt": "2026-08-29T04:31:00.000Z",
+        "epssScoreDate": "2026-08-28",
+        "kevCatalogVersion": "2026.08.28"
+      },
+      "durationMs": 0
+    }
+  ],
+  "freshness": {
+    "scoredAt": "2026-09-06T07:44:47.860Z",
+    "sync": {
+      "osvSyncedAt": "2026-09-02T04:31:10.000Z",
+      "epssScoreDate": "2026-09-01",
+      "kevCatalogVersion": "2026.09.01"
+    },
+    "helmVersion": "v3.16.0",
+    "syftVersion": "1.42.1-test",
+    "serverVersion": "1.0.0+test"
+  },
+  "catalogue": {
+    "charts": {
+      "total": 4,
+      "selected": 3,
+      "selectedWithLatest": 3,
+      "official": 1,
+      "repoVerified": 1,
+      "lastSeenAt": "2026-09-06T07:44:47.823Z"
+    },
+    "versions": {
+      "total": 5,
+      "byRenderStatus": {
+        "pending": 0,
+        "rendered": 5,
+        "failed": 0
+      },
+      "live": {
+        "total": 3,
+        "pending": 0,
+        "rendered": 3,
+        "failed": 0,
+        "noTarball": 0
+      },
+      "attempted24h": 4,
+      "rendered24h": 4,
+      "appVersionCheck": {
+        "matched": 2,
+        "unmatched": 1,
+        "unknown": 1,
+        "unchecked": 1
+      }
+    },
+    "renderFailures": [],
+    "repoIndexCache": {
+      "repositories": 0,
+      "fetched24h": 0,
+      "oldestFetchedAt": null
+    },
+    "workloads": {
+      "total": 6,
+      "resolved": 5,
+      "unresolved": 1
+    },
+    "resolutionErrors": [
+      {
+        "reason": "registry not in allow-list",
+        "count": 1
+      }
+    ]
+  },
+  "images": {
+    "byStatus": {
+      "pending": 2,
+      "done": 4,
+      "failed": 1,
+      "retired": 0
+    },
+    "inFlight": [
+      {
+        "claimedBy": "charts-scanner-7f9c-abc12:1",
+        "claimedAt": "2026-09-06T07:43:47.672Z",
+        "ageSeconds": 60,
+        "registry": "docker.io",
+        "repository": "library/claimed",
+        "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000006",
+        "attempts": 1
+      }
+    ],
+    "staleClaims": 0,
+    "queueByRegistry": [
+      {
+        "registry": "docker.io",
+        "count": 1,
+        "topPriority": 0
+      }
+    ],
+    "failedByAttempts": [
+      {
+        "attempts": 2,
+        "count": 1
+      }
+    ],
+    "maxAttempts": 2,
+    "failures": [
+      {
+        "reason": "syft exited 1: manifest unknown",
+        "count": 1
+      }
+    ],
+    "done24h": 4,
+    "failed24h": 0,
+    "oldestPendingAt": "2026-09-06T07:44:47.688Z",
+    "sboms": {
+      "total": 4,
+      "components": 65,
+      "latestGeneratedAt": "2026-09-06T07:44:47.690Z"
+    },
+    "scanned": 4,
+    "doneUnscanned": 0,
+    "currentFindings": {
+      "total": 64,
+      "kev": 1,
+      "exploited": 1
+    }
+  },
+  "scores": {
+    "liveVersions": {
+      "total": 3,
+      "scored": 3,
+      "images": 6,
+      "measured": 4,
+      "lastScoredAt": "2026-09-06T07:44:47.834Z"
+    },
+    "samples": {
+      "today": 5,
+      "latestSampledOn": "2026-09-06"
+    },
+    "deltas": 1,
+    "deployedImages": {
+      "total": 4,
+      "scored": 3
+    },
+    "trending": {
+      "rows": 0,
+      "computedAt": null
+    },
+    "advisoryReach": {
+      "rows": 0,
+      "computedAt": null
+    }
+  },
+  "database": {
+    "name": "stackradar_charts",
+    "sizeBytes": 9467583,
+    "tables": [
+      {
+        "name": "image_findings",
+        "rows": 0,
+        "bytes": 155648
+      },
+      {
+        "name": "images",
+        "rows": 0,
+        "bytes": 98304
+      },
+      {
+        "name": "components",
+        "rows": 0,
+        "bytes": 81920
+      },
+      {
+        "name": "deployed_images",
+        "rows": 0,
+        "bytes": 81920
+      },
+      {
+        "name": "chart_versions",
+        "rows": 0,
+        "bytes": 65536
+      },
+      {
+        "name": "chart_version_workloads",
+        "rows": 0,
+        "bytes": 65536
+      },
+      {
+        "name": "image_refs",
+        "rows": 0,
+        "bytes": 65536
+      },
+      {
+        "name": "charts",
+        "rows": 0,
+        "bytes": 65536
+      },
+      {
+        "name": "chart_version_scores",
+        "rows": 0,
+        "bytes": 49152
+      },
+      {
+        "name": "runs",
+        "rows": 0,
+        "bytes": 49152
+      },
+      {
+        "name": "image_scans",
+        "rows": 0,
+        "bytes": 49152
+      },
+      {
+        "name": "sboms",
+        "rows": 0,
+        "bytes": 49152
+      },
+      {
+        "name": "advisory_reach",
+        "rows": 0,
+        "bytes": 32768
+      },
+      {
+        "name": "chart_version_deltas",
+        "rows": 0,
+        "bytes": 32768
+      },
+      {
+        "name": "trending_advisories",
+        "rows": 0,
+        "bytes": 24576
+      },
+      {
+        "name": "repo_index_cache",
+        "rows": 0,
+        "bytes": 24576
+      }
+    ]
+  }
+}
