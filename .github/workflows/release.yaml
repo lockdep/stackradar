@@ -67,7 +67,7 @@ jobs:
               exit 1 ;;
           esac
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -151,7 +151,7 @@ jobs:
       PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.branch }}
           fetch-depth: 0 # --generate-notes needs the previous tag

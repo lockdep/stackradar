@@ -134,7 +134,7 @@ jobs:
           done
 
       - name: Checkout prod gitops repository (promotion target)
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: lockdep/stackradar-gitops
           token: ${{ secrets.GITOPS_PROD_TOKEN }}

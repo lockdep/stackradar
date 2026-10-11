@@ -61,7 +61,7 @@ jobs:
           echo "::error::Publish must run on a tag, but was dispatched on ${GITHUB_REF}. Run the Release workflow to make one."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the previous tag decides `latest` and the migration diff
 
@@ -172,7 +172,7 @@ jobs:
       IMAGE: ghcr.io/lockdep/stackradar-${{ matrix.component }}
       VERSION: ${{ needs.verify.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       # arm64 is built through QEMU. kind on Apple silicon is where a large
       # share of evaluators run the quickstart, and an amd64-only image fails
@@ -341,7 +341,7 @@ jobs:
       PREVIOUS: ${{ needs.verify.outputs.previous }}
       LATEST: ${{ needs.verify.outputs.latest }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
