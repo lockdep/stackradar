@@ -66,6 +66,7 @@ body:
       under Compose, `docker compose images` shows the tag.
       *(The release process adds each new version here.)*
     options:
+    - 0.1.0
     - snapshot (built from main)
   validations:
     required: true
