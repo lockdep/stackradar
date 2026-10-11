@@ -1,0 +1,132 @@
+name: Defect Report
+description: File a defect report
+labels: [ "defect", "in triage" ]
+body:
+- type: markdown
+  attributes:
+    value: |
+      Thank you for helping make StackRadar better!
+
+      **Please do not ask questions here.**
+      If you are not sure whether what you see is a defect, ask in
+      [GitHub Discussions](https://github.com/lockdep/stackradar/discussions) first;
+      the [contributing guidelines](https://github.com/lockdep/stackradar/blob/main/CONTRIBUTING.md#asking-questions)
+      say where and how.
+
+      **Defects in the scanner agent or its chart** belong in
+      [lockdep/stackradar-scanner](https://github.com/lockdep/stackradar-scanner/issues/new/choose),
+      and defects in the `stackradar` Helm chart's templates and values in
+      [lockdep/helm-charts](https://github.com/lockdep/helm-charts/issues/new/choose).
+      Unsure? Report it here; a maintainer will move it.
+- type: textarea
+  id: behavior-current
+  attributes:
+    label: Current Behavior
+    description: |-
+      Describe the faulty behaviour you observed.
+      Consider providing screenshots, log output (`kubectl -n stackradar logs deploy/stackradar-server`,
+      `docker compose logs server`) and other supplementary data.
+
+      *Files and images can be included via drag and drop into this text field.*
+  validations:
+    required: true
+- type: textarea
+  id: steps-to-reproduce
+  attributes:
+    label: Steps to Reproduce
+    description: |-
+      Describe the exact steps that reproduce the defect.
+      Consider providing screenshots, SBOM files and other supplementary data.
+
+      *Files and images can be included via drag and drop into this text field.
+      For SBOM files, please redact any internal or otherwise confidential information.*
+    value: |-
+      1.
+  validations:
+    required: true
+- type: textarea
+  id: behavior-expected
+  attributes:
+    label: Expected Behavior
+    description: >-
+      Describe how you expect StackRadar to behave instead.
+  validations:
+    required: true
+- type: markdown
+  attributes:
+    value: |
+      ## Environment
+      Please provide some details about the environment in which you observed the defect.
+- type: dropdown
+  id: environment-stackradar-version
+  attributes:
+    label: StackRadar Version
+    description: >-
+      Which version of StackRadar are you running? `helm -n stackradar list` shows it as `APP VERSION`;
+      under Compose, `docker compose images` shows the tag.
+      *(The release process adds each new version here.)*
+    options:
+    - 0.1.0
+    - snapshot (built from main)
+  validations:
+    required: true
+- type: dropdown
+  id: environment-distribution
+  attributes:
+    label: Distribution
+    description: >-
+      How is it installed?
+    options:
+    - Helm chart (self-hosted)
+    - Docker Compose (self-hosted)
+    - StackRadar Cloud (app.stackradar.io)
+  validations:
+    required: true
+- type: input
+  id: environment-kubernetes-version
+  attributes:
+    label: Kubernetes Version
+    description: |-
+      `kubectl version --short` on the cluster the scanner runs in, and the distribution if it matters (kind, EKS, GKE, AKS, k3s, OpenShift …).
+
+      *Leave empty for Docker Compose.*
+    placeholder: "1.31 (EKS)"
+  validations:
+    required: false
+- type: input
+  id: environment-scanner-chart-version
+  attributes:
+    label: Scanner Chart Version
+    description: |-
+      `helm -n stackradar list` shows it; the `stackradar` chart installs the scanner as a subchart, so the chart's own version is fine too.
+
+      *Leave empty if the defect does not involve the scanner.*
+    placeholder: "0.5.0"
+  validations:
+    required: false
+- type: dropdown
+  id: environment-browser
+  attributes:
+    label: Browser
+    description: |-
+      Which browser are you using?
+
+      *If the defect is not UI-related, select N/A.*
+    options:
+    - Google Chrome
+    - Mozilla Firefox
+    - Apple Safari
+    - Microsoft Edge
+    - Other
+    - N/A
+  validations:
+    required: true
+- type: checkboxes
+  id: checklist
+  attributes:
+    label: Checklist
+    options:
+    - label: I have read and understand the [contributing guidelines](https://github.com/lockdep/stackradar/blob/main/CONTRIBUTING.md#filing-issues)
+      required: true
+    - label: I have checked the [existing issues](https://github.com/lockdep/stackradar/issues) for whether this defect was already reported
+      required: true

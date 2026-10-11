@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+- name: GitHub Discussions
+  url: https://github.com/lockdep/stackradar/discussions
+  about: Questions, ideas and "is this expected?" go here, not in an issue.
+- name: Security report
+  url: https://github.com/lockdep/stackradar/security/advisories/new
+  about: Found a vulnerability in StackRadar? Report it privately here, or email security@stackradar.io.

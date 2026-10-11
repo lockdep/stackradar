@@ -174,3 +174,10 @@ One machine, one Postgres with no TLS on a private Compose network, one
 cluster you feed by hand. It is the community edition's evaluation path,
 not its production shape — that is the Helm chart, which brings the
 scanner, and the cloud for several clusters in one dashboard.
+
+## See also
+
+[users-and-login.md](users-and-login.md) for roles and the locked-out
+admin, [oidc.md](oidc.md) for the provider recipes, [own-postgres.md](own-postgres.md)
+for pointing the file at a database you run, [upgrading.md](upgrading.md)
+and [backup.md](backup.md).

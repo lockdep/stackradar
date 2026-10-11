@@ -1,0 +1,8 @@
+# The source-available part of the repository (StackRadar Cloud Licence).
+# External pull requests touching these paths are not accepted; see
+# CONTRIBUTING.md "What is not accepted".
+/server/src/cloud/   @mariusjor
+/client/src/cloud/   @mariusjor
+/LICENSE             @mariusjor
+/NOTICE              @mariusjor
+/scripts/check-cloud-boundary.mjs @mariusjor

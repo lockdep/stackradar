@@ -246,3 +246,11 @@ for the cluster it runs in, and the API refuses a second cluster. That is
 the cloud, where you install only the scanner chart with a key from
 app.stackradar.io. See [docker-compose.md](docker-compose.md) for the
 laptop try-out without a cluster.
+
+## See also
+
+[users-and-login.md](users-and-login.md) for roles and the locked-out
+admin, [oidc.md](oidc.md) for the provider recipes, [own-postgres.md](own-postgres.md)
+for the full move off the bundled database, [upgrading.md](upgrading.md)
+before every upgrade, and [backup.md](backup.md) for what to keep and how
+to prove a restore works.
