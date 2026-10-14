@@ -14,8 +14,8 @@ importers:
   .:
     dependencies:
       '@cyclonedx/cyclonedx-library':
-        specifier: ^9.4.1
-        version: 9.4.1(ajv-formats@3.0.1(ajv@8.20.0))(ajv@8.20.0)
+        specifier: ^9.5.0
+        version: 9.5.0(ajv-formats@3.0.1(ajv@8.20.0))(ajv@8.20.0)
       ae-cvss-calculator:
         specifier: ^1.0.13
         version: 1.0.13
@@ -156,8 +156,8 @@ packages:
     resolution: {integrity: sha512-6zABk/ECA/QYSCQ1NGiVwwbQerUCZ+TQbp64Q3AgmfNvurHH0j8TtXa1qbShXA6qqkpAj4V5W8pP6mLe1mcMqA==}
     engines: {node: '>=18'}
 
-  '@cyclonedx/cyclonedx-library@9.4.1':
-    resolution: {integrity: sha512-fY/ZEFXEKM4X/eC2vClPrpucgb4IsyKYT1q9SBFx2+ySJ0jA2NELIf1va+8SDlcv6yUgwyLqtJ92g2KivQp3eA==}
+  '@cyclonedx/cyclonedx-library@9.5.0':
+    resolution: {integrity: sha512-rKUcvRGXYhW0JhNgy4eWcgroUYSIJLAd7JhlAE5Jtoy1TvGsWUV0EhWyVwtnhfB1au87YzGwDqJHm/oH/wlM/w==}
     engines: {node: '>=20.18.0'}
     peerDependencies:
       ajv: ^8.12.0
@@ -2636,8 +2636,8 @@ packages:
   spdx-expression-parse@4.0.0:
     resolution: {integrity: sha512-Clya5JIij/7C6bRR22+tnGXbc4VKlibKSVj2iHvVeX5iMW7s1SIQlqu699JkODJJIhh/pUu8L0/VLh8xflD+LQ==}
 
-  spdx-license-ids@3.0.22:
-    resolution: {integrity: sha512-4PRT4nh1EImPbt2jASOKHX7PB7I+e4IWNLvkKFDxNhJlfjbYlleYQh285Z/3mPTHSAK/AvdMmw5BNNuYH8ShgQ==}
+  spdx-license-ids@3.0.24:
+    resolution: {integrity: sha512-cLS9TtWkIQFyLkJ3/5aFQAOHOSKTlOs/7WDut/XPSdjom1fJhUdkepeJAKXa9Y05+FabHd0sti+Et559vDtkpQ==}
 
   split-ca@1.0.1:
     resolution: {integrity: sha512-Q5thBSxp5t8WPTTJQS59LrGqOZqOsrhDGDVm8azCqIBjSBd7nd9o2PM+mDulQQkh8h//4U6hFZnc/mul8t5pWQ==}
@@ -3018,7 +3018,7 @@ snapshots:
 
   '@bcoe/v8-coverage@1.0.2': {}
 
-  '@cyclonedx/cyclonedx-library@9.4.1(ajv-formats@3.0.1(ajv@8.20.0))(ajv@8.20.0)':
+  '@cyclonedx/cyclonedx-library@9.5.0(ajv-formats@3.0.1(ajv@8.20.0))(ajv@8.20.0)':
     dependencies:
       packageurl-js: 2.0.1
       spdx-expression-parse: 4.0.0
@@ -5272,9 +5272,9 @@ snapshots:
   spdx-expression-parse@4.0.0:
     dependencies:
       spdx-exceptions: 2.5.0
-      spdx-license-ids: 3.0.22
+      spdx-license-ids: 3.0.24
 
-  spdx-license-ids@3.0.22: {}
+  spdx-license-ids@3.0.24: {}
 
   split-ca@1.0.1: {}
 
