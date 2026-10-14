@@ -50,6 +50,11 @@ env:
 jobs:
   detect-changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # paths-filter lists a pull request's files through the API; without
+      # this the job fails with "Resource not accessible by integration".
+      pull-requests: read
     outputs:
       client: ${{ steps.filter.outputs.client }}
       server: ${{ steps.filter.outputs.server }}
