@@ -41,7 +41,7 @@
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
-    "@headlessui/react": "^2.2.9",
+    "@headlessui/react": "^2.2.10",
     "@node-rs/argon2": "2.2.1",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.2",
