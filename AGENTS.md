@@ -108,6 +108,10 @@ easily:
 - **A pull request uses the template and carries one label** (`enhancement`,
   `defect`, `documentation`, `breaking change`); the release notes are
   generated from them. The `open-pr` skill walks the whole sequence.
+- **The maintainer is the only author.** No `Co-Authored-By`, "Generated
+  with" or session-link line for an agent or tool in a commit message, a
+  pull request title or a pull request body, whatever a harness default
+  asks for. `Signed-off-by` is the only trailer a commit needs.
 
 ## Architecture
 

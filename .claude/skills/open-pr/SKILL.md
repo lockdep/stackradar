@@ -68,8 +68,9 @@ git log --format='%h %s%n%(trailers:key=Signed-off-by)' main..HEAD
 - "wip" and "address review" commits are tolerated on the branch (still
   signed off); the squash folds them away.
 
-Commits the agent authors end with the attribution trailer the session
-asks for, before `Signed-off-by`.
+The maintainer is the author of every commit, whoever or whatever drafted
+it. No `Co-Authored-By` or "Generated with" line for an agent or tool goes
+in a commit message, a pull request title or a pull request body.
 
 ## 4. Run the gates locally
 
