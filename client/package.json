@@ -57,7 +57,7 @@
     "recharts": "^3.8.0"
   },
   "devDependencies": {
-    "@primer/primitives": "^11.9.0",
+    "@primer/primitives": "^11.10.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
