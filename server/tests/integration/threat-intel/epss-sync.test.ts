@@ -108,6 +108,11 @@ describe("EPSS sync", () => {
         expect(result.rowsInFile).toBe(3);
         expect(result.scoreDate).toBe("2026-08-15");
 
+        // The run stamp the app shell reads is cleared by the success it reports.
+        const [state] = await db.select().from(schema.epssSyncState);
+        expect(state!.lastSyncedAt).not.toBeNull();
+        expect(state!.runStartedAt).toBeNull();
+
         const rows = await db.select().from(schema.vulnerabilities);
         const byId = new Map(rows.map((r) => [r.vulnId, r]));
 
@@ -181,7 +186,11 @@ describe("EPSS sync", () => {
                 .from(schema.vulnerabilities)
                 .where(eq(schema.vulnerabilities.vulnId, "CVE-2021-44228"));
             expect(row!.epss).toBeNull();
-            expect(await repo.createEpssRepository().getState()).toBeUndefined();
+            // Stamped as running before the lock attempt, but neither a sync
+            // nor an error was recorded.
+            const state = await repo.createEpssRepository().getState();
+            expect(state?.lastSyncedAt ?? null).toBeNull();
+            expect(state?.lastError ?? null).toBeNull();
         } finally {
             await holder`SELECT pg_advisory_unlock(${EPSS_APPLY_LOCK_KEY})`;
             holder.release();

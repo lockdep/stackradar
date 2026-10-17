@@ -103,6 +103,8 @@ export interface EpssRepository {
         rowsUnmatched: number;
     }): Promise<void>;
     recordFailure(message: string): Promise<void>;
+    /** A run has passed the freshness guard and is fetching: stamp `run_started_at` for the app shell. */
+    markRunning(): Promise<void>;
 }
 
 export function createEpssRepository(): EpssRepository {
@@ -273,11 +275,16 @@ export function createEpssRepository(): EpssRepository {
                 rowsMatched: state.rowsMatched,
                 rowsUnmatched: state.rowsUnmatched,
                 lastError: null,
+                runStartedAt: null,
             });
         },
 
         async recordFailure(message) {
-            await recordStateFailure(epssSyncState, message);
+            await recordStateFailure(epssSyncState, message, { runStartedAt: null });
+        },
+
+        async markRunning() {
+            await upsertState(epssSyncState, { runStartedAt: new Date() });
         },
     };
 }

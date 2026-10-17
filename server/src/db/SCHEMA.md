@@ -516,13 +516,15 @@ Neither records `lastSyncedAt` on failure — the freshness the API reports has 
 
 ### `epss_sync_state`
 
-`lastSyncedAt`, `lastScoreDate`, `rowsInFile`, `rowsMatched`, `rowsUnmatched`, `lastError`.
+`lastSyncedAt`, `lastScoreDate`, `rowsInFile`, `rowsMatched`, `rowsUnmatched`, `lastError`, `runStartedAt`.
 
 `lastScoreDate` is the feed's own `score_date`, as distinct from when we fetched it — a sync succeeding nightly against a frozen feed is a healthy-looking pipeline serving stale predictions, and this is the only column that shows it. A large `rowsUnmatched` is expected: EPSS scores every CVE in the NVD, the mirror holds only those with an ecosystem or distro advisory.
 
 ### `kev_sync_state`
 
-`lastSyncedAt`, `catalogVersion`, `releasedAt`, `entriesInCatalog`, `entriesMatched`, `entriesCleared`, `lastError`.
+`lastSyncedAt`, `catalogVersion`, `releasedAt`, `entriesInCatalog`, `entriesMatched`, `entriesCleared`, `lastError`, `runStartedAt`.
+
+`runStartedAt` on both: set when a run passes the freshness guard, cleared when it records success or failure. It is how the app shell's banner on a fresh install says a feed is _scoring now_ rather than _not yet_ (`lib/mirror-status.ts`); a stamp a dead process left behind is disbelieved after `FEED_RUN_STALE_AFTER_HOURS` (`lib/feed-health.ts`).
 
 `entriesCleared` is the one to watch. KEV sync is a full replacement, so this counts advisories CISA has delisted since the last run — normally zero or a handful. A large value means the join broke, not that CISA had second thoughts.
 
@@ -532,7 +534,7 @@ Neither records `lastSyncedAt` on failure — the freshness the API reports has 
 
 ### `osv_sync_state`
 
-A single-row table (PK always `1`) tracking the overall sync state of the local OSV vulnerability mirror. Records whether initialization is complete, last poll time, watermark timestamps, current sync status, and failure counters.
+A single-row table (PK always `1`) tracking the overall sync state of the local OSV vulnerability mirror. Records whether initialization is complete, last poll time, watermark timestamps, current sync status, and failure counters — plus `bootstrapProgress`, a jsonb snapshot of where a running bootstrap is (archive, phase, bytes, records), non-null only during one, for the fresh-install banner.
 
 > **There is no `osv_vulns` table, and no `osv_affected_packages`.** Earlier
 > revisions of this document described both, and downstream documents

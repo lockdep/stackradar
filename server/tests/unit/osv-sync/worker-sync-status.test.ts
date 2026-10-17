@@ -348,6 +348,7 @@ describe("Worker sync status lifecycle", () => {
                 lastFullRefreshAt: null,
                 affectedPkgGeneration: 1,
                 ecosystems: null,
+                bootstrapProgress: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             };

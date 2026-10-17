@@ -42,6 +42,8 @@ export function createEpssSyncWorker(config: EpssSyncConfig, downloader: EpssDow
                 return { skipped: true, reason: "fresh" };
             }
 
+            await repository.markRunning();
+
             let scoreDate: string | null = null;
             let modelVersion: string | null = null;
             let malformed = 0;

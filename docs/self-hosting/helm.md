@@ -54,9 +54,12 @@ minutes. The bare install is otherwise the same.
 ## What you see first
 
 A yellow strip above every page says **Vulnerability database is being
-built**. The server bootstraps its own OSV mirror in the background for the
-default ecosystem list — about 1.2 GB compressed, 5–25 minutes depending on
-your connection — and EPSS and KEV right after. Meanwhile the scanner has
+built**, with one line per feed. The server bootstraps its own OSV mirror in
+the background for the default ecosystem list — about 1.2 GB compressed,
+5–25 minutes depending on your connection — and EPSS and KEV right after;
+the strip shows which archive is downloading or importing and how far it is,
+then each feed scoring the mirror, and turns red with the error if one of
+them fails. Meanwhile the scanner has
 already swept the cluster: the Containers and Images pages fill up with
 what is running (on a kind cluster: kindnet, coredns, local-path-provisioner
 and StackRadar itself), and findings appear on each image as the mirror

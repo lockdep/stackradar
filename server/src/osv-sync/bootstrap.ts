@@ -11,6 +11,7 @@ import { createLogger } from "../lib/logger.js";
 import { persistRun, extractSyncError, SyncCounters } from "./sync-utils.js";
 import { fillInheritedSeverity } from "./severity-fill.js";
 import { ecosystemArchiveUrl, ecosystemsListUrl, parseEcosystemsTxt } from "./ecosystems.js";
+import { createBootstrapProgressReporter, type BootstrapProgressReporter } from "./bootstrap-progress.js";
 
 const log = createLogger("osv-sync:bootstrap");
 
@@ -105,7 +106,8 @@ async function importEcosystemArchives(
     deps: Pick<SyncPhaseDeps, "config" | "downloader" | "zipProcessor">,
     scope: readonly string[],
     onRecord: RecordConsumer,
-    options: Pick<ZipOptions, "batchSize" | "onError" | "onProgress">,
+    options: Pick<ZipOptions, "batchSize" | "onError" | "onProgress" | "onDownloadProgress">,
+    progress: BootstrapProgressReporter,
 ): Promise<ZipProcessorResult> {
     const { config, downloader, zipProcessor } = deps;
 
@@ -126,6 +128,7 @@ async function importEcosystemArchives(
         const url = ecosystemArchiveUrl(config.osvStorageBaseUrl, ecosystemDir);
         const startedAt = Date.now();
         log.info({ ecosystemDir, url, archive: `${index + 1}/${scope.length}` }, "Importing ecosystem archive");
+        progress.startArchive({ index: index + 1, count: scope.length, ecosystem: ecosystemDir });
 
         const result = await zipProcessor.processZip(
             url,
@@ -142,6 +145,7 @@ async function importEcosystemArchives(
             },
         );
 
+        progress.finishArchive(result.processedCount);
         total.processedCount += result.processedCount;
         total.errorCount += result.errorCount;
         total.errors.push(...result.errors);
@@ -198,6 +202,7 @@ export async function runBootstrap(deps: SyncPhaseDeps): Promise<SyncCycleResult
     // Still reported for observability — but it no longer gates reads, because
     // with the generation swap the live rows are never removed under a reader.
     await stateManager.setSyncStatus("full_refresh");
+    const progress = createBootstrapProgressReporter(stateManager);
 
     // A previous attempt that died before its cleanup ran left rows under this
     // same number (the build generation is always live + 1, so retries reuse
@@ -301,6 +306,10 @@ export async function runBootstrap(deps: SyncPhaseDeps): Promise<SyncCycleResult
                     { processed, total, affectedPkgs: counters.affectedPackagesExtracted, memRssMb: memRssMb() },
                     "Initialization progress",
                 );
+                progress.imported(processed, total);
+            },
+            onDownloadProgress: (bytesReceived: number, contentLength: number | undefined) => {
+                progress.downloaded(bytesReceived, contentLength);
             },
             onError: (failure: ZipProcessFailure) => {
                 counters.parseFailures++;
@@ -316,13 +325,23 @@ export async function runBootstrap(deps: SyncPhaseDeps): Promise<SyncCycleResult
             },
         };
 
-        const result =
-            scope === null
-                ? await zipProcessor.processZip(config.osvAllZipUrl, onRecord, zipOptions)
-                : await importEcosystemArchives(deps, scope, onRecord, zipOptions);
+        let result: ZipProcessorResult;
+        if (scope === null) {
+            progress.startArchive({ index: 1, count: 1, ecosystem: null });
+            result = await zipProcessor.processZip(config.osvAllZipUrl, onRecord, zipOptions);
+            progress.finishArchive(result.processedCount);
+        } else {
+            result = await importEcosystemArchives(deps, scope, onRecord, zipOptions, progress);
+        }
 
         await flushBatch();
         await flushFailures();
+
+        // Settled before anything clears the column: a throttled snapshot
+        // landing after `markInitialized` would leave a finished run
+        // reported as still publishing.
+        progress.publishing();
+        await progress.settle();
 
         errors.push(...result.errors);
 
@@ -399,6 +418,7 @@ export async function runBootstrap(deps: SyncPhaseDeps): Promise<SyncCycleResult
     } catch (error) {
         const { errorMessage, loggableError } = extractSyncError(error);
         log.error({ error: loggableError, syncRunId, buildGeneration }, "Initialization failed");
+        await progress.settle();
         // The live generation was never touched, so matching is unaffected; all
         // that is left behind is the partial build, which is dropped here.
         await discardBuild(affectedPkgRepository, buildGeneration, liveGeneration);

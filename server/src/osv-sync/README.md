@@ -184,20 +184,33 @@ local fixture server instead of GCS.
 
 Single-row table tracking sync state:
 
-| Column                    | Type          | Description                                                                                                                            |
-| ------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                      | `INTEGER`     | Constant PK (always 1)                                                                                                                 |
-| `initialized`             | `BOOLEAN`     | Whether full import completed                                                                                                          |
-| `init_completed_at`       | `TIMESTAMPTZ` | When initialization finished                                                                                                           |
-| `last_successful_poll_at` | `TIMESTAMPTZ` | Last successful CSV poll                                                                                                               |
-| `last_modified_seen`      | `TIMESTAMPTZ` | Max timestamp in CSV                                                                                                                   |
-| `last_modified_applied`   | `TIMESTAMPTZ` | Max timestamp applied to DB (watermark)                                                                                                |
-| `last_full_refresh_at`    | `TIMESTAMPTZ` | Last full refresh time                                                                                                                 |
-| `sync_status`             | `TEXT`        | `idle` / `full_refresh` / `incremental` (observability only)                                                                           |
-| `affected_pkg_generation` | `INTEGER`     | Which generation of `vulnerability_affected_packages` is live                                                                          |
-| `consecutive_failures`    | `INTEGER`     | Consecutive failed cycles; reported, not used to schedule anything (see _Failure Handling_)                                            |
-| `last_error`              | `TEXT`        | Last error message                                                                                                                     |
-| `ecosystems`              | `JSONB`       | The OSV directories the live generation was built from; `null` = everything. Compared with `OSV_ECOSYSTEMS` by `--bootstrap-if-needed` |
+| Column                    | Type          | Description                                                                                                                               |
+| ------------------------- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | `INTEGER`     | Constant PK (always 1)                                                                                                                    |
+| `initialized`             | `BOOLEAN`     | Whether full import completed                                                                                                             |
+| `init_completed_at`       | `TIMESTAMPTZ` | When initialization finished                                                                                                              |
+| `last_successful_poll_at` | `TIMESTAMPTZ` | Last successful CSV poll                                                                                                                  |
+| `last_modified_seen`      | `TIMESTAMPTZ` | Max timestamp in CSV                                                                                                                      |
+| `last_modified_applied`   | `TIMESTAMPTZ` | Max timestamp applied to DB (watermark)                                                                                                   |
+| `last_full_refresh_at`    | `TIMESTAMPTZ` | Last full refresh time                                                                                                                    |
+| `sync_status`             | `TEXT`        | `idle` / `full_refresh` / `incremental` (observability only)                                                                              |
+| `affected_pkg_generation` | `INTEGER`     | Which generation of `vulnerability_affected_packages` is live                                                                             |
+| `consecutive_failures`    | `INTEGER`     | Consecutive failed cycles; reported, not used to schedule anything (see _Failure Handling_)                                               |
+| `last_error`              | `TEXT`        | Last error message                                                                                                                        |
+| `ecosystems`              | `JSONB`       | The OSV directories the live generation was built from; `null` = everything. Compared with `OSV_ECOSYSTEMS` by `--bootstrap-if-needed`    |
+| `bootstrap_progress`      | `JSONB`       | Where the running bootstrap is (archive, phase, bytes, records); non-null only while `sync_status = 'full_refresh'`. See _Progress_ below |
+
+#### Progress
+
+A bootstrap writes `bootstrap_progress` a few times a minute
+(`bootstrap-progress.ts`): once on every phase change — a new archive, the
+download finishing, the publishing tail — and at most every two seconds
+otherwise. It is what the app shell's banner reads through
+`GET /api/vulnerabilities/mirror` (`lib/mirror-status.ts`) so a fresh install
+can see the import moving without the server log, and it is cleared by
+whatever ends the run: `markInitialized`, or `setSyncStatus("idle")` on
+failure and on the stale-status reset. The snapshot is never a fact about
+the mirror; nothing reads it once `sync_status` has left `full_refresh`.
 
 ### `vulnerabilities`
 

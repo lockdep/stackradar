@@ -66,6 +66,13 @@ export class ZipRecordConsumerError extends Error {
 export interface ZipProcessOptions {
     batchSize?: number;
     onProgress?: (processed: number, total?: number) => void;
+    /**
+     * Download position, a few times a minute while the archive is being
+     * fetched. `contentLength` is undefined when the server sent none. On a
+     * slow connection the download is most of a bootstrap, so a caller
+     * showing progress needs this as much as `onProgress`.
+     */
+    onDownloadProgress?: (bytesReceived: number, contentLength: number | undefined) => void;
     onError?: (failure: ZipProcessFailure) => void;
     /**
      * Decide whether an entry is worth reading, from its path alone. Applied
@@ -153,7 +160,11 @@ function formatBytes(bytes: number): string {
 /**
  * Create a Transform stream that logs download progress at a regular interval.
  */
-function createProgressTransform(contentLength: number | undefined, intervalMs = 5_000): Transform {
+function createProgressTransform(
+    contentLength: number | undefined,
+    onProgress?: ZipProcessOptions["onDownloadProgress"],
+    intervalMs = 5_000,
+): Transform {
     let bytesReceived = 0;
     let lastLogTime = Date.now();
 
@@ -164,6 +175,7 @@ function createProgressTransform(contentLength: number | undefined, intervalMs =
 
             if (now - lastLogTime >= intervalMs) {
                 lastLogTime = now;
+                onProgress?.(bytesReceived, contentLength);
                 if (contentLength) {
                     const pct = ((bytesReceived / contentLength) * 100).toFixed(1);
                     log.info(
@@ -213,7 +225,7 @@ export function createZipProcessor(downloader: OsvDownloader): ZipProcessor {
 
                 // Convert web stream to node stream and pipe through progress tracker to file
                 const nodeStream = Readable.fromWeb(body as import("stream/web").ReadableStream);
-                const progressStream = createProgressTransform(contentLength);
+                const progressStream = createProgressTransform(contentLength, options?.onDownloadProgress);
                 await pipeline(nodeStream, progressStream, createWriteStream(tempZipPath));
 
                 log.info({ contentLength, tempPath: tempZipPath }, "Download complete, processing ZIP");

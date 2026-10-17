@@ -49,6 +49,17 @@ export const epssSyncState = pgTable("epss_sync_state", {
     /** Null when the last run succeeded. */
     lastError: text("last_error"),
 
+    /**
+     * When the run in progress started; null when none is. Set after the
+     * freshness guard, cleared by `recordSuccess` and `recordFailure`, so
+     * the app shell can say "scoring now" rather than "not yet" during the
+     * minutes between the OSV bootstrap and the first scores. A value left
+     * behind by a process that died is harmless: the next run overwrites it,
+     * and the reader treats one older than `FEED_RUN_STALE_AFTER_HOURS` as
+     * not running (`lib/feed-health.ts`).
+     */
+    runStartedAt: timestamp("run_started_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -86,6 +97,9 @@ export const kevSyncState = pgTable("kev_sync_state", {
     entriesCleared: integer("entries_cleared"),
 
     lastError: text("last_error"),
+
+    /** As `epss_sync_state.run_started_at`. */
+    runStartedAt: timestamp("run_started_at", { withTimezone: true }),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

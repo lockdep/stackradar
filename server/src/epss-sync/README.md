@@ -95,14 +95,15 @@ inputs.
 One row, constant PK, same shape as `osv_sync_state`. Lives in
 `db/schema/threat-intel.ts` next to `kev_sync_state`.
 
-| Column            | Meaning                                                                    |
-| ----------------- | -------------------------------------------------------------------------- |
-| `last_synced_at`  | Completion of the last **successful** run — what the freshness guard reads |
-| `last_score_date` | The feed's own `score_date`                                                |
-| `rows_in_file`    | Rows parsed                                                                |
-| `rows_matched`    | CVEs that reached an advisory, directly or via alias                       |
-| `rows_unmatched`  | CVEs with no advisory in the mirror — expected to be large                 |
-| `last_error`      | Null when the last run succeeded                                           |
+| Column            | Meaning                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `last_synced_at`  | Completion of the last **successful** run — what the freshness guard reads                                             |
+| `last_score_date` | The feed's own `score_date`                                                                                            |
+| `rows_in_file`    | Rows parsed                                                                                                            |
+| `rows_matched`    | CVEs that reached an advisory, directly or via alias                                                                   |
+| `rows_unmatched`  | CVEs with no advisory in the mirror — expected to be large                                                             |
+| `last_error`      | Null when the last run succeeded                                                                                       |
+| `run_started_at`  | Set when a run passes the freshness guard, cleared when it records; what the app shell's banner reads as "scoring now" |
 
 `last_score_date` is the one that earns its place: it is what the _data_ says
 about its own age, as opposed to when we fetched it. A sync that succeeds every

@@ -69,6 +69,7 @@ function stateRow(overrides: Partial<OsvSyncState> = {}): OsvSyncState {
         lastFullRefreshAt: null,
         affectedPkgGeneration: 1,
         ecosystems: null,
+        bootstrapProgress: null,
         createdAt: new Date(),
         updatedAt: new Date(),
         ...overrides,

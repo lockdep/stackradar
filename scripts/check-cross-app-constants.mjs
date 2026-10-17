@@ -283,6 +283,14 @@ const RESPONSE_SHAPES = [
         client: { file: "client/src/types/fixes.ts", name: "FixesResponse" },
     },
     {
+        server: { file: "server/src/lib/mirror-status.ts", name: "MirrorStatus" },
+        client: { file: "client/src/lib/mirror-status.ts", name: "MirrorStatus" },
+    },
+    {
+        server: { file: "server/src/db/schema/osv-mirror.ts", name: "BootstrapProgress" },
+        client: { file: "client/src/lib/mirror-status.ts", name: "BootstrapProgress" },
+    },
+    {
         server: { file: "server/src/lib/recent-movement.ts", name: "MovementImage" },
         client: { file: "client/src/types/feed.ts", name: "MovementImage" },
         // What the feed controller joins onto each row before it leaves the server.
