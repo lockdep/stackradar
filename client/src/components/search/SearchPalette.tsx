@@ -63,14 +63,11 @@ export function SearchPalette({
     onClose: () => void;
 }) {
     const router = useRouter();
+    // Starts from what the palette was opened with — a character a trigger
+    // forwarded, or nothing. `SearchProvider` keys the palette by opening,
+    // so each opening is a fresh mount and this initial value is enough.
     const [query, setQuery] = useState(initialQuery);
     const { results, status } = useSearch(query, isOpen);
-
-    // Each opening starts from what it was opened with — a character a
-    // trigger forwarded, or nothing.
-    useEffect(() => {
-        if (isOpen) setQuery(initialQuery);
-    }, [isOpen, initialQuery]);
 
     /* Seeding the input with that character. Headless UI owns the input's
        text — it syncs it to the selected value (always null here) in its

@@ -42,35 +42,39 @@ export async function revealClusterApiKey(clusterId: string): Promise<string> {
  * read it back from. Render it inside a `ph-no-capture` element.
  */
 export function useApiKeyReveal(clusterId: string) {
-    const [apiKey, setApiKey] = useState<string | null>(null);
+    // Keyed by cluster: a new cluster is a new secret, so nothing revealed
+    // (or refused) for the old one carries over — it simply does not read.
+    const [revealed, setRevealed] = useState<Revealed>(nothingRevealed(clusterId));
+    const apiKey = revealed.clusterId === clusterId ? revealed.apiKey : null;
+    const error = revealed.clusterId === clusterId ? revealed.error : null;
     const [isRevealing, setIsRevealing] = useState(false);
-    const [error, setError] = useState<RevealError | null>(null);
 
     useEffect(() => {
         if (!apiKey) return;
-        const timer = setTimeout(() => setApiKey(null), REVEAL_VISIBLE_MS);
+        const timer = setTimeout(() => setRevealed(nothingRevealed(clusterId)), REVEAL_VISIBLE_MS);
         return () => clearTimeout(timer);
-    }, [apiKey]);
-
-    // A new cluster is a new secret; nothing revealed for the old one carries over.
-    useEffect(() => {
-        setApiKey(null);
-        setError(null);
-    }, [clusterId]);
+    }, [apiKey, clusterId]);
 
     const reveal = useCallback(async () => {
         setIsRevealing(true);
-        setError(null);
+        setRevealed((prev) => ({ clusterId, apiKey: prev.clusterId === clusterId ? prev.apiKey : null, error: null }));
         try {
-            setApiKey(await revealClusterApiKey(clusterId));
+            setRevealed({ clusterId, apiKey: await revealClusterApiKey(clusterId), error: null });
         } catch (err) {
-            setError(err instanceof RevealError ? err : new RevealError('Failed to reveal API key', null));
+            const error = err instanceof RevealError ? err : new RevealError('Failed to reveal API key', null);
+            setRevealed((prev) => ({ clusterId, apiKey: prev.clusterId === clusterId ? prev.apiKey : null, error }));
         } finally {
             setIsRevealing(false);
         }
     }, [clusterId]);
 
-    const hide = useCallback(() => setApiKey(null), []);
+    const hide = useCallback(() => setRevealed(nothingRevealed(clusterId)), [clusterId]);
 
     return { apiKey, reveal, hide, isRevealing, error };
+}
+
+type Revealed = { clusterId: string; apiKey: string | null; error: RevealError | null };
+
+function nothingRevealed(clusterId: string): Revealed {
+    return { clusterId, apiKey: null, error: null };
 }

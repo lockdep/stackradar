@@ -56,8 +56,11 @@ export function BillingTab({
     const searchParams = useSearchParams();
     const router = useRouter();
     const { updateOrganization } = useOrganization();
-    const [usage, setUsage] = useState<Usage | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    /* The usage read for the org the tab is showing, keyed by org: a switch
+       while mounted reads as loading, never as the previous org's numbers. */
+    const [loadedUsage, setLoadedUsage] = useState<{ orgId: string; usage: Usage | null } | null>(null);
+    const usage = loadedUsage && loadedUsage.orgId === orgId ? loadedUsage.usage : null;
+    const isLoading = loadedUsage === null || loadedUsage.orgId !== orgId;
     const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
     const [isPortalLoading, setIsPortalLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -95,14 +98,10 @@ export function BillingTab({
     // subscription, so on `billing=success` the org can still read "free" for
     // a few seconds. Poll until the plan flips rather than claim an upgrade
     // the page doesn't yet show; give up quietly after the window.
-    const [isConfirmingPlan, setIsConfirmingPlan] = useState(false);
     const [planConfirmTimedOut, setPlanConfirmTimedOut] = useState(false);
+    const isConfirmingPlan = billingStatus === 'success' && currentPlan === 'free' && !planConfirmTimedOut;
     useEffect(() => {
-        if (billingStatus !== 'success' || currentPlan !== 'free') {
-            setIsConfirmingPlan(false);
-            return;
-        }
-        setIsConfirmingPlan(true);
+        if (!isConfirmingPlan) return;
         let attempts = 0;
         let cancelled = false;
         const timer = setInterval(async () => {
@@ -131,7 +130,6 @@ export function BillingTab({
             }
             if (attempts >= PLAN_CONFIRM_MAX_ATTEMPTS && !cancelled) {
                 clearInterval(timer);
-                setIsConfirmingPlan(false);
                 setPlanConfirmTimedOut(true);
             }
         }, PLAN_CONFIRM_INTERVAL_MS);
@@ -139,7 +137,7 @@ export function BillingTab({
             cancelled = true;
             clearInterval(timer);
         };
-    }, [billingStatus, currentPlan, orgId, updateOrganization]);
+    }, [isConfirmingPlan, orgId, updateOrganization]);
 
     const limits = PLAN_LIMITS[currentPlan];
 
@@ -151,27 +149,32 @@ export function BillingTab({
 
     const isPaymentFailing = subscriptionStatus === 'past_due' || subscriptionStatus === 'unpaid';
 
-    const fetchUsage = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            const data = await apiFetch<{ usage: Usage }>(`/api/organizations/${orgId}/usage`);
-            setUsage(data.usage);
-        } catch (err) {
-            setError(
-                err instanceof ApiError && err.status > 0
-                    ? 'Failed to load usage data'
-                    : errorMessage(err, 'Failed to load usage'),
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    }, [orgId]);
+    const loadUsage = useCallback(
+        () =>
+            apiFetch<{ usage: Usage }>(`/api/organizations/${orgId}/usage`).then(
+                (data) => setLoadedUsage({ orgId, usage: data.usage }),
+                (err: unknown) => {
+                    setLoadedUsage({ orgId, usage: null });
+                    setError(
+                        err instanceof ApiError && err.status > 0
+                            ? 'Failed to load usage data'
+                            : errorMessage(err, 'Failed to load usage'),
+                    );
+                },
+            ),
+        [orgId],
+    );
 
     useEffect(() => {
-        fetchUsage();
-    }, [fetchUsage]);
+        void loadUsage();
+    }, [loadUsage]);
+
+    /* The refresh button: back to loading, then the same read. */
+    const fetchUsage = () => {
+        setLoadedUsage(null);
+        setError(null);
+        void loadUsage();
+    };
 
     const handleManageBilling = async () => {
         setIsPortalLoading(true);
@@ -181,7 +184,7 @@ export function BillingTab({
                 method: 'POST',
                 json: { returnUrl },
             });
-            window.location.href = url;
+            window.location.assign(url);
         } catch {
             setIsPortalLoading(false);
             setError('Failed to open billing portal');
@@ -222,7 +225,7 @@ export function BillingTab({
                     cancelUrl: `${base}&billing=cancelled`,
                 },
             });
-            window.location.href = url;
+            window.location.assign(url);
         } catch (err) {
             setIsCheckoutLoading(false);
             /* The page's wording, as before: a refusal is "could not create", an unreachable server "could not start". */

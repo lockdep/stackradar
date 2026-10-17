@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-StackRadar-Cloud
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 
 const termsOkKey = (userId: string) => `sr_terms_accepted_${userId}`;
+
+/* The cache is read on every render and written only by this hook, so there
+   is nothing to subscribe to; `useSyncExternalStore` is for the server
+   snapshot, which keeps the server render and hydration on "not cached". */
+const subscribeToNothing = () => () => {};
 
 export type TermsGateState = 'checking' | 'needed' | 'clear';
 
@@ -31,15 +36,27 @@ export type TermsGateState = 'checking' | 'needed' | 'clear';
  * rather than a door that cannot open.
  */
 export function useTermsGate(userId: string | null, skip = false) {
-    const [gate, setGate] = useState<TermsGateState>(skip ? 'clear' : 'checking');
+    /* The server's answer, keyed by the user it was given for; another user's
+       answer does not read, so a change of user needs no reset. */
+    const [verdict, setVerdict] = useState<{ userId: string; gate: 'needed' | 'clear' } | null>(null);
     const [isAccepting, setIsAccepting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const cached = useSyncExternalStore(
+        subscribeToNothing,
+        () => (userId ? localStorage.getItem(termsOkKey(userId)) !== null : false),
+        () => false,
+    );
+    const gate: TermsGateState = skip
+        ? 'clear'
+        : verdict && verdict.userId === userId
+          ? verdict.gate
+          : cached
+            ? 'clear'
+            : 'checking';
+
     useEffect(() => {
         if (!userId || skip) return;
-
-        const cached = localStorage.getItem(termsOkKey(userId));
-        setGate(cached ? 'clear' : 'checking');
 
         let cancelled = false;
         (async () => {
@@ -48,13 +65,13 @@ export function useTermsGate(userId: string | null, skip = false) {
                 if (cancelled) return;
                 if (data.accepted) {
                     localStorage.setItem(termsOkKey(userId), String(data.requiredVersion));
-                    setGate('clear');
+                    setVerdict({ userId, gate: 'clear' });
                 } else {
                     localStorage.removeItem(termsOkKey(userId));
-                    setGate('needed');
+                    setVerdict({ userId, gate: 'needed' });
                 }
             } catch {
-                if (!cancelled) setGate('clear');
+                if (!cancelled) setVerdict({ userId, gate: 'clear' });
             }
         })();
         return () => {
@@ -69,7 +86,7 @@ export function useTermsGate(userId: string | null, skip = false) {
         try {
             const data = await apiFetch<{ acceptedVersion: number }>('/api/users/terms/accept', { method: 'POST' });
             localStorage.setItem(termsOkKey(userId), String(data.acceptedVersion));
-            setGate('clear');
+            setVerdict({ userId, gate: 'clear' });
         } catch (err) {
             setError(errorMessage(err, 'Failed to record your acceptance'));
         } finally {

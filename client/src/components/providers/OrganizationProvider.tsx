@@ -104,10 +104,17 @@ export function OrganizationProvider({ children }: Props) {
     const { demoMode } = useRuntimeConfig();
     const pathname = usePathname();
     const onInvitePage = pathname?.startsWith('/invite/') ?? false;
+    const userId = session?.user?.id;
     const [organization, setOrganizationState] = useState<Organization | null>(null);
     const [organizations, setOrganizations] = useState<Organization[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    /* How the last setup run ended, keyed by the user it ran for. Loading is
+       derived from it — a signed-in user whose run has not finished is
+       loading, nobody else is — so nothing has to be reset when the session
+       or the page changes. */
+    const [outcome, setOutcome] = useState<{ userId: string; error: string | null } | null>(null);
+    const settled = outcome !== null && outcome.userId === userId;
+    const isLoading = status === 'loading' || (status === 'authenticated' && !onInvitePage && !settled);
+    const error = settled ? outcome.error : null;
 
     const setOrganization = useCallback((org: Organization) => {
         setOrganizationState(org);
@@ -130,96 +137,91 @@ export function OrganizationProvider({ children }: Props) {
         }
     }, []);
 
-    const setupOrganization = useCallback(async () => {
-        if (!session?.user?.id) return;
-
-        setIsLoading(true);
-        setError(null);
-
-        try {
+    /* The sequence itself; `setupOrganization` records how it ended. A promise
+       chain rather than `async`/`await`: the state writes sit in callbacks,
+       which is what lets the effect below start it without writing state
+       synchronously from the effect body. */
+    const loadOrganizations = useCallback(
+        () =>
             /* First, the user's organizations. Not `useResource`: this is one
                sequence — list, and when the list is empty, set up — whose
                second step is a write, and the hook models one GET. A refused
                list (any non-2xx) falls through to setup as it always has; only
                a network failure is the provider's error. */
-            const data = await apiFetch<{ organizations?: Organization[] }>('/api/users/organizations').catch(
-                (err: unknown) => {
+            apiFetch<{ organizations?: Organization[] }>('/api/users/organizations')
+                .catch((err: unknown) => {
                     if (err instanceof ApiError && err.status > 0) return null;
                     throw err;
-                },
-            );
+                })
+                .then((data) => {
+                    if (data?.organizations && data.organizations.length > 0) {
+                        // In the live demo the visitor owns the demo org, but the server
+                        // refuses every write on it; `role` here is what decides which
+                        // controls get drawn, so it is reported as `member` — the surface
+                        // the server still accepts. See `viewerRole`.
+                        const organizations: Organization[] = data.organizations.map((org: Organization) => ({
+                            ...org,
+                            role: viewerRole(org.role, demoMode),
+                        }));
+                        setOrganizations(organizations);
 
-            if (data) {
-                if (data.organizations && data.organizations.length > 0) {
-                    // In the live demo the visitor owns the demo org, but the server
-                    // refuses every write on it; `role` here is what decides which
-                    // controls get drawn, so it is reported as `member` — the surface
-                    // the server still accepts. See `viewerRole`.
-                    const organizations: Organization[] = data.organizations.map((org: Organization) => ({
-                        ...org,
-                        role: viewerRole(org.role, demoMode),
-                    }));
-                    setOrganizations(organizations);
+                        // Check localStorage for previously selected org
+                        const savedOrgId = localStorage.getItem(STORAGE_KEY);
 
-                    // Check localStorage for previously selected org
-                    const savedOrgId = localStorage.getItem(STORAGE_KEY);
+                        // Find saved org or default to first
+                        const selectedOrg =
+                            (savedOrgId && organizations.find((org) => org.id === savedOrgId)) || organizations[0]!;
 
-                    // Find saved org or default to first
-                    const selectedOrg =
-                        (savedOrgId && organizations.find((org) => org.id === savedOrgId)) || organizations[0]!;
+                        setOrganizationState(selectedOrg);
+                        setActiveOrgCookie(selectedOrg.id);
+                        return;
+                    }
 
-                    setOrganizationState(selectedOrg);
-                    setActiveOrgCookie(selectedOrg.id);
-                    setIsLoading(false);
-                    return;
-                }
-            }
+                    // No organizations exist, create one. The browser's time zone rides
+                    // along: with the request's Accept-Language it is the server's only
+                    // "where is this person" signal (no IP lookup), for the sign-up
+                    // funnel and the founder alert.
+                    return apiFetch<{ organization: Organization }>('/api/users/setup', {
+                        method: 'POST',
+                        json: { timezone: browserTimezone() },
+                    }).then((result) => {
+                        const newOrg = result.organization;
+                        setOrganizations([newOrg]);
+                        setOrganizationState(newOrg);
+                        setActiveOrgCookie(newOrg.id);
+                    });
+                }),
+        [demoMode],
+    );
 
-            // No organizations exist, create one. The browser's time zone rides
-            // along: with the request's Accept-Language it is the server's only
-            // "where is this person" signal (no IP lookup), for the sign-up
-            // funnel and the founder alert.
-            const result = await apiFetch<{ organization: Organization }>('/api/users/setup', {
-                method: 'POST',
-                json: { timezone: browserTimezone() },
-            });
-            const newOrg = result.organization;
-            setOrganizations([newOrg]);
-            setOrganizationState(newOrg);
-            setActiveOrgCookie(newOrg.id);
-        } catch (err) {
-            setError(errorMessage(err, 'Failed to set up organization'));
-        } finally {
-            setIsLoading(false);
-        }
-    }, [session?.user?.id, demoMode]);
+    const setupOrganization = useCallback(() => {
+        if (!userId) return Promise.resolve();
+        return loadOrganizations().then(
+            () => setOutcome({ userId, error: null }),
+            (err: unknown) => setOutcome({ userId, error: errorMessage(err, 'Failed to set up organization') }),
+        );
+    }, [userId, loadOrganizations]);
 
     useEffect(() => {
         // Only run when we have a session
-        if (status === 'loading') return;
-        if (status === 'unauthenticated') {
-            setIsLoading(false);
-            return;
-        }
+        if (status !== 'authenticated') return;
 
         // On the invite page the org to join is the one in the link. A new user
         // arriving here straight from OAuth has no orgs yet, and running setup
         // would hand them a personal "<name>'s Organization" before they have
         // even clicked Accept — they'd end up in two orgs. Accepting does a full
         // navigation to `/`, where this effect runs normally and finds the org.
-        if (onInvitePage) {
-            setIsLoading(false);
-            return;
-        }
+        if (onInvitePage) return;
 
-        setupOrganization();
+        void setupOrganization();
     }, [status, onInvitePage, setupOrganization]);
 
     // The landing page's `?intent=upgrade-<plan>` is handled by the cloud's
     // `UpgradeIntent` (rendered by AppShell), not here.
 
     const retry = useCallback(() => {
-        setupOrganization();
+        setOutcome(null);
+        void setupOrganization();
     }, [setupOrganization]);
 
     return (

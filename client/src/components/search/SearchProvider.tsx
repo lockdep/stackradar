@@ -42,11 +42,16 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     const [isOpen, setIsOpen] = useState(false);
     const [initialQuery, setInitialQuery] = useState('');
     const [source, setSource] = useState<SearchSource>('shortcut');
+    /* Counts openings; it keys the palette, so each opening mounts a fresh one
+       whose state starts from what it was opened with — a character a trigger
+       forwarded, or nothing — instead of resetting the last opening's state. */
+    const [opening, setOpening] = useState(0);
 
     const open = useCallback((query = '', from: SearchSource = 'shortcut') => {
         setInitialQuery(query);
         setSource(from);
         setIsOpen(true);
+        setOpening((n) => n + 1);
         // No-op without a PostHog key (local dev). Never the query text.
         capture('search_opened', { source: from });
     }, []);
@@ -84,7 +89,7 @@ export function SearchProvider({ children }: { children: ReactNode }) {
     return (
         <Context.Provider value={value}>
             {children}
-            <SearchPalette isOpen={isOpen} initialQuery={initialQuery} source={source} onClose={close} />
+            <SearchPalette key={opening} isOpen={isOpen} initialQuery={initialQuery} source={source} onClose={close} />
         </Context.Provider>
     );
 }

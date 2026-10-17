@@ -93,7 +93,8 @@ export function DashboardView() {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     /* Not shown. It is the reference the focus revalidator measures staleness
-       against. */
+       against, and the "now" the filtered-history note dates its window from:
+       the moment the snapshots were fetched, not the moment of a render. */
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
     /* A plain `cancelled` flag per effect run was enough when the only trigger
@@ -271,11 +272,11 @@ export function DashboardView() {
     const filteredHistoryStart = useMemo(() => {
         if (!isNarrowed) return null;
         const first = snapshots[0];
-        if (!first) return 'none' as const;
-        const windowStart = Date.now() - days * 86_400_000;
+        if (!first || !lastUpdated) return 'none' as const;
+        const windowStart = lastUpdated.getTime() - days * 86_400_000;
         const startedAt = new Date(first.capturedAt);
         return startedAt.getTime() - windowStart > 86_400_000 ? startedAt : null;
-    }, [isNarrowed, snapshots, days]);
+    }, [isNarrowed, snapshots, days, lastUpdated]);
 
     const { refetch: refetchMovement } = movement;
     const { refetch: refetchMostCritical } = mostCritical;
