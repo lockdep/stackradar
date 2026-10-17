@@ -108,6 +108,16 @@ cloud directory is a conversation to have in the issue first.
   closed.**
 * Pull requests that do not merge cleanly with the tip of `main` will be
   sent back for a rebase.
+* Name the branch after the kind of change, then the issue number when
+  there is one, then a few words: `feat/142-coverage-per-namespace`,
+  `fix/158-double-counted-digests`, `docs/helm-upgrade-notes`,
+  `chore/drop-dead-exports-gate`. Lowercase, hyphens, no author prefix.
+  The prefixes mirror the release-note labels (`enhancement`, `defect`,
+  `documentation`; `chore/` is for changes that are none of these). The
+  name never reaches `main` (pull requests are squash-merged), so it is a
+  convention, not a gate; the pull request title is what matters. Two
+  patterns are taken: `x.y.x` is a release branch
+  ([RELEASING.md](RELEASING.md)) and `dependabot/` is Dependabot's.
 * Formatting is Prettier's, not yours: `pnpm format` in the app you changed
   (CI runs `pnpm format:check`). Beyond that, follow the conventions of the
   code around you. Where the existing code and a language convention
@@ -140,8 +150,51 @@ cloud directory is a conversation to have in the issue first.
 
 ### Commit messages
 
-* Separate the subject from the body with a blank line.
-* Limit the subject line to 50 characters, capitalised, no trailing period,
-  in the imperative mood ("Add", not "Added" or "Adds").
-* Wrap the body at 72 characters.
-* Use the body to explain *what* and *why*, not *how*; the diff is the how.
+Pull requests are squash-merged, so what lands on `main` is one commit
+whose subject is the pull request title and whose body is built from the
+branch's commit messages, edited by the maintainer in the merge dialog.
+The rules below therefore apply to the pull request title and description
+as much as to each commit; write both so the squash needs no editing.
+
+* **Subject**: one line, imperative mood ("Add", not "Added" or "Adds"),
+  capitalised, no trailing period, no type prefix. Aim for 50 characters
+  and never pass 72, where GitHub truncates. Say what changes for someone
+  reading `git log`, not which file was touched: "Refuse SBOM uploads
+  without a cluster-scoped key", not "Update sbom.controller.ts" or
+  "Fix bug".
+* **No `feat:` / `fix:` prefixes.** The branch name and the pull request
+  label already carry the kind of change, the release notes are generated
+  from labels rather than from commit subjects, and the subject doubles
+  as a line in those notes, where a prefix reads as noise to a
+  self-hoster.
+* **Body**: separated from the subject by a blank line, wrapped at 72
+  characters, present tense. It explains *why* the change is needed and
+  *what* it does; the diff is the how. Name the consequence for someone
+  running StackRadar when there is one: a migration, a changed default,
+  a new or removed environment variable, a scanner version it needs.
+  Name the invariant or ADR a design decision rests on. A body may be
+  left out only when the subject says everything, such as a typo fix.
+* **Trailers** come last, after a blank line, one per line:
+  `Signed-off-by` (required, see the DCO above), `Closes #123` or
+  `Refs #123`, and `Co-authored-by` for anyone who shared the work.
+* **One logical change per commit** on the branch, each with a real
+  message. "Address review comments" and "wip" commits are fine while a
+  review is ongoing (they still need a sign-off) and are folded away by
+  the squash; the maintainer removes them from the squash body.
+
+A commit that follows all of this:
+
+```
+Gate runtime dependency licences in CI
+
+The images ship every runtime dependency of the two AGPL-3.0 apps, so a
+dependency under an incompatible or missing licence is a defect in the
+release. scripts/check-dependency-licenses.mjs evaluates each runtime
+package's SPDX expression against an allow-list of permissive and
+weak-copyleft licences and fails on anything else. Strong copyleft is
+left off the list on purpose so a human records each case in the
+script's exception table with a reason.
+
+Closes #87
+Signed-off-by: Ada Lovelace <ada@example.org>
+```

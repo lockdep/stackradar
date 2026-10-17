@@ -89,6 +89,26 @@ up. The `.github/workflows/` gates (`ci-test`, `cloud-boundary`,
 `primer-token-drift`, `osv-schema-drift`) are what a pull request has to
 pass.
 
+### Shipping a change
+
+`main` only accepts pull requests (a ruleset enforces it, with no admin
+bypass), so every change, however small, follows the same path. The rules
+are in [CONTRIBUTING.md](CONTRIBUTING.md); the four an agent breaks most
+easily:
+
+- **Never commit on `main`.** Branch first: `feat/`, `fix/`, `docs/` or
+  `chore/`, then the issue number when there is one, then a few words
+  (`fix/158-double-counted-digests`).
+- **Every commit is signed off**: `git commit -s`, or enable the repo's
+  hook once with `git config core.hooksPath .githooks`. The `dco` gate
+  rejects a pull request with one unsigned commit.
+- **Commit subjects are release-note lines**: imperative, no type prefix,
+  under 72 characters, saying what changes for someone running StackRadar.
+  Pull requests are squash-merged, so the PR title becomes that subject.
+- **A pull request uses the template and carries one label** (`enhancement`,
+  `defect`, `documentation`, `breaking change`); the release notes are
+  generated from them. The `open-pr` skill walks the whole sequence.
+
 ## Architecture
 
 ### Request Flow
@@ -293,7 +313,7 @@ Domain knowledge lives as skills in `.claude/skills/`. These auto-trigger based 
 
 ### General engineering skills
 
-`tdd`, `diagnose`, `triage`, `grill-me`, `improve-codebase-architecture`, plus `zoom-out` and `grill-with-docs` (manual-only — invoke explicitly, they don't auto-trigger).
+`tdd`, `diagnose`, `triage`, `open-pr` (branch, sign-off, local gates, templated pull request), `grill-me`, `improve-codebase-architecture`, plus `zoom-out` and `grill-with-docs` (manual-only — invoke explicitly, they don't auto-trigger).
 
 ## Database Schema Reference
 

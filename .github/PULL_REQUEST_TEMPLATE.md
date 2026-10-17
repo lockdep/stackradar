@@ -3,6 +3,9 @@
 <!-- REQUIRED
     Provide a concise description of your change. What does it do? Why is it necessary?
     As a guideline, think about how you would describe your change if you were to write a changelog entry for it.
+    The pull request is squash-merged: the title becomes the commit subject and a line in the
+    release notes, and this description becomes its body. Both follow the commit message rules in
+    CONTRIBUTING.md (imperative subject under 72 characters, no type prefix, body says why).
 -->
 
 ### Addressed Issue

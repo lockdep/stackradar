@@ -1,0 +1,21 @@
+#!/bin/sh
+# Append the DCO trailer (Signed-off-by) when the commit message lacks one,
+# so `git commit` does what `git commit -s` does. CONTRIBUTING.md requires
+# the trailer on every commit and the dco workflow rejects pull requests
+# without it; this makes the rule mechanical for humans and agents alike.
+#
+# Enabled per clone with:  git config core.hooksPath .githooks
+set -e
+
+MSG_FILE="$1"
+NAME=$(git config user.name || true)
+EMAIL=$(git config user.email || true)
+
+# No identity configured: git itself will refuse the commit with a clearer
+# message than anything this hook could add.
+[ -n "$NAME" ] && [ -n "$EMAIL" ] || exit 0
+
+git interpret-trailers \
+  --if-exists doNothing \
+  --trailer "Signed-off-by: $NAME <$EMAIL>" \
+  --in-place "$MSG_FILE"
