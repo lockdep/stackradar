@@ -52,14 +52,18 @@ const mockPricesList = vi.hoisted(() => vi.fn());
 const MockStripeInvalidRequestError = vi.hoisted(() => class MockStripeInvalidRequestError extends Error {});
 
 vi.mock("stripe", () => {
-    const StripeCtor = vi.fn().mockImplementation(() => ({
-        customers: { create: mockCustomersCreate },
-        checkout: { sessions: { create: mockCheckoutSessionsCreate } },
-        billingPortal: { sessions: { create: mockPortalSessionsCreate } },
-        webhooks: { constructEvent: vi.fn() },
-        subscriptions: { retrieve: vi.fn(), list: mockSubscriptionsList, cancel: mockSubscriptionsCancel },
-        prices: { list: mockPricesList },
-    }));
+    // A `function`, not an arrow: `new Stripe(...)` needs a constructible
+    // implementation under Vitest 4.
+    const StripeCtor = vi.fn(function () {
+        return {
+            customers: { create: mockCustomersCreate },
+            checkout: { sessions: { create: mockCheckoutSessionsCreate } },
+            billingPortal: { sessions: { create: mockPortalSessionsCreate } },
+            webhooks: { constructEvent: vi.fn() },
+            subscriptions: { retrieve: vi.fn(), list: mockSubscriptionsList, cancel: mockSubscriptionsCancel },
+            prices: { list: mockPricesList },
+        };
+    });
     (StripeCtor as unknown as { errors: object }).errors = {
         StripeInvalidRequestError: MockStripeInvalidRequestError,
     };

@@ -21,11 +21,15 @@ const mockSubscriptionsList = vi.hoisted(() => vi.fn());
 const mockProductsRetrieve = vi.hoisted(() => vi.fn());
 
 vi.mock("stripe", () => ({
-    default: vi.fn().mockImplementation(() => ({
-        webhooks: { constructEvent: mockConstructEvent },
-        subscriptions: { list: mockSubscriptionsList },
-        products: { retrieve: mockProductsRetrieve },
-    })),
+    // A `function`, not an arrow: `new Stripe(...)` needs a constructible
+    // implementation under Vitest 4.
+    default: vi.fn(function () {
+        return {
+            webhooks: { constructEvent: mockConstructEvent },
+            subscriptions: { list: mockSubscriptionsList },
+            products: { retrieve: mockProductsRetrieve },
+        };
+    }),
 }));
 
 const LIST_EXPAND = ["data.items.data.price"];
