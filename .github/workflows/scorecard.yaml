@@ -1,0 +1,64 @@
+name: OpenSSF Scorecard
+
+# Scores this repository's own supply-chain practices: pinned actions,
+# token permissions, branch protection, code review, SAST, dependency
+# updates, signed releases. A vulnerability tracker that scored badly on
+# its own supply chain would be hard to take seriously, so the result is
+# published (api.scorecard.dev) and the findings land under Security →
+# Code scanning next to CodeQL's. Free on public repositories only.
+#
+# The two checks that will stay low are expected: Code-Review (one
+# maintainer merges their own pull requests) and Fuzzing (a web app with
+# no fuzz targets).
+
+on:
+  push:
+    branches: [main]
+  # Branch protection changes do not produce a push, so re-score weekly.
+  schedule:
+    # Saturdays 06:00 UTC
+    - cron: "0 6 * * 6"
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    # Publishing results and uploading SARIF both need a public repository;
+    # skip rather than fail if it is ever private again.
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Upload the results to Security → Code scanning.
+      security-events: write
+      # Publishing to api.scorecard.dev signs the result with the
+      # workflow's OIDC token (publish_results below).
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # Makes the score public and enables the README badge. Only the
+          # default branch of the repository that owns the workflow is
+          # accepted; forks are ignored by the publisher.
+          publish_results: true
+
+      # Keep the raw SARIF for five days so a surprising score can be read
+      # in full rather than through the code-scanning summary.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: results.sarif

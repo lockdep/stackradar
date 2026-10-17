@@ -280,6 +280,13 @@ database.
 All of the drift scripts run on bare `node` from a bare checkout, so they
 are cheap to run before pushing.
 
+Two more workflows score the repository rather than a pull request:
+`codeql` also runs weekly, and `scorecard` (OpenSSF Scorecard) runs on
+every merge to `main` and weekly, publishing the result to
+[scorecard.dev](https://scorecard.dev/viewer/?uri=github.com/lockdep/stackradar)
+and its findings to Security → Code scanning. Code-Review and Fuzzing
+are the two checks expected to score low.
+
 ## Building Container Images
 
 ```sh

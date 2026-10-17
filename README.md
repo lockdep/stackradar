@@ -222,7 +222,8 @@ boundary mechanical.
   SLSA provenance and SBOM attestations, and the chart pins them by digest.
   [RELEASING.md](RELEASING.md) has the `cosign verify` commands, the tag
   policy and the pin recommendations. CodeQL and Dependabot run on every
-  change.
+  change, and [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/lockdep/stackradar)
+  scores the repository's own supply chain on every merge.
 
 Report a vulnerability privately through
 [GitHub's private reporting](https://github.com/lockdep/stackradar/security/advisories/new)
