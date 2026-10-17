@@ -38,6 +38,9 @@ const THEMES = {
         muted: "#59636e",
         faint: "#818b98",
         accent: "#0969da",
+        emphasis: "#0969da",
+        boxFill: "#ddf4ff",
+        boxStroke: "#0969da",
         accentSubtle: "#ddf4ff",
         onAccent: "#ffffff",
         critical: "#d1242f",
@@ -53,6 +56,9 @@ const THEMES = {
         muted: "#9198a1",
         faint: "#656c76",
         accent: "#4493f8",
+        emphasis: "#1f6feb",
+        boxFill: "#0c2d6b",
+        boxStroke: "#4493f8",
         accentSubtle: "rgba(56, 139, 253, 0.15)",
         onAccent: "#ffffff",
         critical: "#f85149",
@@ -95,17 +101,6 @@ function marker(id, fill) {
     return `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9 Z" fill="${fill}"/></marker>`;
 }
 
-/** A label with its own background, so it can sit on top of a line. */
-function pill(cx, cy, s, t, o = {}) {
-    const { size = 10.5, mono = false, fill = t.canvas, stroke = t.border, color = t.muted } = o;
-    const w = Math.ceil(measure(s, size, mono)) + 16;
-    const h = 20;
-    return (
-        rect(cx - w / 2, cy - h / 2, w, h, { rx: 10, fill, stroke }) +
-        text(cx, cy + size * 0.36, s, { size, fill: color, anchor: "middle", mono })
-    );
-}
-
 /** A chip of sample data, left-aligned; returns [svg, width]. */
 function chip(x, y, s, t, o = {}) {
     const { size = 9.5, mono = true } = o;
@@ -115,28 +110,6 @@ function chip(x, y, s, t, o = {}) {
         rect(x, y, w, h, { rx: 5, fill: t.subtle, stroke: t.border }) +
         text(x + w / 2, y + h / 2 + size * 0.36, s, { size, fill: t.muted, anchor: "middle", mono });
     return [svg, w];
-}
-
-/** A card: bordered box with a title and lines of muted body text. */
-function card(x, y, w, h, t, o = {}) {
-    const { title, lines = [], icon = "", titleSize = 13, lineSize = 11, pad = 14, titleX = 0 } = o;
-    let s = rect(x, y, w, h, { fill: t.canvas, stroke: t.border });
-    if (icon) s += icon;
-    if (title) s += text(x + pad + titleX, y + pad + 12, title, { size: titleSize, weight: 600, fill: t.fg });
-    lines.forEach((l, i) => {
-        s += text(x + pad, y + pad + 32 + i * (lineSize + 4), l, { size: lineSize, fill: t.muted });
-    });
-    return s;
-}
-
-/** A group: subtle field with a label; cards sit inside it. */
-function group(x, y, w, h, label, t, o = {}) {
-    const { icon = "" } = o;
-    return (
-        rect(x, y, w, h, { rx: 12, fill: t.subtle, stroke: t.border }) +
-        icon +
-        text(x + 16 + (icon ? 22 : 0), y + 24, label, { size: 12, weight: 600, fill: t.muted })
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -169,6 +142,8 @@ const glyph = {
     gauge: (x, y, c) =>
         line(`M${x + 3} ${y + 15} a7.5 7.5 0 0 1 14 0 M${x + 10} ${y + 14} L${x + 13.5} ${y + 8}`, { stroke: c }) +
         `<circle cx="${x + 10}" cy="${y + 14}" r="1.5" fill="${c}"/>`,
+    shield: (x, y, c) =>
+        line(`M${x + 10} ${y + 2} L${x + 17} ${y + 5} V${y + 10} c0 4.5 -3 7 -7 8 c-4 -1 -7 -3.5 -7 -8 V${y + 5} Z M${x + 7} ${y + 10} L${x + 9.5} ${y + 12.5} L${x + 13.5} ${y + 7.5}`, { stroke: c }),
     upgrade: (x, y, c) =>
         `<circle cx="${x + 10}" cy="${y + 10}" r="7.5" fill="none" stroke="${c}" stroke-width="1.5"/>` +
         line(`M${x + 10} ${y + 14} V${y + 6} M${x + 6.5} ${y + 9.5} L${x + 10} ${y + 6} L${x + 13.5} ${y + 9.5}`, { stroke: c }),
@@ -177,7 +152,7 @@ const glyph = {
 function svg(w, h, t, body, label) {
     return (
         `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">\n` +
-        `<defs>${marker("arrow-muted", t.muted)}${marker("arrow-accent", t.accent)}${marker("arrow-faint", t.faint)}</defs>\n` +
+        `<defs>${marker("arrow-muted", t.muted)}${marker("arrow-accent", t.accent)}${marker("arrow-faint", t.faint)}${marker("arrow-fg", t.fg)}</defs>\n` +
         body +
         `\n</svg>\n`
     );
@@ -185,130 +160,127 @@ function svg(w, h, t, body, label) {
 
 // ---------------------------------------------------------------------------
 // Figure 1: the topology.
+//
+// Flat and iconic: tinted boxes for places, solid tiles for components, a
+// dashed border for the cluster, short bold labels and plain arrows. What a
+// component does is the README's job, not the figure's.
 // ---------------------------------------------------------------------------
 
+const TILE = 56;
+
+/** A solid accent tile with a white glyph, and its label underneath. */
+function tile(cx, cy, g, label, t) {
+    const x = cx - TILE / 2;
+    const y = cy - TILE / 2;
+    return (
+        rect(x, y, TILE, TILE, { rx: 10, fill: t.emphasis }) +
+        `<g transform="translate(${cx - 16} ${cy - 16}) scale(1.6)">${g(0, 0, t.onAccent)}</g>` +
+        text(cx, y + TILE + 22, label, { size: 15, weight: 700, fill: t.fg, anchor: "middle" })
+    );
+}
+
+/** A solid accent database cylinder, the same height as a tile. */
+function cylinder(cx, cy, label, t) {
+    const w = 48;
+    const h = TILE;
+    const ry = 8;
+    const x = cx - w / 2;
+    const y = cy - h / 2;
+    return (
+        `<path d="M${x} ${y + ry} V${y + h - ry} a${w / 2} ${ry} 0 0 0 ${w} 0 V${y + ry} Z" fill="${t.emphasis}"/>` +
+        `<ellipse cx="${cx}" cy="${y + ry}" rx="${w / 2}" ry="${ry}" fill="${t.emphasis}"/>` +
+        `<ellipse cx="${cx}" cy="${y + ry}" rx="${w / 2 - 5}" ry="${ry - 3.5}" fill="none" stroke="${t.onAccent}" stroke-width="1.5"/>` +
+        line(`M${x + 5} ${y + 24} a${w / 2 - 5} ${ry - 3.5} 0 0 0 ${w - 10} 0 M${x + 5} ${y + 38} a${w / 2 - 5} ${ry - 3.5} 0 0 0 ${w - 10} 0`, { stroke: t.onAccent }) +
+        text(cx, y + h + 22, label, { size: 15, weight: 700, fill: t.fg, anchor: "middle" })
+    );
+}
+
+/** A stack of three pods, back to front. */
+function podStack(cx, cy, t) {
+    let s = "";
+    [-12, 0, 12].forEach((d, i, all) => {
+        const x = cx - 20 + d;
+        const y = cy - 20 + d;
+        s += rect(x, y, 40, 40, { rx: 8, fill: t.emphasis, stroke: t.boxFill, sw: 3 });
+        if (i === all.length - 1) s += `<g transform="translate(${x + 8} ${y + 8}) scale(1.2)">${glyph.pods(0, 0, t.onAccent)}</g>`;
+    });
+    return s;
+}
+
+/** A tinted place: pale box with an accent border and a bold title. */
+function place(x, y, w, h, title, t) {
+    return rect(x, y, w, h, { rx: 6, fill: t.boxFill, stroke: t.boxStroke, sw: 1.5 }) + text(x + w / 2, y + 26, title, { size: 15, weight: 700, fill: t.fg, anchor: "middle" });
+}
+
 function topology(t) {
-    const W = 960;
-    const H = 468;
-    const GY = 96;
-    const GH = 348;
+    const W = 920;
+    const H = 580;
+    const arrow = (d) => line(d, { stroke: t.fg, sw: 1.75, marker: "arrow-fg" });
     let s = "";
 
-    // --- Your cluster -------------------------------------------------------
-    const cx = 24;
-    const cw = 244;
-    s += group(cx, GY, cw, GH, "Your Kubernetes cluster", t, { icon: glyph.cluster(cx + 14, GY + 12, t.muted) });
+    // The cluster is a dashed boundary; everything StackRadar needs is inside it.
+    const CX = 200;
+    const CY = 150;
+    const CW = 680;
+    const CH = 410;
+    s += rect(CX, CY, CW, CH, { rx: 0, fill: "none", stroke: t.fg, sw: 1.5, dash: "6 5" });
+    s += text(CX + 16, CY + 24, "Your Kubernetes cluster", { size: 15, weight: 700, fill: t.fg });
 
-    const podsY = 132;
-    s += card(cx + 16, podsY, 212, 86, t, {
-        title: "Pods",
-        lines: ["Every namespace, every container."],
-        icon: glyph.pods(cx + 30, podsY + 14, t.muted),
-        titleX: 26,
-    });
-    let chipX = cx + 30;
-    for (const ns of ["ci", "argocd", "monitoring"]) {
-        const [c, w] = chip(chipX, podsY + 54, ns, t);
-        s += c;
-        chipX += w + 6;
-    }
+    // StackRadar: client, server and the database, in one place.
+    const SX = 430;
+    const SY = 180;
+    const SW = 420;
+    const SH = 150;
+    const rowY = SY + 70;
+    const clientX = SX + 70;
+    const serverX = SX + SW / 2;
+    const pgX = SX + SW - 70;
+    s += place(SX, SY, SW, SH, "StackRadar", t);
+    s += tile(clientX, rowY, glyph.browser, "Client", t);
+    s += tile(serverX, rowY, glyph.ring, "Server", t);
+    s += cylinder(pgX, rowY, "PostgreSQL", t);
+    s += arrow(`M${clientX + TILE / 2 + 6} ${rowY} H${serverX - TILE / 2 - 8}`);
+    s += arrow(`M${serverX + TILE / 2 + 6} ${rowY} H${pgX - 24 - 8}`);
 
-    const scY = 254;
-    s += line(`M${cx + 122} ${podsY + 86} V${scY - 2}`, { stroke: t.muted, marker: "arrow-muted" });
-    s += pill(cx + 122, podsY + 86 + 18, "list, watch (read-only)", t);
-    s += card(cx + 16, scY, 212, 100, t, {
-        title: "stackradar-scanner",
-        lines: ["Pod informer. Pulls each image", "once per digest and writes its", "CycloneDX SBOM with Syft."],
-        icon: glyph.scan(cx + 30, scY + 14, t.accent),
-        titleX: 26,
-    });
-    s += text(cx + 16, scY + 100 + 30, "No create, update, delete or patch", { size: 10.5, fill: t.faint });
-    s += text(cx + 16, scY + 100 + 45, "on anything. No telemetry.", { size: 10.5, fill: t.faint });
+    // The browser, outside, reaches the client only.
+    s += place(24, rowY - 28, 130, 56, "", t);
+    s += text(89, rowY + 5.5, "Browser", { size: 15, weight: 700, fill: t.fg, anchor: "middle" });
+    s += arrow(`M154 ${rowY} H${clientX - TILE / 2 - 8}`);
 
-    // --- StackRadar ---------------------------------------------------------
-    const px = 372;
-    const pw = 280;
-    const kx = px + 16;
-    const kw = pw - 32;
-    s += group(px, GY, pw, GH, "StackRadar", t, { icon: glyph.ring(px + 14, GY + 12, t.accent) });
+    // The pods, and the scanner that watches them and reports to the server.
+    const PX = 230;
+    const PY = 380;
+    const PW = 160;
+    const PH = 160;
+    s += place(PX, PY, PW, PH, "Pods", t);
+    s += podStack(PX + PW / 2, PY + 96, t);
+    const scanY = PY + 80;
+    s += tile(serverX, scanY, glyph.scan, "Scanner", t);
+    s += arrow(`M${PX + PW} ${scanY} H${serverX - TILE / 2 - 8}`);
+    s += arrow(`M${serverX} ${scanY - TILE / 2} V${SY + SH + 8}`);
 
-    const clY = 136;
-    s += card(kx, clY, kw, 74, t, {
-        title: "client",
-        lines: ["Next.js UI and BFF. Owns sign-in;", "the only thing a browser talks to."],
-        icon: glyph.browser(kx + 14, clY + 14, t.muted),
-        titleX: 26,
-    });
-
-    const svY = 260;
-    s += card(kx, svY, kw, 88, t, {
-        title: "server",
-        lines: ["API, job worker, sync schedule.", "Matches every SBOM against the", "mirror and ranks every finding."],
-        icon: glyph.ring(kx + 14, svY + 14, t.accent),
-        titleX: 26,
-    });
-
-    const pgY = 380;
-    s += card(kx, pgY, kw, 48, t, {
-        title: "PostgreSQL",
-        icon: glyph.database(kx + 14, pgY + 14, t.muted),
-        titleX: 26,
-    });
-    s += text(kx + kw - 14, pgY + 26 + 4, "one database", { size: 11, fill: t.muted, anchor: "end" });
-
-    // client → server, server → postgres
-    s += line(`M${px + pw / 2} ${clY + 74} V${svY - 2}`, { stroke: t.muted, marker: "arrow-muted" });
-    s += pill(px + pw / 2, clY + 74 + 24, "internal service key", t);
-    s += line(`M${px + pw / 2} ${svY + 88} V${pgY - 2}`, { stroke: t.muted, marker: "arrow-muted" });
-
-    // --- Browser ------------------------------------------------------------
-    const bw = 150;
-    const bx = px + (pw - bw) / 2;
-    const by = 16;
-    s += card(bx, by, bw, 44, t, { title: "Browser", icon: glyph.browser(bx + 14, by + 12, t.muted), titleX: 26 });
-    s += line(`M${px + pw / 2} ${by + 44} V${clY - 2}`, { stroke: t.muted, marker: "arrow-muted" });
-    s += pill(px + pw / 2, by + 44 + 22, "session", t);
-
-    // --- Scanner → server: the one write path into the platform -------------
-    const sy = svY + 44;
-    s += line(`M${cx + 228} ${sy} H${kx - 2}`, { stroke: t.accent, sw: 2, marker: "arrow-accent" });
-    const mid = (cx + 228 + kx) / 2;
-    s += pill(mid, sy - 14, "SBOM + inventory", t, { color: t.accent, fill: t.accentSubtle, stroke: "none" });
-    s += pill(mid, sy + 14, "cluster-scoped API key", t, { size: 10 });
-
-    // --- Advisory feeds -----------------------------------------------------
-    const fx = 764;
-    const fw = 172;
-    s += group(fx, GY, fw, GH, "Advisory feeds", t, { icon: glyph.globe(fx + 14, GY + 12, t.muted) });
+    // The advisory feeds, outside: the server pulls them, nothing is sent.
     const feeds = [
-        ["OSV.dev", "hourly"],
-        ["EPSS", "daily"],
-        ["CISA KEV", "daily"],
+        ["OSV.dev", glyph.globe],
+        ["EPSS", glyph.gauge],
+        ["CISA KEV", glyph.shield],
     ];
-    s += text(fx + 16, GY + 52, "Fetched by the server on a", { size: 10.5, fill: t.faint });
-    s += text(fx + 16, GY + 67, "schedule. Nothing is sent", { size: 10.5, fill: t.faint });
-    s += text(fx + 16, GY + 82, "anywhere to be scored.", { size: 10.5, fill: t.faint });
-    const busX = fx + 22;
-    const feedX = fx + 38;
-    const feedW = fw - 54;
-    const feedYs = [230, 282, 334];
-    feeds.forEach(([name, cadence], i) => {
-        const y = feedYs[i];
-        s += rect(feedX, y, feedW, 44, { fill: t.canvas, stroke: t.border });
-        s += text(feedX + 12, y + 19, name, { size: 12, weight: 600, fill: t.fg });
-        s += text(feedX + 12, y + 35, cadence, { size: 10.5, fill: t.muted });
-        s += line(`M${feedX} ${y + 22} H${busX}`, { stroke: t.faint, dash: "3 3" });
+    const feedY = 48;
+    const busY = 130;
+    feeds.forEach(([label, g], i) => {
+        const x = serverX + (i - 1) * 150;
+        s += tile(x, feedY, g, label, t);
+        s += line(`M${x} ${feedY + TILE / 2 + 32} V${busY}`, { stroke: t.fg, sw: 1.75 });
     });
-    s += line(`M${busX} ${feedYs[0] + 22} V${feedYs[2] + 22}`, { stroke: t.faint, dash: "3 3" });
-    s += line(`M${busX} ${sy} H${kx + kw + 2}`, { stroke: t.faint, dash: "3 3", marker: "arrow-faint" });
-    s += pill((busX + kx + kw) / 2, sy - 14, "mirrored locally", t);
+    s += line(`M${serverX - 150} ${busY} H${serverX + 150}`, { stroke: t.fg, sw: 1.75 });
+    s += arrow(`M${serverX} ${busY} V${SY - 8}`);
 
     return svg(
         W,
         H,
         t,
         s,
-        "StackRadar topology: a read-only scanner in your cluster sends SBOMs and inventory to the server over a cluster-scoped key; the server mirrors OSV.dev, EPSS and CISA KEV locally and stores everything in one PostgreSQL; the browser reaches the client only.",
+        "StackRadar topology in a self-hosted install: the scanner, the client, the server and PostgreSQL all run in your Kubernetes cluster. The scanner watches the pods and reports to the server; the browser reaches the client only; the server pulls OSV.dev, EPSS and CISA KEV, the only traffic that crosses the cluster boundary.",
     );
 }
 
