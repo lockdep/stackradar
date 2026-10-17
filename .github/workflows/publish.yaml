@@ -61,7 +61,7 @@ jobs:
           echo "::error::Publish must run on a tag, but was dispatched on ${GITHUB_REF}. Run the Release workflow to make one."
           exit 1
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0 # the previous tag decides `latest` and the migration diff
 
@@ -110,7 +110,7 @@ jobs:
           echo "Publishing ${version} (prerelease=${prerelease}, latest=${latest}, previous=${previous:-none})"
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -172,19 +172,19 @@ jobs:
       IMAGE: ghcr.io/lockdep/stackradar-${{ matrix.component }}
       VERSION: ${{ needs.verify.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
       # arm64 is built through QEMU. kind on Apple silicon is where a large
       # share of evaluators run the quickstart, and an amd64-only image fails
       # there with `exec format error`.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -195,7 +195,7 @@ jobs:
       # prerelease, and `latest` additionally follows the highest version.
       - name: Extract image metadata
         id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ${{ env.IMAGE }}
           flavor: |
@@ -211,7 +211,7 @@ jobs:
 
       - name: Build and push
         id: build
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ./${{ matrix.component }}
           target: runner
@@ -247,7 +247,7 @@ jobs:
           echo "amd64 and arm64 present; provenance and SBOM attestations present."
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4.1.2
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       # Keyless: the certificate binds the image to this workflow at this tag,
       # so there is no signing key to store, rotate or leak. RELEASING.md has
@@ -262,27 +262,32 @@ jobs:
       # document per image, of the amd64 manifest: the two platforms differ
       # only in the architecture of the helm and syft binaries, and the
       # per-platform SPDX attestation above covers the rest.
+      # Anchore's own download action, pinned by commit like everything
+      # else here, rather than the install script piped into sh: a mutable
+      # raw URL in a job that holds the signing identity is the one place a
+      # supply-chain tracker cannot afford one.
       - name: Install syft
-        run: |
-          set -euo pipefail
-          curl -sSfL "https://raw.githubusercontent.com/anchore/syft/${SYFT_VERSION}/install.sh" \
-            | sh -s -- -b /usr/local/bin "${SYFT_VERSION}"
-          syft version
+        id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          syft-version: ${{ env.SYFT_VERSION }}
 
       - name: Generate the SBOM
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
           COMPONENT: ${{ matrix.component }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
         run: |
           set -euo pipefail
+          "${SYFT}" version
           mkdir -p out
-          syft "registry:${IMAGE}@${DIGEST}" --platform linux/amd64 \
+          "${SYFT}" "registry:${IMAGE}@${DIGEST}" --platform linux/amd64 \
             -o "cyclonedx-json@1.6=out/stackradar-${COMPONENT}-${VERSION}.cdx.json" --quiet
           python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(sys.argv[1], 'CycloneDX', d['specVersion'], len(d.get('components', [])), 'components')" \
             "out/stackradar-${COMPONENT}-${VERSION}.cdx.json"
           printf '%s %s@%s\n' "${COMPONENT}" "${IMAGE}" "${DIGEST}" > "out/digest-${COMPONENT}.txt"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-${{ matrix.component }}
           path: out/
@@ -306,7 +311,7 @@ jobs:
       matrix:
         component: [server, client]
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: release-${{ matrix.component }}
           path: out
@@ -316,7 +321,7 @@ jobs:
         run: echo "ref=$(cut -d' ' -f2 "out/digest-${{ matrix.component }}.txt")" >> "$GITHUB_OUTPUT"
 
       - name: Trivy
-        uses: aquasecurity/trivy-action@v0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ steps.digest.outputs.ref }}
           format: sarif
@@ -326,13 +331,13 @@ jobs:
 
       # Code scanning is free on public repositories only; on a private one
       # the upload is refused. The SARIF is kept as a run artifact either way.
-      - uses: github/codeql-action/upload-sarif@v4
+      - uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         if: ${{ !github.event.repository.private }}
         with:
           sarif_file: trivy-${{ matrix.component }}.sarif
           category: trivy-${{ matrix.component }}
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: trivy-${{ matrix.component }}-${{ github.ref_name }}
           path: trivy-${{ matrix.component }}.sarif
@@ -351,11 +356,11 @@ jobs:
       PREVIOUS: ${{ needs.verify.outputs.previous }}
       LATEST: ${{ needs.verify.outputs.latest }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: release-*
           path: out

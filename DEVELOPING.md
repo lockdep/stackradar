@@ -287,6 +287,13 @@ every merge to `main` and weekly, publishing the result to
 and its findings to Security → Code scanning. Code-Review and Fuzzing
 are the two checks expected to score low.
 
+Every action a workflow uses is pinned to a commit SHA, with the release
+it corresponds to in a trailing comment (`uses: actions/checkout@d23441a… # v6.1.0`),
+and nothing is piped from a URL into a shell. A tag can be moved; a
+commit cannot, and the `publish` job holds the identity that signs the
+images. Dependabot's `github-actions` entry bumps the SHA and the comment
+together, so a new workflow only has to start out pinned.
+
 ## Building Container Images
 
 ```sh
