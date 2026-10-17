@@ -43,7 +43,7 @@ jobs:
         with:
           package_json_file: ${{ matrix.app }}/package.json
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: pnpm
