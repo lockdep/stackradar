@@ -87,7 +87,16 @@ export async function GET() {
         lockedUntil: row.lockedUntil && row.lockedUntil.getTime() > now ? row.lockedUntil.toISOString() : null,
         createdAt: row.createdAt.toISOString(),
     }));
-    return NextResponse.json({ users: result }, { headers: NO_STORE });
+    return NextResponse.json(
+        {
+            users: result,
+            // With `AUTH_OIDC_ADMIN_GROUP` set, the flag is re-evaluated at every
+            // OIDC sign-in, so a grant made here to a group-managed account does
+            // not survive that account's next login. The tab says so.
+            oidcAdminGroup: Boolean(process.env.AUTH_OIDC_ADMIN_GROUP?.trim()),
+        },
+        { headers: NO_STORE },
+    );
 }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

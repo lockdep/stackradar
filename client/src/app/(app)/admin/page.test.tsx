@@ -51,15 +51,20 @@ describe('AdminPage', () => {
         expect(tabs(html)).toEqual([
             'Overview',
             'System',
-            'Users',
+            'Jobs',
             'Images',
+            'Explorer',
             'Vulnerabilities',
             'Matcher',
-            'Explorer',
             'OSV Sync',
             'Feeds',
-            'Jobs',
+            'Users',
         ]);
+        // The section labels, once each, in reading order; the Index group has nothing here.
+        expect(html.indexOf('>Health<')).toBeLessThan(html.indexOf('>Data<'));
+        expect(html.indexOf('>Data<')).toBeLessThan(html.indexOf('>Advisories<'));
+        expect(html.indexOf('>Advisories<')).toBeLessThan(html.indexOf('>People<'));
+        expect(html).not.toContain('>Index<');
         expect(html).toContain('Administration');
         expect(html).toContain('health, data and accounts');
         expect(html.toLowerCase()).not.toContain('organization');
@@ -77,17 +82,18 @@ describe('AdminPage', () => {
         expect(tabs(html)).toEqual([
             'Overview',
             'System',
-            'Organizations',
-            'Feedback',
+            'Jobs',
             'Images',
+            'Explorer',
             'Vulnerabilities',
             'Matcher',
-            'Explorer',
             'OSV Sync',
             'Feeds',
-            'Jobs',
+            'Organizations',
+            'Feedback',
             'Chart Index',
         ]);
+        expect(html).toContain('>Index<');
         expect(html).toContain('Admin Dashboard');
         expect(html).toContain('Platform-wide health and statistics');
     });

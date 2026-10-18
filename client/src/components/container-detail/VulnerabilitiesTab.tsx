@@ -34,6 +34,8 @@ import {
     TierLensControl,
     TierLensEmpty,
 } from '@/components/ui';
+import Link from 'next/link';
+import { useSession } from 'next-auth/react';
 import { useResource, useTierLens } from '@/hooks';
 import { SHOWN_DESPITE_LENS_LABEL, withTierParam, type TierLens } from '@/lib/tier-lens';
 import { formatDate, formatRelativeTime } from '@/utils/formatters';
@@ -88,6 +90,11 @@ function ComponentSection({
     // Computed server-side, by the same comparators the matcher uses. Ordering
     // versions is package-manager-specific work and does not belong in the view.
     const fixVersion = group.fixVersion;
+
+    // Match provenance — which affected-package entry won, by what rule — is
+    // the admin Explorer's one thing this page does not show. The link is for
+    // the platform admin only; a member has no route behind it.
+    const isPlatformAdmin = useSession().data?.user?.isAdmin === true;
 
     return (
         <Fragment>
@@ -176,6 +183,18 @@ function ComponentSection({
                 <tr>
                     <td colSpan={8} className="p-0">
                         <div className="bg-surface-muted/60 border-t border-edge">
+                            {isPlatformAdmin && (
+                                <p className="border-b border-edge/60 py-1.5 pl-10 pr-3 text-xs text-ink-muted">
+                                    <Link
+                                        href={`/admin?tab=explorer&component=${encodeURIComponent(group.componentId)}`}
+                                        className="text-accent hover:underline"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        Open in the Explorer
+                                    </Link>
+                                    <span> — how each of these was matched, and against which entry.</span>
+                                </p>
+                            )}
                             {group.bumpCommand && (
                                 /* Advice for the reader's own repository, where the image is
                                    built from — text to copy, never a button: nothing in

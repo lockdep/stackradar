@@ -24,6 +24,7 @@ import { getTestDb, cleanAllData } from "../../setup/test-db.js";
 import { createOrganization, createOrgWithOwner } from "../../fixtures/seed-data.js";
 import { edition } from "../../../src/edition.js";
 import { PLAN_LIMITS } from "../../../src/config/plans.js";
+import * as schema from "../../../src/db/schema/index.js";
 
 let adminRepository: typeof import("../../../src/repositories/admin.repository.js").adminRepository;
 let adminStatusRepository: typeof import("../../../src/repositories/admin-status.repository.js").adminStatusRepository;
@@ -73,6 +74,22 @@ describe("getRecentOrganizations", () => {
             clusters: PLAN_LIMITS.free.clusters,
             sboms: null,
         });
+    });
+});
+
+describe("getOrgRoles", () => {
+    it("lists every membership of every tenant org, and none of the platform's", async () => {
+        const db = getTestDb();
+        const { user, org } = await createOrgWithOwner(db);
+        const platform = await createOrganization(db, { slug: "stackradar-platform", system: true });
+        // The repository refuses members on a system org, so the row is written directly.
+        await db.insert(schema.orgMembers).values({ orgId: platform.id, userId: user.id, role: "admin" });
+
+        const roles = await adminRepository.getOrgRoles();
+
+        expect(roles).toEqual([
+            { userId: user.id, orgId: org.id, orgName: org.name, orgSlug: org.slug, role: "owner" },
+        ]);
     });
 });
 

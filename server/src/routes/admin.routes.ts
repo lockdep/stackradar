@@ -8,6 +8,7 @@ router.get("/jobs", requireAuth, requireInternal, requireAdmin, adminController.
 router.get("/overview", requireAuth, requireInternal, requireAdmin, adminController.getOverview);
 router.get("/system", requireAuth, requireInternal, requireAdmin, adminController.getSystem);
 router.get("/organizations", requireAuth, requireInternal, requireAdmin, adminController.getOrganizations);
+router.get("/org-roles", requireAuth, requireInternal, requireAdmin, adminController.getOrgRoles);
 router.get(
     "/organizations/:orgId/clusters",
     requireAuth,

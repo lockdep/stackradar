@@ -33,10 +33,12 @@ proxying rather than by a denylist):
   itself (see Authentication below). 404 unless local login is enabled.
 - `account/password` — read/change the signed-in account's password; the
   hash lives in the client's `users` table and never reaches Express
-- `admin/users`, `admin/users/[id]/password` — the admin Users tab: list
-  accounts with how each signs in, create a local account, set or reset a
-  local account's password. Same session + `isAdmin` gate as the catch-all;
-  404 unless local login is enabled
+- `admin/users`, `admin/users/[id]`, `admin/users/[id]/password` — the
+  admin Users tab: list accounts with how each signs in, create a local
+  account, grant or revoke the platform-admin flag on any account (never
+  the last admin's), set or reset a local account's password. Same
+  session + `isAdmin` gate as the catch-all; 404 unless local login is
+  enabled
 - `admin/system` — the admin System tab: relays Express's
   `GET /api/admin/system` report and adds this app's half (its version,
   which sign-in methods are on, whether the `auth` schema is current

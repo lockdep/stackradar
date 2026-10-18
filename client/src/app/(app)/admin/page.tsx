@@ -33,38 +33,42 @@ interface AdminTab extends TabBarItem {
     requires?: AdminCapability;
 }
 
+/**
+ * Grouped, in the order a person reads the page: is it working (Health),
+ * what it holds (Data), what it knows (Advisories), who uses it (People),
+ * and the maintainers' own index last and apart. The strip draws a group
+ * label before the first tab of each on wide screens; a tab's group must
+ * be adjacent to its siblings, so the order here is the grouping.
+ */
 const TABS: AdminTab[] = [
-    { id: 'overview', name: 'Overview' },
+    { id: 'overview', name: 'Overview', group: 'Health' },
     // What this install is: versions, edition, topology, every knob's
     // effective value, sign-in methods, both schemas' state. Read-only.
-    { id: 'system', name: 'System' },
-    // The tenant list, and the drill-down into one tenant. A single-org
-    // install has nothing to list: its one org is the install.
-    { id: 'organizations', name: 'Organizations', requires: 'multiOrg' },
+    { id: 'system', name: 'System', group: 'Health' },
+    { id: 'jobs', name: 'Jobs', group: 'Health' },
+    // `images` is the table the deployment side and the advisory side meet
+    // on, and the state breakdown there explains gaps the vulnerability
+    // figures otherwise get blamed for; the Explorer drills from one row.
+    { id: 'images', name: 'Images', group: 'Data' },
+    { id: 'explorer', name: 'Explorer', group: 'Data' },
+    // The mirror, what the matcher did with it, then the sync that fills it
+    // and the feeds that decorate it (EPSS, KEV, the chart mirror).
+    { id: 'vulnerabilities', name: 'Vulnerabilities', group: 'Advisories' },
+    { id: 'matcher', name: 'Matcher', group: 'Advisories' },
+    { id: 'osv', name: 'OSV Sync', group: 'Advisories' },
+    { id: 'feeds', name: 'Feeds', group: 'Advisories' },
     // The accounts and how each signs in, with local-password management —
     // only when local login is on; the cloud's accounts are all OAuth.
-    { id: 'users', name: 'Users', requires: 'localLogin' },
-    // Beside Organizations: both are about the people using the product,
-    // before the tabs about what the product ingested. The cloud's inbox.
-    { id: 'feedback', name: 'Feedback', requires: 'support' },
-    // Before Vulnerabilities: `images` is the table the deployment side and the
-    // advisory side meet on, and the state breakdown here explains gaps the
-    // vulnerability figures otherwise get blamed for.
-    { id: 'images', name: 'Images' },
-    { id: 'vulnerabilities', name: 'Vulnerabilities' },
-    // Between Vulnerabilities and Explorer on purpose: the mirror, then what the
-    // matcher did with it, then a single component's version of the same story.
-    { id: 'matcher', name: 'Matcher' },
-    { id: 'explorer', name: 'Explorer' },
-    { id: 'osv', name: 'OSV Sync' },
-    // Beside OSV Sync: the advisory mirror, then the feeds that decorate it
-    // (EPSS, KEV) and the chart mirror that runs on the same nightly cadence.
-    { id: 'feeds', name: 'Feeds' },
-    { id: 'jobs', name: 'Jobs' },
+    { id: 'users', name: 'Users', group: 'People', requires: 'localLogin' },
+    // The tenant list, and the drill-down into one tenant. A single-org
+    // install has nothing to list: its one org is the install.
+    { id: 'organizations', name: 'Organizations', group: 'People', requires: 'multiOrg' },
+    // The cloud's inbox.
+    { id: 'feedback', name: 'Feedback', group: 'People', requires: 'support' },
     // Last, and apart: the public chart index (charts.stackradar.io) is its
     // own app with its own database, run by the maintainers. Everything above
     // is the product's; in the community edition its route can only answer 503.
-    { id: 'chart-index', name: 'Chart Index', requires: 'isCloud' },
+    { id: 'chart-index', name: 'Chart Index', group: 'Index', requires: 'isCloud' },
 ];
 
 /** `useSearchParams` wants a Suspense boundary above it; the page is that boundary. */

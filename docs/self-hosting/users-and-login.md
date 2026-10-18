@@ -56,7 +56,11 @@ automatically on first sign-in; there are no invite emails in the community
 edition (email is a cloud integration), and none are needed.
 
 From the same tab an admin can set a new password on any local account,
-which also clears a lockout and signs the account out everywhere.
+which also clears a lockout and signs the account out everywhere, and make
+any account a platform admin or revoke it — whatever way it signs in. The
+last platform admin cannot be revoked. In the community edition the tab
+also shows each account's organisation role, with a link to the
+organisation's Members tab where it is changed.
 
 Users who sign in through an identity provider need no local account; see
 [oidc.md](oidc.md) for making the members of a group platform admins

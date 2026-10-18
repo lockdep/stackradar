@@ -1,8 +1,9 @@
 'use client';
 
 import { Fragment, useState } from 'react';
+import Link from 'next/link';
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react';
-import { KeyRound, Lock, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { KeyRound, Lock, ShieldCheck, ShieldOff, UserPlus, X } from 'lucide-react';
 import {
     Button,
     RelativeTime,
@@ -16,9 +17,19 @@ import {
 } from '@/components/ui';
 import { PASSWORD_MIN_LENGTH } from '@/lib/local-login';
 import { ApiError, apiFetch } from '@/lib/api-client';
+import { useResource } from '@/hooks';
+import { useRuntimeConfig } from '@/components/providers';
 import { TabShell } from './Shared';
 import { useTabData } from './useTabData';
 import type { AdminUserRow } from '@/app/api/admin/users/route';
+
+interface OrgRole {
+    userId: string;
+    orgId: string;
+    orgName: string;
+    orgSlug: string;
+    role: string;
+}
 
 /**
  * Every account and how it signs in, with the two things an admin does for
@@ -48,14 +59,41 @@ export function UsersTab({
     refreshKey: number;
     onLoadingChange: (v: boolean) => void;
 }) {
-    const { data, isLoading, error, refetch } = useTabData<{ users: AdminUserRow[] }>(
+    const { data, isLoading, error, refetch } = useTabData<{ users: AdminUserRow[]; oidcAdminGroup: boolean }>(
         '/api/admin/users',
         refreshKey,
         onLoadingChange,
     );
     const [dialog, setDialog] = useState<{ mode: 'create' } | { mode: 'reset'; user: AdminUserRow } | null>(null);
+    const [flagError, setFlagError] = useState<string | null>(null);
+    const [flagBusy, setFlagBusy] = useState<string | null>(null);
+
+    // One place to see people: in the single-org edition each account's role
+    // in the org sits beside its sign-in. Roles still change where they live,
+    // the organisation's Members tab, which the column links to.
+    const { multiOrg } = useRuntimeConfig().edition;
+    const { data: roles } = useResource<OrgRole[]>(multiOrg ? null : '/api/admin/org-roles', {
+        cache: 'no-store',
+        refreshKey,
+        select: (body) => (body as { roles?: OrgRole[] }).roles ?? [],
+    });
+    const roleOf = (userId: string) => roles?.find((r) => r.userId === userId) ?? null;
 
     const rows = data?.users ?? [];
+    const admins = rows.filter((u) => u.isAdmin).length;
+
+    async function setAdmin(user: AdminUserRow, isAdmin: boolean) {
+        setFlagBusy(user.id);
+        setFlagError(null);
+        try {
+            await apiFetch(`/api/admin/users/${user.id}`, { method: 'PATCH', json: { isAdmin } });
+            refetch();
+        } catch (err) {
+            setFlagError(err instanceof ApiError && err.status > 0 ? err.message : 'Could not reach the server.');
+        } finally {
+            setFlagBusy(null);
+        }
+    }
 
     return (
         <TabShell isLoading={isLoading} error={error} onRetry={refetch}>
@@ -69,6 +107,18 @@ export function UsersTab({
                     New local user
                 </Button>
             </div>
+            {data?.oidcAdminGroup && (
+                <p className="mt-2 text-xs text-ink-muted">
+                    Platform admins follow an OIDC group (<span className="font-mono">AUTH_OIDC_ADMIN_GROUP</span>): the
+                    flag is re-evaluated at every OIDC sign-in, so a grant or revoke made here to an account that signs
+                    in that way lasts until its next login.
+                </p>
+            )}
+            {flagError && (
+                <p role="alert" className="mt-2 text-sm text-danger">
+                    {flagError}
+                </p>
+            )}
 
             <TableContainer className="mt-4">
                 <Table>
@@ -77,6 +127,7 @@ export function UsersTab({
                             <TableHeader>Email</TableHeader>
                             <TableHeader>Name</TableHeader>
                             <TableHeader>Sign-in</TableHeader>
+                            {!multiOrg && <TableHeader>Role</TableHeader>}
                             <TableHeader>Status</TableHeader>
                             <TableHeader>Created</TableHeader>
                             <TableHeader className="text-right">
@@ -106,6 +157,24 @@ export function UsersTab({
                                             ? '—'
                                             : user.signIn.map((m) => SIGN_IN_LABEL[m] ?? m).join(', ')}
                                     </TableCell>
+                                    {!multiOrg && (
+                                        <TableCell className="text-ink-secondary">
+                                            {(() => {
+                                                const r = roleOf(user.id);
+                                                if (!roles) return <span className="text-ink-faint">…</span>;
+                                                if (!r) return <span className="text-ink-muted">not a member</span>;
+                                                return (
+                                                    <Link
+                                                        href="/org-settings?tab=members"
+                                                        className="hover:underline"
+                                                        title={`${r.role} of ${r.orgName} — change it on the organisation's Members tab`}
+                                                    >
+                                                        {r.role}
+                                                    </Link>
+                                                );
+                                            })()}
+                                        </TableCell>
+                                    )}
                                     <TableCell>
                                         <span className="inline-flex flex-wrap gap-1.5 text-xs">
                                             {user.lockedUntil && (
@@ -130,12 +199,44 @@ export function UsersTab({
                                         <RelativeTime date={new Date(user.createdAt)} />
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {local && !user.demo && (
-                                            <Button size="sm" onClick={() => setDialog({ mode: 'reset', user })}>
-                                                <KeyRound className="size-3.5" aria-hidden="true" />
-                                                Set password
-                                            </Button>
-                                        )}
+                                        <span className="inline-flex flex-wrap justify-end gap-2">
+                                            {local && !user.demo && (
+                                                <Button size="sm" onClick={() => setDialog({ mode: 'reset', user })}>
+                                                    <KeyRound className="size-3.5" aria-hidden="true" />
+                                                    Set password
+                                                </Button>
+                                            )}
+                                            {/* Any account, however it signs in. The last admin's
+                                                button is disabled here and refused by the route. */}
+                                            {!user.demo &&
+                                                (user.isAdmin ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="danger"
+                                                        loading={flagBusy === user.id}
+                                                        disabled={admins <= 1}
+                                                        title={
+                                                            admins <= 1
+                                                                ? 'The last platform admin cannot be revoked'
+                                                                : 'Remove the platform-admin flag; takes effect on their next request'
+                                                        }
+                                                        onClick={() => setAdmin(user, false)}
+                                                    >
+                                                        <ShieldOff className="size-3.5" aria-hidden="true" />
+                                                        Revoke admin
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        loading={flagBusy === user.id}
+                                                        title="Make this account a platform admin, whatever way it signs in"
+                                                        onClick={() => setAdmin(user, true)}
+                                                    >
+                                                        <ShieldCheck className="size-3.5" aria-hidden="true" />
+                                                        Make admin
+                                                    </Button>
+                                                ))}
+                                        </span>
                                     </TableCell>
                                 </TableRow>
                             );

@@ -40,6 +40,14 @@ export interface AdminOrgLimits {
     sboms: null;
 }
 
+export interface AdminOrgRole {
+    userId: string;
+    orgId: string;
+    orgName: string;
+    orgSlug: string;
+    role: string;
+}
+
 export interface AdminOrganization {
     id: string;
     name: string;
@@ -218,6 +226,27 @@ export const adminRepository = {
             .limit(limit);
 
         return rows.map((row) => ({ ...row, limits: adminOrgLimits(row.plan) }));
+    },
+
+    /**
+     * Every membership in every tenant org, for the admin Users tab: one
+     * place to see people and what they may do, in the edition where the
+     * one org is the install. Read-only here — roles change where they
+     * live, in the organisation's Members tab.
+     */
+    async getOrgRoles(): Promise<AdminOrgRole[]> {
+        return db
+            .select({
+                userId: schema.orgMembers.userId,
+                orgId: schema.organizations.id,
+                orgName: schema.organizations.name,
+                orgSlug: schema.organizations.slug,
+                role: schema.orgMembers.role,
+            })
+            .from(schema.orgMembers)
+            .innerJoin(schema.organizations, eq(schema.orgMembers.orgId, schema.organizations.id))
+            .where(and(isNull(schema.organizations.deletedAt), eq(schema.organizations.system, false)))
+            .orderBy(asc(schema.organizations.name));
     },
 
     async getVulnerabilityStats() {

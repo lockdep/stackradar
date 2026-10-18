@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { ChevronRight, Building2, Layers } from 'lucide-react';
 import { useTabData } from './useTabData';
 import { useRuntimeConfig } from '@/components/providers';
@@ -39,6 +40,26 @@ export function ExplorerTab({
     const [image, setImage] = useState<ExplorerImage | null>(null);
     const [sbom, setSbom] = useState<ExplorerSbom | null>(null);
     const [component, setComponent] = useState<{ id: string; name: string } | null>(null);
+    // `?component=` is the image page's way in: straight to one component's
+    // match provenance, with no org, image or SBOM picked above it. Clearing
+    // it is the breadcrumb's root; the URL is left as it was.
+    const linkedParam = useSearchParams().get('component');
+    const [linked, setLinked] = useState<string | null>(linkedParam);
+
+    if (linked) {
+        return (
+            <div>
+                <nav className="text-sm text-ink-muted mb-6 flex items-center gap-1 flex-wrap">
+                    <button type="button" onClick={() => setLinked(null)} className="hover:text-ink cursor-pointer">
+                        {multiOrg ? 'Explorer' : 'Images'}
+                    </button>
+                    <ChevronRight className="size-3.5 text-ink-faint" />
+                    <span className="text-ink font-medium font-mono text-xs">{linked}</span>
+                </nav>
+                <ExplorerComponentDetail componentId={linked} />
+            </div>
+        );
+    }
 
     const org = multiOrg ? pickedOrg : (data?.recentOrgs[0] ?? null);
     const setOrg = (o: RecentOrg | null) => {

@@ -62,6 +62,14 @@ export const adminController = {
         }
     },
 
+    async getOrgRoles(_req: Request, res: Response, next: NextFunction) {
+        try {
+            res.json({ roles: await adminRepository.getOrgRoles() });
+        } catch (error) {
+            next(error);
+        }
+    },
+
     async getSystem(_req: Request, res: Response, next: NextFunction) {
         try {
             res.json(await getSystemReport());

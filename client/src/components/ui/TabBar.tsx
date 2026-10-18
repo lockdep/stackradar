@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useRef, type ComponentType, type KeyboardEvent, type ReactNode } from 'react';
 import {
     underlineNavStripClasses,
     underlineNavListClasses,
@@ -15,6 +15,13 @@ export interface TabBarItem {
     icon?: ComponentType<{ className?: string }>;
     /** Primer's counter slot. Omitted (not zero) until the number is known. */
     count?: number;
+    /**
+     * A section label drawn before the first tab that carries it, on wide
+     * screens only — twelve tabs read as a list without one. Tabs of one
+     * group must be adjacent; the strip does not reorder. The mobile strip
+     * stays flat, where a label would cost a tab's width.
+     */
+    group?: string;
 }
 
 interface TabBarProps {
@@ -62,40 +69,53 @@ export function TabBar({ tabs, activeTab, onChange, label }: TabBarProps) {
     return (
         <div className={underlineNavStripClasses}>
             <nav role="tablist" aria-label={label} className={underlineNavListClasses}>
-                {tabs.map((tab) => {
+                {tabs.map((tab, index) => {
                     const selected = activeTab === tab.id;
+                    const opensGroup = tab.group !== undefined && tabs[index - 1]?.group !== tab.group;
                     return (
-                        <button
-                            key={tab.id}
-                            ref={(el) => {
-                                tabRefs.current[tab.id] = el;
-                            }}
-                            id={tabId(tab.id)}
-                            type="button"
-                            role="tab"
-                            aria-selected={selected}
-                            aria-controls={panelId(tab.id)}
-                            tabIndex={selected ? 0 : -1}
-                            onClick={() => onChange(tab.id)}
-                            onKeyDown={handleKeyDown}
-                            className={`${underlineNavItemClasses} ${selected ? underlineNavItemActiveClasses : ''}`}
-                        >
-                            <UnderlineNavItemContent
-                                icon={tab.icon}
-                                name={tab.name}
-                                labelClassName={selected ? 'font-semibold' : ''}
+                        <Fragment key={tab.id}>
+                            {opensGroup && (
+                                // Presentational: a tablist's children are tabs, and
+                                // a label that announced itself as one would be a lie.
+                                <span
+                                    role="presentation"
+                                    aria-hidden="true"
+                                    className={`hidden md:inline-flex items-center self-stretch mb-2 pl-3 text-[11px] font-medium uppercase tracking-wide text-ink-faint whitespace-nowrap ${index > 0 ? 'border-l border-edge' : ''}`}
+                                >
+                                    {tab.group}
+                                </span>
+                            )}
+                            <button
+                                ref={(el) => {
+                                    tabRefs.current[tab.id] = el;
+                                }}
+                                id={tabId(tab.id)}
+                                type="button"
+                                role="tab"
+                                aria-selected={selected}
+                                aria-controls={panelId(tab.id)}
+                                tabIndex={selected ? 0 : -1}
+                                onClick={() => onChange(tab.id)}
+                                onKeyDown={handleKeyDown}
+                                className={`${underlineNavItemClasses} ${selected ? underlineNavItemActiveClasses : ''}`}
                             >
-                                {/* Primer's Counter: a translucent neutral, so it stays a
+                                <UnderlineNavItemContent
+                                    icon={tab.icon}
+                                    name={tab.name}
+                                    labelClassName={selected ? 'font-semibold' : ''}
+                                >
+                                    {/* Primer's Counter: a translucent neutral, so it stays a
                                     step darker than whatever is under it — the hover pill
                                     included. An opaque surface token went lighter than the
                                     hover fill and read as a hole. */}
-                                {tab.count !== undefined && (
-                                    <span className="rounded-full bg-neutral-subtle px-1.5 text-xs font-medium tabular-nums text-ink">
-                                        {tab.count}
-                                    </span>
-                                )}
-                            </UnderlineNavItemContent>
-                        </button>
+                                    {tab.count !== undefined && (
+                                        <span className="rounded-full bg-neutral-subtle px-1.5 text-xs font-medium tabular-nums text-ink">
+                                            {tab.count}
+                                        </span>
+                                    )}
+                                </UnderlineNavItemContent>
+                            </button>
+                        </Fragment>
                     );
                 })}
             </nav>
