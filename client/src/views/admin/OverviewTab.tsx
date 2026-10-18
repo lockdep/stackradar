@@ -16,6 +16,7 @@ import {
     FolderTree,
 } from 'lucide-react';
 import { useTabData } from './useTabData';
+import { useRuntimeConfig } from '@/components/providers';
 import { TabShell, StatCard, PlanBadge, HealthTile } from './Shared';
 import {
     formatNumber,
@@ -99,12 +100,16 @@ export function OverviewTab({
         refreshKey,
         onLoadingChange,
     );
+    // The tenant figures — how many orgs, on which plans — are the cloud
+    // operator's. A single-org install has one, and it is the install.
+    const { multiOrg } = useRuntimeConfig().edition;
 
     return (
         <TabShell isLoading={isLoading} error={error} onRetry={refetch}>
             {data &&
                 (() => {
                     const { stats, osvState } = data;
+                    const plans = Object.keys(stats.organizations.byPlan).sort();
                     const activeJobs =
                         (stats.jobs.byStatus['pending'] ?? 0) +
                         (stats.jobs.byStatus['processing'] ?? 0) +
@@ -124,7 +129,13 @@ export function OverviewTab({
                     return (
                         <div className="space-y-6">
                             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                <StatCard icon={Building2} label="Organizations" value={stats.organizations.total} />
+                                {multiOrg && (
+                                    <StatCard
+                                        icon={Building2}
+                                        label="Organizations"
+                                        value={stats.organizations.total}
+                                    />
+                                )}
                                 <StatCard icon={Users} label="Users" value={stats.users.total} />
                                 <StatCard icon={Layers} label="SBOMs" value={stats.sboms.total} />
                                 <StatCard
@@ -216,8 +227,9 @@ export function OverviewTab({
                                 digest, which is why the two figures sit together rather
                                 than in the stat grid above. */}
                                 <p className="text-xs text-ink-muted mb-4">
-                                    Counted across every tenant — `images` has no org column, so this is the only view
-                                    of it the platform has.
+                                    {multiOrg
+                                        ? 'Counted across every cluster of every tenant. An image belongs to one cluster, so a digest running in two clusters is two images.'
+                                        : 'An image is a digest as this cluster sees it, so each digest is counted once however many places it runs.'}
                                 </p>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                                     <StatCard
@@ -255,30 +267,43 @@ export function OverviewTab({
                                 </div>
                             </div>
 
-                            <div className="bg-surface-raised rounded-md border border-edge p-5">
-                                <h2 className="text-sm font-semibold text-ink-secondary mb-4">Organizations by Plan</h2>
-                                <div className="space-y-2">
-                                    {(['free', 'pro'] as const).map((plan) => {
-                                        const n = stats.organizations.byPlan[plan] ?? 0;
-                                        const pct =
-                                            stats.organizations.total > 0 ? (n / stats.organizations.total) * 100 : 0;
-                                        return (
-                                            <div key={plan} className="flex items-center gap-3">
-                                                <PlanBadge plan={plan} />
-                                                <div className="flex-1 h-1.5 bg-track rounded-full overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-accent-emphasis rounded-full"
-                                                        style={{ width: `${pct}%` }}
-                                                    />
-                                                </div>
-                                                <span className="text-sm font-medium text-ink-secondary w-8 text-right">
-                                                    {n}
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
+                            {/* Every plan the table holds, not a fixed list: a fixed one
+                                drew two empty bars in the community edition and could
+                                not show a tier it did not name. */}
+                            {multiOrg && (
+                                <div className="bg-surface-raised rounded-md border border-edge p-5">
+                                    <h2 className="text-sm font-semibold text-ink-secondary mb-4">
+                                        Organizations by Plan
+                                    </h2>
+                                    {plans.length === 0 ? (
+                                        <p className="text-sm text-ink-muted">No organizations yet.</p>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {plans.map((plan) => {
+                                                const n = stats.organizations.byPlan[plan] ?? 0;
+                                                const pct =
+                                                    stats.organizations.total > 0
+                                                        ? (n / stats.organizations.total) * 100
+                                                        : 0;
+                                                return (
+                                                    <div key={plan} className="flex items-center gap-3">
+                                                        <PlanBadge plan={plan} />
+                                                        <div className="flex-1 h-1.5 bg-track rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-accent-emphasis rounded-full"
+                                                                style={{ width: `${pct}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-sm font-medium text-ink-secondary w-8 text-right">
+                                                            {n}
+                                                        </span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            )}
                         </div>
                     );
                 })()}

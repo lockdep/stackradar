@@ -346,7 +346,7 @@ function NavItems({
                             <NavItem
                                 href="/admin"
                                 icon={Shield}
-                                label="Admin Dashboard"
+                                label={edition.multiOrg ? 'Admin Dashboard' : 'Administration'}
                                 current={pathname === '/admin'}
                                 onNavigate={onNavigate}
                             />

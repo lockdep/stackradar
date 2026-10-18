@@ -4,6 +4,8 @@ import { isCurrentGeneration } from "../db/generation.js";
 import { severityRowsByImage } from "../db/findings.js";
 import { scannedImageIds } from "./image.repository.js";
 import { IMAGE_GC_RETENTION_DAYS, imageGcRetentionDays } from "../config/image-gc.js";
+import { getPlanLimits } from "../config/plans.js";
+import { edition } from "../edition.js";
 import type { JobStatus } from "../db/schema/jobs.js";
 
 import {
@@ -22,6 +24,53 @@ export interface AdminEcosystemEntry {
     ecosystem: string;
     count: number;
 }
+
+/**
+ * The caps an org's usage is drawn against, resolved on the server by
+ * `getPlanLimits` so the admin table reads the same rule every other limit
+ * check does — the community edition's one plan whatever the column says, free
+ * for an unknown value on the cloud. `null` is "no cap": JSON cannot carry
+ * `Infinity`, and the client would otherwise have to keep a mirror of
+ * `config/plans.ts` that no gate compares.
+ */
+export interface AdminOrgLimits {
+    members: number | null;
+    clusters: number | null;
+    /** Always `null` — completeness of the current picture is never charged for. */
+    sboms: null;
+}
+
+export interface AdminOrganization {
+    id: string;
+    name: string;
+    slug: string;
+    plan: string;
+    demo: boolean;
+    createdAt: Date;
+    memberCount: number;
+    sbomCount: number;
+    clusterCount: number;
+    limits: AdminOrgLimits;
+}
+
+function finiteOrNull(n: number): number | null {
+    return Number.isFinite(n) ? n : null;
+}
+
+export function adminOrgLimits(plan: string): AdminOrgLimits {
+    const limits = getPlanLimits(plan);
+    return { members: finiteOrNull(limits.members), clusters: finiteOrNull(limits.clusters), sboms: null };
+}
+
+/**
+ * The retention figure the Images tab prints. On the cloud it is the floor
+ * every plan's window is at least (`IMAGE_GC_RETENTION_DAYS`), because the
+ * table mixes orgs on different plans and each row's own countdown already
+ * accounts for its plan. In the community edition there is one plan, so the
+ * figure can be the actual window — the one number a self-hosting admin wants
+ * to know, with no plan to mention.
+ */
+const ADMIN_IMAGE_RETENTION_DAYS = edition.billing ? IMAGE_GC_RETENTION_DAYS : imageGcRetentionDays("community");
 
 export interface AdminWithdrawnStats {
     /** Advisories in the mirror that OSV has since retracted. */
@@ -64,11 +113,12 @@ export interface AdminWithdrawnStats {
  * One row of the `images` table, with everything reachable from a digest.
  *
  * Deliberately not scoped to a tenant — this is the platform operator's view
- * across every org. Since ADR 0006 an image belongs to one cluster, so the
- * org/cluster counts below are 1 for any row with containers; they survive as
- * columns because a drifted count would be the symptom of a broken invariant.
- * This shape must never leak past `requireAdmin`: "which tenant runs what" is
- * provenance and belongs to them.
+ * across every org. Since ADR 0006 an image belongs to one cluster and one
+ * org, so there is no org count to show: `images.org_id` is the answer, and a
+ * second one would only ever be 1. `clusterCount` survives as a column because
+ * a value other than 1 on a row with containers would be the symptom of a
+ * broken invariant. This shape must never leak past `requireAdmin`: "which
+ * tenant runs what" is provenance and belongs to them.
  */
 export interface AdminImage {
     id: string;
@@ -87,11 +137,9 @@ export interface AdminImage {
      * Same rule as the customer-facing image list, via `scannedImageIds`.
      */
     findings: SeverityCounts | null;
-    /** `workload_containers` rows pointing here, across every tenant. */
+    /** `workload_containers` rows pointing here. */
     containerCount: number;
-    /** Distinct orgs running it — 1 under ADR 0006 unless an invariant broke. */
-    orgCount: number;
-    /** Distinct clusters running it. */
+    /** Distinct clusters running it — 1 under ADR 0006 unless an invariant broke. */
     clusterCount: number;
     state: AdminImageState;
     /**
@@ -134,8 +182,8 @@ export interface AdminImagesPage {
 }
 
 export const adminRepository = {
-    async getRecentOrganizations(limit = 10) {
-        return db
+    async getRecentOrganizations(limit = 10): Promise<AdminOrganization[]> {
+        const rows = await db
             .select({
                 id: schema.organizations.id,
                 name: schema.organizations.name,
@@ -161,9 +209,15 @@ export const adminRepository = {
         )`.as("cluster_count"),
             })
             .from(schema.organizations)
-            .where(isNull(schema.organizations.deletedAt))
+            // Not the platform org (`platform.service.ts`): nobody can join it,
+            // nothing can be minted for it, and its plan is not a sale — it is
+            // the StackRadar-owned cluster the chart index scans into, and on
+            // an admin screen it would read as a tenant with no members.
+            .where(and(isNull(schema.organizations.deletedAt), eq(schema.organizations.system, false)))
             .orderBy(desc(schema.organizations.createdAt))
             .limit(limit);
+
+        return rows.map((row) => ({ ...row, limits: adminOrgLimits(row.plan) }));
     },
 
     async getVulnerabilityStats() {
@@ -438,7 +492,7 @@ export const adminRepository = {
             limit,
             offset,
             stateTotals,
-            retentionDays: IMAGE_GC_RETENTION_DAYS,
+            retentionDays: ADMIN_IMAGE_RETENTION_DAYS,
         };
         if (rows.length === 0) return page;
 
@@ -465,7 +519,6 @@ export const adminRepository = {
                 .select({
                     imageId: schema.workloadContainers.imageId,
                     containerCount: count(),
-                    orgCount: countDistinct(schema.workloadContainers.orgId),
                     clusterCount: countDistinct(schema.namespaces.clusterId),
                 })
                 .from(schema.workloadContainers)
@@ -524,7 +577,6 @@ export const adminRepository = {
                 componentCount: sbom ? (componentCounts.get(sbom.id) ?? 0) : 0,
                 findings: scanned.has(r.id) ? (findingsByImage.get(r.id) ?? EMPTY_SEVERITY()) : null,
                 containerCount,
-                orgCount: Number(usage?.orgCount ?? 0),
                 clusterCount: Number(usage?.clusterCount ?? 0),
                 state,
                 gcInDays:

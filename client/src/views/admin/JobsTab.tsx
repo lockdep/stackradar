@@ -25,6 +25,7 @@ import {
     TableCell,
 } from '@/components/ui';
 import { useTabData } from './useTabData';
+import { useRuntimeConfig } from '@/components/providers';
 import { TabShell } from './Shared';
 import { formatTimeAgo, formatDuration } from './utils';
 import type { AdminJob, AdminJobsData, JobStatus, JobTrigger } from './types';
@@ -80,7 +81,7 @@ function JobStatusBadge({ status }: { status: JobStatus }) {
     );
 }
 
-function JobDetail({ job, onClose }: { job: AdminJob; onClose: () => void }) {
+function JobDetail({ job, multiOrg, onClose }: { job: AdminJob; multiOrg: boolean; onClose: () => void }) {
     return (
         <div className="bg-surface-raised rounded-md border border-edge p-5 space-y-4">
             <div className="flex items-start justify-between gap-4">
@@ -106,12 +107,16 @@ function JobDetail({ job, onClose }: { job: AdminJob; onClose: () => void }) {
                     <p className="text-xs text-ink-muted uppercase tracking-wide font-medium mb-0.5">Type</p>
                     <p className="text-ink-secondary">{TYPE_LABELS[job.type] ?? job.type}</p>
                 </div>
-                <div>
-                    <p className="text-xs text-ink-muted uppercase tracking-wide font-medium mb-0.5">Organization</p>
-                    <p className="text-ink-secondary">
-                        {job.orgName} <span className="text-ink-muted">({job.orgSlug})</span>
-                    </p>
-                </div>
+                {multiOrg && (
+                    <div>
+                        <p className="text-xs text-ink-muted uppercase tracking-wide font-medium mb-0.5">
+                            Organization
+                        </p>
+                        <p className="text-ink-secondary">
+                            {job.orgName} <span className="text-ink-muted">({job.orgSlug})</span>
+                        </p>
+                    </div>
+                )}
                 <div>
                     <p className="text-xs text-ink-muted uppercase tracking-wide font-medium mb-0.5">Triggered By</p>
                     {(() => {
@@ -205,6 +210,9 @@ export function JobsTab({
     const [offset, setOffset] = useState(0);
     const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('');
     const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null);
+    // Which tenant a job belongs to is a column only where there is more
+    // than one tenant to tell apart.
+    const { multiOrg } = useRuntimeConfig().edition;
 
     const statusQs = statusFilter ? `&status=${statusFilter}` : '';
     const url = `/api/admin/jobs?limit=${PAGE_SIZE}&offset=${offset}${statusQs}`;
@@ -246,7 +254,7 @@ export function JobsTab({
                 })}
             </div>
 
-            {selectedJob && <JobDetail job={selectedJob} onClose={() => setSelectedJob(null)} />}
+            {selectedJob && <JobDetail job={selectedJob} multiOrg={multiOrg} onClose={() => setSelectedJob(null)} />}
 
             <TabShell isLoading={isLoading} error={error} onRetry={refetch}>
                 {data && (
@@ -261,7 +269,7 @@ export function JobsTab({
                                 <Table density="spacious" aria-label="Jobs">
                                     <TableHead>
                                         <TableHeader>Title</TableHeader>
-                                        <TableHeader hideBelow="xl">Org</TableHeader>
+                                        {multiOrg && <TableHeader hideBelow="xl">Org</TableHeader>}
                                         <TableHeader hideBelow="md">Type</TableHeader>
                                         <TableHeader>Status</TableHeader>
                                         <TableHeader hideBelow="xl">Trigger</TableHeader>
@@ -304,11 +312,13 @@ export function JobsTab({
                                                             </p>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell hideBelow="xl">
-                                                        <p className="text-sm text-ink-secondary truncate max-w-[120px]">
-                                                            {job.orgName}
-                                                        </p>
-                                                    </TableCell>
+                                                    {multiOrg && (
+                                                        <TableCell hideBelow="xl">
+                                                            <p className="text-sm text-ink-secondary truncate max-w-[120px]">
+                                                                {job.orgName}
+                                                            </p>
+                                                        </TableCell>
+                                                    )}
                                                     <TableCell
                                                         hideBelow="md"
                                                         className="text-ink-secondary whitespace-nowrap"

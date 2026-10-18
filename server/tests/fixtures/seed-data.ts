@@ -77,6 +77,8 @@ export interface CreateOrganizationOptions {
   color?: schema.OrgColor;
   /** The read-only demo org (`organizations.demo`). */
   demo?: boolean;
+  /** The platform's own org (`organizations.system`): no members, no keys, not a tenant. */
+  system?: boolean;
 }
 
 export async function createOrganization(
@@ -96,6 +98,7 @@ export async function createOrganization(
       plan: options.plan || "free",
       color: options.color || "blue",
       demo: options.demo ?? false,
+      system: options.system ?? false,
     })
     .returning();
 

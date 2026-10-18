@@ -142,7 +142,6 @@ describe("listAdminImages", () => {
 
         expect(byId.size).toBe(2);
         expect(byId.get(ours.id)?.containerCount).toBe(2);
-        expect(byId.get(ours.id)?.orgCount).toBe(1);
         expect(byId.get(ours.id)?.clusterCount).toBe(1);
         expect(byId.get(theirs.id)?.containerCount).toBe(1);
     });

@@ -71,20 +71,10 @@ export const JOB_PENDING_WARNING_SECONDS = 15 * 60;
 export const JOB_PENDING_CRITICAL_SECONDS = 60 * 60;
 
 /**
- * Mirror of `server/src/config/plans.ts` for the admin org table. SBOMs are
- * uncapped on every tier (completeness of the current picture is never
- * charged for), so that column renders usage against ∞.
+ * A cap as the server reports it (`AdminOrgLimits`): `null` is "no cap", and
+ * renders as ∞ — SBOMs are uncapped on every tier, the community plan caps
+ * nothing.
  */
-const ADMIN_PLAN_LIMITS = {
-    free: { members: 1, clusters: 1, sboms: Infinity },
-    pro: { members: 10, clusters: 5, sboms: Infinity },
-    team: { members: 25, clusters: 15, sboms: Infinity },
-} as const;
-
-export function getAdminPlanLimits(plan: string) {
-    return ADMIN_PLAN_LIMITS[plan as keyof typeof ADMIN_PLAN_LIMITS] ?? ADMIN_PLAN_LIMITS.free;
-}
-
-export function formatMax(n: number): string {
-    return n === Infinity ? '∞' : formatNumber(n);
+export function formatMax(n: number | null): string {
+    return n === null ? '∞' : formatNumber(n);
 }

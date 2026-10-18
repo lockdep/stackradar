@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { ChevronRight, Building2, Layers } from 'lucide-react';
 import { useTabData } from './useTabData';
+import { useRuntimeConfig } from '@/components/providers';
 import { TabShell, SourceTables } from './Shared';
 import { imageLabel, sbomLabel } from './explorerShared';
 import { ExplorerImageList } from './ExplorerImageList';
@@ -13,6 +14,14 @@ import type { RecentOrg, OrganizationsData, ExplorerImage, ExplorerSbom } from '
 
 // ── Top-level tab: org picker + breadcrumb router ────────────────────────────
 
+/**
+ * Drill from an image into its SBOM, components and matched vulnerabilities.
+ *
+ * The first level is the org picker only where there is more than one org
+ * to pick (`edition.multiOrg`). A single-org install has exactly one, so the
+ * tab starts on its image list and the breadcrumb starts at "Images" — the
+ * same `/api/admin/organizations` call supplies the org id either way.
+ */
 export function ExplorerTab({
     refreshKey,
     onLoadingChange,
@@ -25,10 +34,16 @@ export function ExplorerTab({
         refreshKey,
         onLoadingChange,
     );
-    const [org, setOrg] = useState<RecentOrg | null>(null);
+    const { multiOrg } = useRuntimeConfig().edition;
+    const [pickedOrg, setPickedOrg] = useState<RecentOrg | null>(null);
     const [image, setImage] = useState<ExplorerImage | null>(null);
     const [sbom, setSbom] = useState<ExplorerSbom | null>(null);
     const [component, setComponent] = useState<{ id: string; name: string } | null>(null);
+
+    const org = multiOrg ? pickedOrg : (data?.recentOrgs[0] ?? null);
+    const setOrg = (o: RecentOrg | null) => {
+        if (multiOrg) setPickedOrg(o);
+    };
 
     const crumbs = (
         <nav className="text-sm text-ink-muted mb-6 flex items-center gap-1 flex-wrap">
@@ -40,11 +55,11 @@ export function ExplorerTab({
                     setSbom(null);
                     setComponent(null);
                 }}
-                className="hover:text-ink cursor-pointer"
+                className={multiOrg || image ? 'hover:text-ink cursor-pointer' : 'text-ink font-medium'}
             >
-                Explorer
+                {multiOrg ? 'Explorer' : 'Images'}
             </button>
-            {org && (
+            {multiOrg && org && (
                 <>
                     <ChevronRight className="size-3.5 text-ink-faint" />
                     <button
@@ -150,7 +165,12 @@ export function ExplorerTab({
         <div>
             {crumbs}
             <TabShell isLoading={isLoading} error={error} onRetry={refetch}>
-                {data && (
+                {data && !multiOrg && (
+                    // The single org has not been seeded yet (`default-org.service.ts`
+                    // runs at server start), so there is nothing to explore.
+                    <p className="text-sm text-ink-muted">No organization yet.</p>
+                )}
+                {data && multiOrg && (
                     <div className="bg-surface-raised rounded-md border border-edge p-5">
                         <div className="flex flex-wrap items-start justify-between gap-4 mb-1">
                             <h2 className="text-sm font-semibold text-ink-secondary">Select an organization</h2>

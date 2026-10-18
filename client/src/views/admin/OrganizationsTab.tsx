@@ -4,7 +4,7 @@ import { Users, Layers, Server } from 'lucide-react';
 import { Badge, TableContainer, Table, TableHead, TableBody, TableHeader, TableRow, TableCell } from '@/components/ui';
 import { useTabData } from './useTabData';
 import { TabShell, PlanBadge, formatMax } from './Shared';
-import { formatTimeAgo, getAdminPlanLimits } from './utils';
+import { formatTimeAgo } from './utils';
 import type { RecentOrg, OrganizationsData } from './types';
 
 // ── OrganizationsTab ───────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ export function OrganizationsTab({
                                                     <Users className="size-3 text-ink-faint" />
                                                     {org.memberCount}
                                                     <span className="text-ink-muted">
-                                                        / {formatMax(getAdminPlanLimits(org.plan).members)}
+                                                        / {formatMax(org.limits.members)}
                                                     </span>
                                                 </span>
                                             </TableCell>
@@ -90,7 +90,7 @@ export function OrganizationsTab({
                                                     <Layers className="size-3 text-ink-faint" />
                                                     {org.sbomCount}
                                                     <span className="text-ink-muted">
-                                                        / {formatMax(getAdminPlanLimits(org.plan).sboms)}
+                                                        / {formatMax(org.limits.sboms)}
                                                     </span>
                                                 </span>
                                             </TableCell>
@@ -99,7 +99,7 @@ export function OrganizationsTab({
                                                     <Server className="size-3 text-ink-faint" />
                                                     {org.clusterCount}
                                                     <span className="text-ink-muted">
-                                                        / {formatMax(getAdminPlanLimits(org.plan).clusters)}
+                                                        / {formatMax(org.limits.clusters)}
                                                     </span>
                                                 </span>
                                             </TableCell>

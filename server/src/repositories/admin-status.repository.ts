@@ -63,6 +63,11 @@ export interface AdminQueueHealth {
     stuckAtMaxRetries: number;
 }
 
+/** A live, customer-facing org: not soft-deleted, not the platform's own. */
+function isTenantOrg() {
+    return and(isNull(schema.organizations.deletedAt), eq(schema.organizations.system, false));
+}
+
 export interface AdminSystemStats {
     organizations: {
         total: number;
@@ -364,12 +369,15 @@ export const adminStatusRepository = {
             containerRow,
             helmReleaseRow,
         ] = await Promise.all([
-            db.select({ total: count() }).from(schema.organizations).where(isNull(schema.organizations.deletedAt)),
+            // Tenants only: the platform org (`platform.service.ts`) is
+            // StackRadar's own, with no members and a plan nobody bought, so
+            // it belongs in neither the total nor the per-plan split.
+            db.select({ total: count() }).from(schema.organizations).where(isTenantOrg()),
 
             db
                 .select({ plan: schema.organizations.plan, total: count() })
                 .from(schema.organizations)
-                .where(isNull(schema.organizations.deletedAt))
+                .where(isTenantOrg())
                 .groupBy(schema.organizations.plan),
 
             db.select({ total: countDistinct(schema.users.id) }).from(schema.users),

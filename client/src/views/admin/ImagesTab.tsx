@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Package, Building2, Boxes, Trash2, Clock } from 'lucide-react';
+import { Search, Package, Boxes, Trash2, Clock } from 'lucide-react';
 import {
     Badge,
     Button,
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui';
 import { SourceTables, SevCounts, ErrorBox, LoadingBox } from './Shared';
 import { useTabData } from './useTabData';
+import { useRuntimeConfig } from '@/components/providers';
 import { formatNumber, formatTimeAgo } from './utils';
 import type { AdminImage, AdminImageState, AdminImageSort, AdminImagesData } from './types';
 import { PAGE_SIZE } from '@/lib/constants';
@@ -31,7 +32,7 @@ const STATES: Array<{ id: AdminImageState; label: string; hint: string }> = [
     {
         id: 'orphaned',
         label: 'Orphaned',
-        hint: "No workload_containers row anywhere. The GC collects these once they age past the owning org's plan history window.",
+        hint: 'No workload_containers row anywhere. The GC collects these once they have been unreferenced for the retention window.',
     },
     {
         id: 'awaiting_sbom',
@@ -64,7 +65,15 @@ function StateBadge({ state }: { state: AdminImageState }) {
  * nightly and batch-limited, so an image past its cutoff has not been collected
  * *yet*, and "-3d" would read as though something were broken.
  */
-function GcCountdown({ image, retentionDays }: { image: AdminImage; retentionDays: number }) {
+function GcCountdown({
+    image,
+    retentionDays,
+    multiOrg,
+}: {
+    image: AdminImage;
+    retentionDays: number;
+    multiOrg: boolean;
+}) {
     if (image.gcInDays === null) return <span className="text-ink-faint">—</span>;
     if (image.gcInDays <= 0) {
         return (
@@ -79,7 +88,11 @@ function GcCountdown({ image, retentionDays }: { image: AdminImage; retentionDay
     return (
         <span
             className="inline-flex items-center gap-1 text-xs text-ink-muted"
-            title={`Collected once last_seen_at is older than the owning org's plan history window (${retentionDays}-day floor). The countdown already accounts for the org's plan.`}
+            title={
+                multiOrg
+                    ? `Collected once last_seen_at is older than the owning org's plan history window (${retentionDays}-day floor). The countdown already accounts for the org's plan.`
+                    : `Collected once last_seen_at is older than ${retentionDays} days.`
+            }
         >
             <Clock className="size-3 text-ink-faint" /> {image.gcInDays}d
         </span>
@@ -87,32 +100,20 @@ function GcCountdown({ image, retentionDays }: { image: AdminImage; retentionDay
 }
 
 /**
- * Where a digest runs, as one cell.
- *
- * The org count is the point of the column. `images` has no tenant column by
- * design, so this is the only place the platform can show cross-tenant reuse
- * actually happening — one digest, one SBOM, five customers. A "1" here is the
- * ordinary case; anything higher is the architecture paying for itself.
+ * Where a digest runs, as one cell: how many containers reference it. An
+ * image belongs to one cluster and one org (ADR 0006), so there is no second
+ * figure to show — the org count this cell used to carry could only ever be 1.
  */
 function UsageCell({ image }: { image: AdminImage }) {
     if (image.containerCount === 0) {
         return <span className="text-xs text-ink-faint">Nowhere</span>;
     }
     return (
-        <span className="inline-flex items-center gap-3 text-xs text-ink-secondary whitespace-nowrap">
-            <span className="inline-flex items-center gap-1" title="workload_containers rows referencing this image">
-                <Boxes className="size-3 text-ink-faint" /> {formatNumber(image.containerCount)}
-            </span>
-            <span
-                className={`inline-flex items-center gap-1 ${image.orgCount > 1 ? 'text-accent font-medium' : ''}`}
-                title={
-                    image.orgCount > 1
-                        ? 'Shared across tenants — one SBOM serves all of them'
-                        : 'Distinct organizations running it'
-                }
-            >
-                <Building2 className="size-3 text-ink-faint" /> {image.orgCount}
-            </span>
+        <span
+            className="inline-flex items-center gap-1 text-xs text-ink-secondary whitespace-nowrap"
+            title="workload_containers rows referencing this image"
+        >
+            <Boxes className="size-3 text-ink-faint" /> {formatNumber(image.containerCount)}
         </span>
     );
 }
@@ -129,6 +130,8 @@ export function ImagesTab({
     const [search, setSearch] = useState('');
     const [debounced, setDebounced] = useState('');
     const [offset, setOffset] = useState(0);
+    // Plans decide the retention window only where there are plans.
+    const { multiOrg } = useRuntimeConfig().edition;
 
     useEffect(() => {
         const t = setTimeout(() => {
@@ -299,7 +302,11 @@ export function ImagesTab({
                                                 {formatTimeAgo(i.lastSeenAt)}
                                             </TableCell>
                                             <TableCell align="end" hideBelow="md">
-                                                <GcCountdown image={i} retentionDays={data.retentionDays} />
+                                                <GcCountdown
+                                                    image={i}
+                                                    retentionDays={data.retentionDays}
+                                                    multiOrg={multiOrg}
+                                                />
                                             </TableCell>
                                         </TableRow>
                                     ))}
@@ -314,8 +321,9 @@ export function ImagesTab({
                             {formatNumber(data.total)}
                             <span className="text-ink-faint">
                                 {' '}
-                                · collected once unreferenced past the org&apos;s plan window ({data.retentionDays}-day
-                                floor)
+                                {multiOrg
+                                    ? `· collected once unreferenced past the org's plan window (${data.retentionDays}-day floor)`
+                                    : `· collected once unreferenced for ${data.retentionDays} days`}
                             </span>
                         </span>
                         {data.total > PAGE_SIZE && (

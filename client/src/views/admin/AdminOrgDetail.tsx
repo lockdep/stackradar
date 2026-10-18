@@ -20,7 +20,7 @@ import { getTotalVulnerabilities, groupContainers } from '@/utils/containerUtils
 import type { Cluster } from '@/types/cluster';
 import { useResource } from '@/hooks';
 import { PlanBadge, LoadingBox, formatMax } from './Shared';
-import { formatTimeAgo, getAdminPlanLimits } from './utils';
+import { formatTimeAgo } from './utils';
 import type { RecentOrg } from './types';
 
 /** One organization's detail screen: header stats, cluster grid, and a per-cluster container drill-down. */
@@ -57,7 +57,7 @@ export function AdminOrgDetail({ org, onBack }: { org: RecentOrg; onBack: () => 
         );
     }
 
-    const limits = getAdminPlanLimits(org.plan);
+    const { limits } = org;
     const hasVulns =
         orgVulnTotals && orgVulnTotals.critical + orgVulnTotals.high + orgVulnTotals.medium + orgVulnTotals.low > 0;
 

@@ -214,6 +214,19 @@ export interface FeedsData {
     };
 }
 
+/**
+ * The caps an org's usage is drawn against, resolved by the server from the
+ * same `getPlanLimits` every limit check uses. `null` is "no cap" — JSON
+ * cannot carry `Infinity`, and a client-side mirror of the plan table is what
+ * this replaced: it did not know the community plan, so a three-member
+ * install read "3 / 1 members".
+ */
+export interface AdminOrgLimits {
+    members: number | null;
+    clusters: number | null;
+    sboms: number | null;
+}
+
 export interface RecentOrg {
     id: string;
     name: string;
@@ -225,6 +238,7 @@ export interface RecentOrg {
     memberCount: number;
     sbomCount: number;
     clusterCount: number;
+    limits: AdminOrgLimits;
 }
 
 export interface EcosystemEntry {
@@ -361,7 +375,7 @@ export type AdminImageState = 'orphaned' | 'awaiting_sbom' | 'scanned';
 
 export type AdminImageSort = 'lastSeen' | 'firstSeen' | 'repository';
 
-/** One row of `images`, cross-tenant. Admin-only: the org/cluster counts are provenance. */
+/** One row of `images`, across every cluster. Admin-only: where a digest runs is provenance. */
 export interface AdminImage {
     id: string;
     digest: string;
@@ -376,8 +390,7 @@ export interface AdminImage {
     /** `null` = nobody has matched it yet. Never render as zero. */
     findings: SeverityCounts | null;
     containerCount: number;
-    /** Distinct orgs running it — cross-tenant reuse, made visible. */
-    orgCount: number;
+    /** 1 under ADR 0006 for any row with containers — an image belongs to one cluster. */
     clusterCount: number;
     state: AdminImageState;
     /** Days until the GC cutoff reaches it, rounded up; <= 0 once past. Null unless orphaned. */
@@ -391,6 +404,11 @@ export interface AdminImagesData {
     offset: number;
     /** Unfiltered, so the filter control's own counts never move when it is used. */
     stateTotals: Record<AdminImageState, number>;
+    /**
+     * Days an unreferenced image is kept before the GC collects it. On the
+     * cloud this is the floor every plan's window is at least; in the
+     * community edition, where there is one plan, it is the window itself.
+     */
     retentionDays: number;
 }
 
