@@ -13,6 +13,14 @@ import { buildMirrorStatus } from "../lib/mirror-status.js";
 import { fetchOsvRecord } from "../lib/osv-api.js";
 import { getSystemReport } from "../services/admin-system.service.js";
 import {
+    collectOrphanedImages,
+    rescanFleet,
+    retryJob,
+    retryStuckJobs,
+    triggerSync,
+    type SyncAction,
+} from "../services/admin-actions.service.js";
+import {
     adminListQuerySchema,
     adminJobsQuerySchema,
     adminImagesQuerySchema,
@@ -22,7 +30,14 @@ import {
     adminOrgIdParamSchema,
     adminComponentIdParamSchema,
     parseFailureIdParamSchema,
+    adminJobIdParamSchema,
+    adminFeedParamSchema,
 } from "../schemas/index.js";
+
+/** The acting admin, for the log line every action writes. `requireAdmin` guarantees the internal branch. */
+function actor(req: Request): string {
+    return req.auth?.userId ?? "unknown";
+}
 
 export const adminController = {
     /**
@@ -128,9 +143,69 @@ export const adminController = {
 
     async getJobs(req: Request, res: Response, next: NextFunction) {
         try {
-            const { limit, offset, status } = adminJobsQuerySchema.parse(req.query);
-            const result = await adminRepository.getAdminJobs({ limit, offset, ...(status && { status }) });
+            const { limit, offset, status, stuck } = adminJobsQuerySchema.parse(req.query);
+            const result = await adminRepository.getAdminJobs({ limit, offset, stuck, ...(status && { status }) });
             res.json(result);
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+
+    async retryJob(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { id } = adminJobIdParamSchema.parse(req.params);
+            res.json(await retryJob(id, actor(req)));
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async retryStuckJobs(req: Request, res: Response, next: NextFunction) {
+        try {
+            res.json(await retryStuckJobs(actor(req)));
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async triggerOsvSync(req: Request, res: Response, next: NextFunction) {
+        try {
+            res.status(202).json(triggerSync("osv-sync", actor(req)));
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async triggerOsvBootstrap(req: Request, res: Response, next: NextFunction) {
+        try {
+            res.status(202).json(triggerSync("osv-bootstrap", actor(req)));
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async triggerFeedSync(req: Request, res: Response, next: NextFunction) {
+        try {
+            const { feed } = adminFeedParamSchema.parse(req.params);
+            res.status(202).json(triggerSync(feed as SyncAction, actor(req)));
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async collectImages(req: Request, res: Response, next: NextFunction) {
+        try {
+            res.json(await collectOrphanedImages(actor(req)));
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async rescanFleet(req: Request, res: Response, next: NextFunction) {
+        try {
+            res.status(202).json(await rescanFleet(actor(req)));
         } catch (error) {
             next(error);
         }

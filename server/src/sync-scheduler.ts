@@ -197,6 +197,8 @@ export function createSyncRunners(osv: OsvSyncRuntime): SyncRunners {
 }
 
 export interface SyncSchedulerHandle {
+    /** The runs the crons drive — the admin page's triggers call the same ones, behind the same locks. */
+    runners: SyncRunners;
     /** Resolves when the start-up pass has finished (it never rejects). */
     startup: Promise<StartupSyncOutcome>;
     /** Stop the crons and close the sync's own connections. A run in progress finishes. */
@@ -285,6 +287,7 @@ export function startSyncScheduler(
     });
 
     return {
+        runners,
         startup,
         async stop(): Promise<void> {
             for (const job of jobs) job.stop();

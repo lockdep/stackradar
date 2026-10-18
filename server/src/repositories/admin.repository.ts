@@ -341,16 +341,25 @@ export const adminRepository = {
         }));
     },
 
-    async getAdminJobs(options?: { status?: string[]; limit?: number; offset?: number }) {
+    async getAdminJobs(options?: { status?: string[]; stuck?: boolean; limit?: number; offset?: number }) {
         const limit = options?.limit ?? 50;
         const offset = options?.offset ?? 0;
 
         // One predicate, both queries. `total` drives the client's page count, so a
         // count that ignores the status filter reports pages of rows the filtered
         // query will never return — "Page 1 of 100" over three failed jobs.
-        const statusFilter = options?.status?.length
-            ? inArray(schema.jobs.status, options.status as JobStatus[])
+        //
+        // `stuck` is the Overview's "out of retries" figure as a filter: failed,
+        // with the budget spent — the same predicate `queueHealth` counts, so the
+        // tile's number and this list agree.
+        const stuckFilter = options?.stuck
+            ? and(eq(schema.jobs.status, "failed"), sql`${schema.jobs.retryCount} >= ${schema.jobs.maxRetries}`)
             : undefined;
+        const statusFilter = stuckFilter
+            ? stuckFilter
+            : options?.status?.length
+              ? inArray(schema.jobs.status, options.status as JobStatus[])
+              : undefined;
 
         let query = db
             .select({

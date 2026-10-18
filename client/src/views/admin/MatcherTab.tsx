@@ -4,6 +4,7 @@ import { Crosshair, GitCompareArrows, Link2, ShieldQuestion } from 'lucide-react
 import { TableContainer, Table, TableHead, TableBody, TableHeader, TableRow, TableCell } from '@/components/ui';
 import { useTabData } from './useTabData';
 import { TabShell, DistributionBar, HealthTile, type BarSegment } from './Shared';
+import { ActionButton } from './ActionButton';
 import { formatNumber } from './utils';
 import { UNRECORDED, type MatcherQualityData } from './types';
 
@@ -123,6 +124,29 @@ export function MatcherTab({
 
                     return (
                         <div className="space-y-6">
+                            {/* The recovery after a matcher fix: re-match every image with
+                                an SBOM now, rather than waiting for the mirror to change. The
+                                same enqueue the hourly sync uses, so nothing stacks up behind
+                                a scan already open. */}
+                            <div className="flex flex-wrap items-start justify-between gap-3 bg-surface-raised rounded-md border border-edge px-5 py-3">
+                                <p className="text-xs text-ink-muted max-w-2xl">
+                                    These figures describe the links the matcher has written. After a change to the
+                                    matcher, or to doubt one of them, rescan the fleet: one scheduled scan per image
+                                    with an SBOM, skipping any with a scan already queued.
+                                </p>
+                                <ActionButton<{ enqueued: number }>
+                                    path="/api/admin/rescan"
+                                    label="Rescan the fleet"
+                                    pendingLabel="Queueing…"
+                                    describe={(b) =>
+                                        b.enqueued === 0
+                                            ? 'Nothing to queue — every scanned image already has a scan open'
+                                            : `${formatNumber(b.enqueued)} scans queued`
+                                    }
+                                    onDone={refetch}
+                                    title="Queue a scheduled scan for every image with an SBOM — the worker re-matches each against the current mirror"
+                                />
+                            </div>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                                 <HealthTile
                                     label="Matches"

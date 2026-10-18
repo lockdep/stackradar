@@ -6,6 +6,40 @@ import { createLogger } from "../lib/logger.js";
 const log = createLogger("osv-sync:rescan");
 
 /**
+ * The one INSERT..SELECT behind every fleet rescan: a `scheduled_scan` for
+ * each image that has an SBOM and no scan already open. The mirror sync
+ * calls it after a changed cycle (`trigger: "schedule"`); the admin page's
+ * "rescan the fleet" calls it on a click (`"manual"`), which is the recovery
+ * after a matcher fix — before that button existed the only way to re-match
+ * everything was to wait for the mirror to change. Throws on failure; the
+ * callers decide what that means.
+ */
+export async function enqueueFleetRescan(trigger: "schedule" | "manual"): Promise<number> {
+    const rows = await db.execute<{ id: string }>(sql`
+        INSERT INTO jobs (org_id, image_id, sbom_id, type, status, priority, title, triggered_by)
+        SELECT
+            i.org_id,
+            i.id,
+            s.id,
+            'scheduled_scan',
+            'pending',
+            1,
+            coalesce(i.repository, i.registry, 'image') || '@' || left(i.digest, 19) || ': Scheduled Security Scan',
+            ${trigger}
+        FROM images i
+        JOIN sboms s ON s.image_id = i.id
+        WHERE NOT EXISTS (
+            SELECT 1 FROM jobs j
+            WHERE j.image_id = i.id
+              AND j.type IN ('vulnerability_scan', 'scheduled_scan')
+              AND j.status IN ('pending', 'scheduled', 'processing')
+        )
+        RETURNING id
+    `);
+    return rows.length;
+}
+
+/**
  * Did this cycle change what the mirror would answer?
  *
  * A completed bootstrap always did — a whole generation was swapped in. An
@@ -51,33 +85,12 @@ export async function enqueueRescansAfterMirrorChange(result: SyncCycleResult): 
     if (!mirrorChanged(result)) return 0;
 
     try {
-        const rows = await db.execute<{ id: string }>(sql`
-            INSERT INTO jobs (org_id, image_id, sbom_id, type, status, priority, title, triggered_by)
-            SELECT
-                i.org_id,
-                i.id,
-                s.id,
-                'scheduled_scan',
-                'pending',
-                1,
-                coalesce(i.repository, i.registry, 'image') || '@' || left(i.digest, 19) || ': Scheduled Security Scan',
-                'schedule'
-            FROM images i
-            JOIN sboms s ON s.image_id = i.id
-            WHERE NOT EXISTS (
-                SELECT 1 FROM jobs j
-                WHERE j.image_id = i.id
-                  AND j.type IN ('vulnerability_scan', 'scheduled_scan')
-                  AND j.status IN ('pending', 'scheduled', 'processing')
-            )
-            RETURNING id
-        `);
-
+        const enqueued = await enqueueFleetRescan("schedule");
         log.info(
-            { enqueued: rows.length, mode: result.mode, inserted: result.inserted, updated: result.updated },
+            { enqueued, mode: result.mode, inserted: result.inserted, updated: result.updated },
             "Queued fleet rescan after mirror change",
         );
-        return rows.length;
+        return enqueued;
     } catch (error) {
         log.error(
             { error: error instanceof Error ? error.message : String(error) },

@@ -3,6 +3,7 @@
 import { CheckCircle, AlertCircle } from 'lucide-react';
 import { useTabData } from './useTabData';
 import { TabShell } from './Shared';
+import { ActionButton } from './ActionButton';
 import { formatTimeAgo, formatNumber } from './utils';
 import type { FeedsData } from './types';
 
@@ -29,6 +30,7 @@ export function FeedsTab({
                         <FeedCard
                             title="EPSS"
                             subtitle="Exploitation probability scores (FIRST.org)"
+                            action={{ path: '/api/admin/feeds/epss/sync', onDone: refetch }}
                             stale={data.epss.stale}
                             lastSyncedAt={data.epss.state?.lastSyncedAt ?? null}
                             lastError={data.epss.state?.lastError ?? null}
@@ -68,6 +70,7 @@ export function FeedsTab({
                         <FeedCard
                             title="KEV"
                             subtitle="Known Exploited Vulnerabilities (CISA)"
+                            action={{ path: '/api/admin/feeds/kev/sync', onDone: refetch }}
                             stale={data.kev.stale}
                             lastSyncedAt={data.kev.state?.lastSyncedAt ?? null}
                             lastError={data.kev.state?.lastError ?? null}
@@ -110,6 +113,7 @@ export function FeedsTab({
                         <FeedCard
                             title="Artifact Hub"
                             subtitle="Helm chart mirror + attribution"
+                            action={{ path: '/api/admin/feeds/artifacthub/sync', onDone: refetch }}
                             stale={data.artifactHub.stale}
                             lastSyncedAt={data.artifactHub.state?.lastSyncedAt ?? null}
                             lastError={data.artifactHub.state?.lastError ?? null}
@@ -178,6 +182,7 @@ function collapsed(matched: number | null, total: number | null): boolean {
 function FeedCard({
     title,
     subtitle,
+    action,
     stale,
     lastSyncedAt,
     lastError,
@@ -186,6 +191,8 @@ function FeedCard({
 }: {
     title: string;
     subtitle: string;
+    /** The feed's "run now": the scheduler's runner, forced past its freshness guard, behind its lock. */
+    action: { path: string; onDone: () => void };
     stale: boolean;
     lastSyncedAt: string | null;
     lastError: string | null;
@@ -197,9 +204,19 @@ function FeedCard({
 
     return (
         <div className="bg-surface-raised rounded-md border border-edge p-5 space-y-3">
-            <div>
-                <h2 className="text-sm font-semibold text-ink-secondary">{title}</h2>
-                <p className="text-xs text-ink-muted mt-0.5">{subtitle}</p>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 className="text-sm font-semibold text-ink-secondary">{title}</h2>
+                    <p className="text-xs text-ink-muted mt-0.5">{subtitle}</p>
+                </div>
+                <ActionButton<{ startedAt: string }>
+                    path={action.path}
+                    label="Run now"
+                    pendingLabel="Starting…"
+                    describe={() => 'Started — the card updates once the run lands'}
+                    onDone={action.onDone}
+                    title="Run this feed now in the server process, past its daily freshness guard; in the split topology the server names the CronJob instead"
+                />
             </div>
 
             <div className="flex items-center gap-2">

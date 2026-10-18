@@ -23,6 +23,13 @@ import { envPositiveNumber } from "../lib/env.js";
 export const IMAGE_GC_RETENTION_DAYS = envPositiveNumber("IMAGE_GC_RETENTION_DAYS", 30);
 
 /**
+ * Images one sweep may collect. The nightly cron and the admin page's
+ * "collect now" run the same sweep with the same cap, so a click can never
+ * delete more than a night would have.
+ */
+export const IMAGE_GC_BATCH_LIMIT = envPositiveNumber("IMAGE_GC_BATCH_LIMIT", 500);
+
+/**
  * How long *this org's* unreferenced images are kept: the plan's history
  * window (`PLAN_LIMITS[plan].historyDays` — the SBOM archive is one of the
  * things a paid plan's history buys), floored by `IMAGE_GC_RETENTION_DAYS`

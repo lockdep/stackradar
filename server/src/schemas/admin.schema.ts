@@ -16,12 +16,26 @@ export const adminListQuerySchema = z.object({
     offset: z.coerce.number().int().min(0).catch(0).default(0),
 });
 
-/** `?status=` for the jobs table — one value or repeated, normalised to an array. */
+/** `?status=` for the jobs table — one value or repeated, normalised to an array. `?stuck=1` narrows to failed jobs with no retries left. */
 export const adminJobsQuerySchema = adminListQuerySchema.extend({
     status: z
         .union([z.string(), z.array(z.string())])
         .optional()
         .transform((s) => (s === undefined ? undefined : Array.isArray(s) ? s : [s])),
+    stuck: z
+        .string()
+        .optional()
+        .transform((s) => s === "1" || s === "true"),
+});
+
+/** The `:id` of a job, on the retry action. */
+export const adminJobIdParamSchema = z.object({
+    id: z.uuid("Invalid job ID"),
+});
+
+/** The `:feed` of a feed trigger. */
+export const adminFeedParamSchema = z.object({
+    feed: z.enum(["epss", "kev", "artifacthub"]),
 });
 
 export const adminImagesQuerySchema = adminListQuerySchema.extend({

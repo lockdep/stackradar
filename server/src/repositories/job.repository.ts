@@ -302,6 +302,57 @@ export const jobRepository = {
     /**
      * Clean up old completed/failed/cancelled jobs
      */
+    /**
+     * Put a failed job back in the queue as if it were new: `pending`, the
+     * retry budget restored, the error cleared. Only a `failed` job — a
+     * pending or running one is already moving, and resetting a completed
+     * one would re-run work nobody asked for — so the WHERE is the guard and
+     * `undefined` means "not failed, nothing done".
+     */
+    async resetForRetry(id: string): Promise<Job | undefined> {
+        const [result] = await db
+            .update(schema.jobs)
+            .set({
+                status: "pending",
+                retryCount: 0,
+                errorCode: null,
+                errorMessage: null,
+                startedAt: null,
+                completedAt: null,
+                progress: 0,
+                progressMessage: null,
+                updatedAt: new Date(),
+            })
+            .where(and(eq(schema.jobs.id, id), eq(schema.jobs.status, "failed")))
+            .returning();
+        return result;
+    },
+
+    /**
+     * The same reset for every job that has spent its retries — the
+     * Overview's "out of retries" figure, as an action. Bounded by what is
+     * stuck *now*: a job that fails again lands back in the set with its
+     * budget spent, and the next click is a person deciding again.
+     */
+    async resetAllStuck(): Promise<number> {
+        const rows = await db
+            .update(schema.jobs)
+            .set({
+                status: "pending",
+                retryCount: 0,
+                errorCode: null,
+                errorMessage: null,
+                startedAt: null,
+                completedAt: null,
+                progress: 0,
+                progressMessage: null,
+                updatedAt: new Date(),
+            })
+            .where(and(eq(schema.jobs.status, "failed"), sql`${schema.jobs.retryCount} >= ${schema.jobs.maxRetries}`))
+            .returning({ id: schema.jobs.id });
+        return rows.length;
+    },
+
     async cleanupOld(daysOld = 30): Promise<number> {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - daysOld);

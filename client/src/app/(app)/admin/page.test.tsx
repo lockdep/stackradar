@@ -16,6 +16,7 @@ import { resolveEdition, type Edition } from '@/lib/edition';
 vi.mock('next/navigation', () => ({
     usePathname: () => '/admin',
     useRouter: () => ({ push: () => {} }),
+    useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@/views/admin/useTabData', () => ({
     useTabData: () => ({ data: null, isLoading: true, error: null, refetch: () => {}, reloadKey: 0 }),

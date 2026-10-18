@@ -4,6 +4,7 @@ import { FileWarning } from 'lucide-react';
 import { TableContainer, Table, TableHead, TableBody, TableHeader } from '@/components/ui';
 import { useTabData } from './useTabData';
 import { TabShell } from './Shared';
+import { ActionButton } from './ActionButton';
 import { OsvStateCard, OsvParseFailuresCard, OsvRunRow, ParseFailuresTable } from './OsvComponents';
 import type { OsvStatus } from './types';
 
@@ -22,7 +23,33 @@ export function OsvTab({ refreshKey, onLoadingChange }: { refreshKey: number; on
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div className="bg-surface-raised rounded-md border border-edge p-5">
-                            <h2 className="text-sm font-semibold text-ink-secondary mb-4">Mirror State</h2>
+                            <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                                <h2 className="text-sm font-semibold text-ink-secondary">Mirror State</h2>
+                                {/* The scheduler's own runners, behind the same advisory
+                                    lock as the hourly cron: a click that overlaps a tick is
+                                    answered as skipped, never as a second run. In the split
+                                    topology the server names the CronJob to run instead. */}
+                                <div className="flex flex-wrap items-start gap-2">
+                                    <ActionButton<{ startedAt: string }>
+                                        path="/api/admin/osv/sync"
+                                        label="Run incremental now"
+                                        pendingLabel="Starting…"
+                                        describe={() => 'Started — this tab shows the run once it lands'}
+                                        onDone={refetch}
+                                        title="One incremental cycle, now, in the server process — what the hourly schedule runs"
+                                    />
+                                    <ActionButton<{ startedAt: string }>
+                                        path="/api/admin/osv/bootstrap"
+                                        label="Bootstrap if needed"
+                                        pendingLabel="Starting…"
+                                        describe={() =>
+                                            'Started — a no-op if the mirror already carries what is configured'
+                                        }
+                                        onDone={refetch}
+                                        title="Rebuild the mirror from the archives if it is empty or narrower than OSV_ECOSYSTEMS; otherwise nothing"
+                                    />
+                                </div>
+                            </div>
                             <OsvStateCard
                                 state={data.state}
                                 generations={data.generations}

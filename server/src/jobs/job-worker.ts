@@ -44,7 +44,7 @@ import { enqueueCandidateRenders } from "../chart-render/selection.js";
 import { enqueueMissingPlatformScans } from "../platform-scan/scan-job.js";
 import { jobRepository } from "../repositories/job.repository.js";
 import { deleteOrphanedImages } from "../repositories/delete-helpers.js";
-import { IMAGE_GC_RETENTION_DAYS } from "../config/image-gc.js";
+import { IMAGE_GC_RETENTION_DAYS, IMAGE_GC_BATCH_LIMIT } from "../config/image-gc.js";
 import { createLogger } from "../lib/logger.js";
 import { envPositiveNumber, envString } from "../lib/env.js";
 import { SERVER_VERSION } from "../lib/server-version.js";
@@ -86,7 +86,6 @@ const CHART_REPO_SYNC_CRON = envString("CHART_REPO_SYNC_CRON", "45 4 * * *");
 const CHART_RENDER_CRON = envString("CHART_RENDER_CRON", "15 5 * * *");
 // Bounds one run, so a large first sweep is spread over several nights rather
 // than holding the connection for hours.
-const IMAGE_GC_BATCH_LIMIT = envPositiveNumber("IMAGE_GC_BATCH_LIMIT", 500);
 // Monday 07:00 UTC: the weekly digest email (services/digest.service.ts).
 // After the 07:00 metrics snapshot would be ideal but they share the hour;
 // the digest reads the live rollup, not the snapshot, so the order is moot.

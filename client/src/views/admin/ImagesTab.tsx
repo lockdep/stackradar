@@ -15,6 +15,7 @@ import {
     TableEmpty,
 } from '@/components/ui';
 import { SourceTables, SevCounts, ErrorBox, LoadingBox } from './Shared';
+import { ActionButton } from './ActionButton';
 import { useTabData } from './useTabData';
 import { useRuntimeConfig } from '@/components/providers';
 import { formatNumber, formatTimeAgo } from './utils';
@@ -146,7 +147,7 @@ export function ImagesTab({
     if (debounced.trim()) params.set('search', debounced.trim());
     const url = `/api/admin/images?${params.toString()}`;
 
-    const { data, isLoading, error } = useTabData<AdminImagesData>(url, refreshKey, onLoadingChange);
+    const { data, isLoading, error, refetch } = useTabData<AdminImagesData>(url, refreshKey, onLoadingChange);
 
     // Kept from the last successful load so the filter chips do not blank out
     // and re-flow while a filtered page is in flight.
@@ -164,7 +165,23 @@ export function ImagesTab({
                         so unscanned and unreferenced rows survive — they are the two the other views cannot show.
                     </p>
                 </div>
-                <SourceTables tables={['images', 'sboms', 'workload_containers']} />
+                <div className="flex flex-col items-end gap-2">
+                    <SourceTables tables={['images', 'sboms', 'workload_containers']} />
+                    {/* The nightly sweep, now — same cutoff, same batch cap, so a
+                        click never collects more than a night would have. */}
+                    <ActionButton<{ collected: number; limit: number }>
+                        path="/api/admin/images/gc"
+                        label="Collect orphans now"
+                        pendingLabel="Collecting…"
+                        describe={(b) =>
+                            b.collected === 0
+                                ? 'Nothing past its cutoff'
+                                : `${formatNumber(b.collected)} collected${b.collected >= b.limit ? ' — the batch cap; run again for more' : ''}`
+                        }
+                        onDone={refetch}
+                        title="Run the nightly image GC now: orphaned images past their retention window, up to one batch"
+                    />
+                </div>
             </div>
 
             <div className="flex items-center justify-between gap-4 mt-4 mb-4 flex-wrap">

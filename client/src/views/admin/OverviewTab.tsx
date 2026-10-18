@@ -20,6 +20,7 @@ import { useRuntimeConfig } from '@/components/providers';
 import { getScannerHealth, ScannerDot, type ScannerHealth } from '@/components/clusters/ScannerDot';
 import { isScannerOutdated } from '@/components/clusters/scannerInstall';
 import { TabShell, StatCard, PlanBadge, HealthTile } from './Shared';
+import { ActionButton } from './ActionButton';
 import {
     formatNumber,
     formatLag,
@@ -46,7 +47,7 @@ import type { OverviewData, QueueHealth, PipelineHealth, OsvSyncState } from './
  * for three hours rendered identically to a healthy one. None of these three
  * accumulate: each is a live measurement or a bounded window.
  */
-function QueueHealthTiles({ health }: { health: QueueHealth }) {
+function QueueHealthTiles({ health, onChanged }: { health: QueueHealth; onChanged: () => void }) {
     const { oldestPendingAgeSeconds: oldest, last24h, stuckAtMaxRetries } = health;
 
     const settled = last24h.completed + last24h.failed;
@@ -86,7 +87,23 @@ function QueueHealthTiles({ health }: { health: QueueHealth }) {
                         ? 'Failed with every retry spent — nothing moves these without a person'
                         : 'Every failed job still has a retry left'
                 }
-            />
+            >
+                {stuckAtMaxRetries > 0 && (
+                    <div className="mt-2 flex flex-wrap items-start gap-3">
+                        <ActionButton<{ retried: number }>
+                            path="/api/admin/jobs/retry-stuck"
+                            label={`Retry all ${formatNumber(stuckAtMaxRetries)}`}
+                            pendingLabel="Queueing…"
+                            describe={(b) => `${formatNumber(b.retried)} back in the queue`}
+                            onDone={onChanged}
+                            title="Put every job that is out of retries back in the queue — the ones stuck now, not any that fail later"
+                        />
+                        <Link href="/admin?tab=jobs&stuck=1" className="text-xs text-accent hover:underline mt-1.5">
+                            See them
+                        </Link>
+                    </div>
+                )}
+            </HealthTile>
         </div>
     );
 }
@@ -465,7 +482,7 @@ export function OverviewTab({
                                 <p className="text-xs text-ink-muted mb-4">
                                     How the worker is doing now — the lifetime status counts it replaced could not say.
                                 </p>
-                                <QueueHealthTiles health={stats.jobs.health} />
+                                <QueueHealthTiles health={stats.jobs.health} onChanged={refetch} />
                                 {/* Kept, demoted. The lifetime totals are worth a glance and
                                 worthless as the headline: `completed` only grows, so it
                                 set the scale for every box beside it. */}

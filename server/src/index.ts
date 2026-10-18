@@ -8,6 +8,7 @@ import { readBootstrapCluster } from "./lib/bootstrap-cluster.js";
 import { logger } from "./lib/logger.js";
 import { ensureDefaultOrganization } from "./services/default-org.service.js";
 import { startSyncScheduler, type SyncSchedulerHandle } from "./sync-scheduler.js";
+import { registerSyncRunners } from "./services/admin-actions.service.js";
 import { topology } from "./topology.js";
 
 async function main(): Promise<void> {
@@ -63,6 +64,9 @@ async function main(): Promise<void> {
     if (topology === "monolith") {
         worker = startJobWorker();
         scheduler = startSyncScheduler();
+        // The admin page's "run now" buttons call the scheduler's own runners,
+        // so a click and a cron tick share one lock and one code path.
+        registerSyncRunners(scheduler.runners);
     }
 
     let stopping = false;

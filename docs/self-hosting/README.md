@@ -35,6 +35,15 @@ setting with the value in force and whether the environment set it, which
 sign-in methods are on, whether the server's and the client's schemas are
 current for the running build, and which OSV ecosystems the mirror carries
 against what `OSV_ECOSYSTEMS` asks for. The **Overview** tab is the
-pipeline's health — scanner, queue, mirror and feeds — and the other tabs
-are the data behind it: images, vulnerabilities, the matcher, jobs, and
-the accounts when local login is on.
+pipeline's health — scanner, inventory, SBOMs, queue, mirror and feeds, one
+tile each — and the other tabs are the data behind it: images,
+vulnerabilities, the matcher, jobs, and the accounts when local login is on.
+
+Where a reading calls for a hand, the hand is on the same screen: retry a
+failed job (or every job that is out of retries), run the OSV sync or a feed
+now, rebuild the mirror if `OSV_ECOSYSTEMS` was widened, collect orphaned
+images ahead of the nightly sweep, or rescan every image after a matcher
+change. Each runs the same code the schedule runs, behind the same lock, so
+a click can never overlap a scheduled run; it is refused while the same
+action is already in progress. In the split topology the feed triggers
+answer with the name of the CronJob to run instead.

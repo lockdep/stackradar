@@ -39,6 +39,8 @@ export {
     adminOrgIdParamSchema,
     adminComponentIdParamSchema,
     parseFailureIdParamSchema,
+    adminJobIdParamSchema,
+    adminFeedParamSchema,
 } from "./admin.schema.js";
 
 // User schemas

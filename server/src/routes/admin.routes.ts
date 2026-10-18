@@ -48,4 +48,17 @@ router.get(
 );
 router.delete("/osv/parse-failures", requireAuth, requireInternal, requireAdmin, adminController.clearParseFailures);
 
+// Actions (`services/admin-actions.service.ts`): each runs the existing
+// code path behind the lock it already takes, refuses while the same action
+// is in progress, and is logged with the acting admin. 202 for a run started
+// in the background, 200 for one that finished in the request, 409 for one
+// already running or one the topology cannot run from here.
+router.post("/jobs/:id/retry", requireAuth, requireInternal, requireAdmin, adminController.retryJob);
+router.post("/jobs/retry-stuck", requireAuth, requireInternal, requireAdmin, adminController.retryStuckJobs);
+router.post("/osv/sync", requireAuth, requireInternal, requireAdmin, adminController.triggerOsvSync);
+router.post("/osv/bootstrap", requireAuth, requireInternal, requireAdmin, adminController.triggerOsvBootstrap);
+router.post("/feeds/:feed/sync", requireAuth, requireInternal, requireAdmin, adminController.triggerFeedSync);
+router.post("/images/gc", requireAuth, requireInternal, requireAdmin, adminController.collectImages);
+router.post("/rescan", requireAuth, requireInternal, requireAdmin, adminController.rescanFleet);
+
 export default router;

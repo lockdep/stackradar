@@ -20,7 +20,7 @@ exists only in the cloud is a 404 in the community edition, never a 403.
 |---|---|---|
 | **Scanner (API key)** | `X-API-Key`, hashed and matched against an active `api_keys` row (`middleware/auth.ts` `validateApiKey`). Carries an org and, for every key minted today, a cluster. No user: `created_by` is audit metadata, never an identity. | The `/v1` ingest surface only (heartbeat, inventory, SBOM check/upload), each behind `requireScope("sbom:write")`. Every other route mounts `requireInternal` and answers 403 to a key. |
 | **User (via the BFF)** | `X-Internal-Key` plus the identity headers the Next.js BFF sets from the Auth.js session; `requireOrg` re-verifies the `X-Org-Id` claim against `org_members` on every request. | Everything under `/api`, subject to the role rows below. |
-| **Platform admin** | `X-Is-Admin: true`, set by the BFF from the client's `auth.users.is_admin` (`createApiHeaders` sets it only for admins, and the BFF's catch-all rejects `admin/*` for anyone else). **The server does not re-verify it**: `requireAdmin` reads the header-derived `req.auth.isAdmin`, so the claim rests on `INTERNAL_SERVICE_KEY` never leaving the BFF. | `/api/admin/*` (20 routes). |
+| **Platform admin** | `X-Is-Admin: true`, set by the BFF from the client's `auth.users.is_admin` (`createApiHeaders` sets it only for admins, and the BFF's catch-all rejects `admin/*` for anyone else). **The server does not re-verify it**: `requireAdmin` reads the header-derived `req.auth.isAdmin`, so the claim rests on `INTERNAL_SERVICE_KEY` never leaving the BFF. | `/api/admin/*` (27 routes). |
 | **Demo visitor** | `users.demo` / `organizations.demo`, set only by the seed script. | Reads only: every non-safe method is `403 read_only_demo` (`lib/demo.ts`, `middleware/auth.ts`). |
 
 Org roles are `owner`, `admin`, `member` (`org_members.role`).
@@ -84,6 +84,22 @@ adds or removes one by setting variables, not by changing code.
 | Reset from the shell | `pnpm admin:reset-password <email>` | whoever has shell + `DATABASE_URL` | same — the locked-out-admin path; `--create-local` is the one way to give a provider account a password | `client/scripts/admin-reset-password.mjs` |
 | Bootstrap admin | server start | not created (local login off) | created once, when no account has a password: `AUTH_BOOTSTRAP_ADMIN_EMAIL` (default `admin@stackradar.local`), `isAdmin`, forced change; never modifies an existing user | `lib/bootstrap-admin.ts`, `instrumentation.ts` |
 | Become the default org's owner | `POST /api/users/setup` | n/a | whoever signs in first — by any method above. | `controllers/user.controller.ts` |
+
+## Platform admin actions
+
+Every `/api/admin` route is read-only except these. Each runs the existing
+code path behind the lock it already takes, refuses `409 in_progress` while
+the same action is running in the process, and is logged with the acting
+admin (`services/admin-actions.service.ts`). None writes `activity_events`.
+
+| Action | Route | Cloud | Community | Where |
+|---|---|---|---|---|
+| Retry a failed job | `POST /api/admin/jobs/:id/retry` | platform admin; `409` unless the job is `failed` | same | `job.repository.ts` `resetForRetry` |
+| Retry every job that is out of retries | `POST /api/admin/jobs/retry-stuck` | platform admin | same | `job.repository.ts` `resetAllStuck` |
+| Run the OSV incremental sync / bootstrap if needed | `POST /api/admin/osv/sync`, `…/osv/bootstrap` | **`409 not_available_in_split`** naming the CronJob: the split API process has no runner | platform admin; runs the scheduler's own runner in the background (`202`), behind the sync's session advisory lock | `sync-scheduler.ts` `createSyncRunners` |
+| Run a feed now (EPSS, KEV, Artifact Hub) | `POST /api/admin/feeds/:feed/sync` | `409 not_available_in_split` | platform admin; forced past the daily freshness guard, behind the feed's transaction lock; `409 disabled` for Artifact Hub when `ARTIFACT_HUB_SYNC_ENABLED=false` | same |
+| Collect orphaned images now | `POST /api/admin/images/gc` | platform admin; the nightly sweep's cutoff and batch cap | same | `delete-helpers.ts` `deleteOrphanedImages` |
+| Rescan the fleet | `POST /api/admin/rescan` | platform admin; one `scheduled_scan` per image with an SBOM and no scan open (`202`) | same | `osv-sync/rescan.ts` `enqueueFleetRescan` |
 
 ## Cloud-only surfaces
 

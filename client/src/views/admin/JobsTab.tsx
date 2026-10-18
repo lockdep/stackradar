@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
     CheckCircle,
     Clock,
@@ -27,6 +28,7 @@ import {
 import { useTabData } from './useTabData';
 import { useRuntimeConfig } from '@/components/providers';
 import { TabShell } from './Shared';
+import { ActionButton } from './ActionButton';
 import { formatTimeAgo, formatDuration } from './utils';
 import type { AdminJob, AdminJobsData, JobStatus, JobTrigger } from './types';
 
@@ -81,7 +83,31 @@ function JobStatusBadge({ status }: { status: JobStatus }) {
     );
 }
 
-function JobDetail({ job, multiOrg, onClose }: { job: AdminJob; multiOrg: boolean; onClose: () => void }) {
+/** The one action a failed job has: back into the queue, budget restored. */
+function RetryButton({ job, onDone }: { job: AdminJob; onDone: () => void }) {
+    return (
+        <ActionButton
+            path={`/api/admin/jobs/${job.id}/retry`}
+            label="Retry"
+            pendingLabel="Queueing…"
+            describe={() => 'Queued — the worker picks it up on its next poll'}
+            onDone={onDone}
+            title="Put this job back in the queue as pending, with its retries restored and its error cleared"
+        />
+    );
+}
+
+function JobDetail({
+    job,
+    multiOrg,
+    onClose,
+    onRetried,
+}: {
+    job: AdminJob;
+    multiOrg: boolean;
+    onClose: () => void;
+    onRetried: () => void;
+}) {
     return (
         <div className="bg-surface-raised rounded-md border border-edge p-5 space-y-4">
             <div className="flex items-start justify-between gap-4">
@@ -89,13 +115,16 @@ function JobDetail({ job, multiOrg, onClose }: { job: AdminJob; multiOrg: boolea
                     <h3 className="text-sm font-semibold text-ink break-words">{job.title}</h3>
                     <p className="text-xs text-ink-muted mt-0.5 font-mono break-all">{job.id}</p>
                 </div>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="text-xs text-ink-muted hover:text-ink-secondary cursor-pointer shrink-0"
-                >
-                    Close
-                </button>
+                <div className="flex items-start gap-3 shrink-0">
+                    {job.status === 'failed' && <RetryButton job={job} onDone={onRetried} />}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="text-xs text-ink-muted hover:text-ink-secondary cursor-pointer shrink-0 mt-1.5"
+                    >
+                        Close
+                    </button>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
@@ -208,24 +237,32 @@ export function JobsTab({
     onLoadingChange: (v: boolean) => void;
 }) {
     const [offset, setOffset] = useState(0);
-    const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('');
+    // `stuck` is the Overview's "out of retries" tile as a filter: failed,
+    // with the budget spent. The tile links here with `?stuck=1`.
+    const stuckRequested = useSearchParams().get('stuck') === '1';
+    const [statusFilter, setStatusFilter] = useState<JobStatus | 'stuck' | ''>(stuckRequested ? 'stuck' : '');
     const [selectedJob, setSelectedJob] = useState<AdminJob | null>(null);
     // Which tenant a job belongs to is a column only where there is more
     // than one tenant to tell apart.
     const { multiOrg } = useRuntimeConfig().edition;
 
-    const statusQs = statusFilter ? `&status=${statusFilter}` : '';
-    const url = `/api/admin/jobs?limit=${PAGE_SIZE}&offset=${offset}${statusQs}`;
+    const filterQs = statusFilter === 'stuck' ? '&stuck=1' : statusFilter ? `&status=${statusFilter}` : '';
+    const url = `/api/admin/jobs?limit=${PAGE_SIZE}&offset=${offset}${filterQs}`;
 
     const { data, isLoading, error, refetch } = useTabData<AdminJobsData>(url, refreshKey, onLoadingChange);
 
     const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0;
     const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
 
-    function handleStatusChange(s: JobStatus | '') {
+    function handleStatusChange(s: JobStatus | 'stuck' | '') {
         setStatusFilter(s);
         setOffset(0);
         setSelectedJob(null);
+    }
+
+    function afterRetry() {
+        setSelectedJob(null);
+        refetch();
     }
 
     return (
@@ -252,9 +289,24 @@ export function JobsTab({
                         </button>
                     );
                 })}
+                <button
+                    type="button"
+                    onClick={() => handleStatusChange('stuck')}
+                    title="Failed with every retry spent — nothing moves these without a person"
+                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${statusFilter === 'stuck' ? 'bg-ink text-surface border-ink' : 'border-edge text-ink-secondary hover:border-edge-strong'}`}
+                >
+                    Out of retries
+                </button>
             </div>
 
-            {selectedJob && <JobDetail job={selectedJob} multiOrg={multiOrg} onClose={() => setSelectedJob(null)} />}
+            {selectedJob && (
+                <JobDetail
+                    job={selectedJob}
+                    multiOrg={multiOrg}
+                    onClose={() => setSelectedJob(null)}
+                    onRetried={afterRetry}
+                />
+            )}
 
             <TabShell isLoading={isLoading} error={error} onRetry={refetch}>
                 {data && (
@@ -277,6 +329,7 @@ export function JobsTab({
                                         <TableHeader align="end" hideBelow="sm">
                                             Created
                                         </TableHeader>
+                                        <TableHeader srOnly>Actions</TableHeader>
                                     </TableHead>
                                     <TableBody>
                                         {data.jobs.map((job) => {
@@ -346,6 +399,11 @@ export function JobsTab({
                                                         className="text-ink-muted whitespace-nowrap"
                                                     >
                                                         {formatTimeAgo(job.createdAt)}
+                                                    </TableCell>
+                                                    <TableCell align="end" onClick={(e) => e.stopPropagation()}>
+                                                        {job.status === 'failed' && (
+                                                            <RetryButton job={job} onDone={afterRetry} />
+                                                        )}
                                                     </TableCell>
                                                 </TableRow>
                                             );

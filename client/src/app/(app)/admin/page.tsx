@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { RefreshCw, Shield } from 'lucide-react';
 import { TabBar, TabPanel, type TabBarItem } from '@/components/ui';
 import { OverviewTab } from '@/views/admin/OverviewTab';
@@ -66,7 +67,16 @@ const TABS: AdminTab[] = [
     { id: 'chart-index', name: 'Chart Index', requires: 'isCloud' },
 ];
 
+/** `useSearchParams` wants a Suspense boundary above it; the page is that boundary. */
 export default function AdminPage() {
+    return (
+        <Suspense>
+            <AdminPageContent />
+        </Suspense>
+    );
+}
+
+function AdminPageContent() {
     const { edition, localLogin } = useRuntimeConfig();
     const caps: Record<AdminCapability, boolean> = {
         multiOrg: edition.multiOrg,
@@ -84,7 +94,13 @@ export default function AdminPage() {
         ? 'Platform-wide health and statistics'
         : "This install's health, data and accounts";
 
-    const [activeTab, setActiveTab] = useState<Tab>('overview');
+    // `?tab=` is how a tile elsewhere opens a specific tab (the Overview's
+    // out-of-retries tile links to the Jobs tab); a tab the edition hides
+    // falls back to the Overview rather than an empty page.
+    const requested = useSearchParams().get('tab');
+    const [activeTab, setActiveTab] = useState<Tab>(() =>
+        requested && tabs.some((t) => t.id === requested) ? (requested as Tab) : 'overview',
+    );
     const [refreshKey, setRefreshKey] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [selectedOrg, setSelectedOrg] = useState<RecentOrg | null>(null);

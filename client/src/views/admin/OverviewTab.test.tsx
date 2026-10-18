@@ -16,6 +16,7 @@ import type { OverviewData } from './types';
 vi.mock('next/navigation', () => ({
     usePathname: () => '/admin',
     useRouter: () => ({ push: () => {} }),
+    useSearchParams: () => new URLSearchParams(),
 }));
 
 const HOUR = 3600_000;
