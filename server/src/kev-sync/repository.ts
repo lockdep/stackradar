@@ -88,6 +88,8 @@ export interface KevRepository {
         entriesCleared: number;
     }): Promise<void>;
     recordFailure(message: string): Promise<void>;
+    /** A run has passed the freshness guard and is fetching: stamp `run_started_at` for the app shell. */
+    markRunning(): Promise<void>;
 }
 
 export function createKevRepository(): KevRepository {
@@ -279,11 +281,16 @@ export function createKevRepository(): KevRepository {
                 entriesMatched: state.entriesMatched,
                 entriesCleared: state.entriesCleared,
                 lastError: null,
+                runStartedAt: null,
             });
         },
 
         async recordFailure(message) {
-            await recordStateFailure(kevSyncState, message);
+            await recordStateFailure(kevSyncState, message, { runStartedAt: null });
+        },
+
+        async markRunning() {
+            await upsertState(kevSyncState, { runStartedAt: new Date() });
         },
     };
 }

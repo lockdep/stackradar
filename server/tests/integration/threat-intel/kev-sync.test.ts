@@ -205,7 +205,12 @@ describe("KEV sync", () => {
             } finally {
                 fetchSpy.mockRestore();
             }
-            expect(await createKevRepository().getState()).toBeUndefined();
+            // The worker did stamp `run_started_at` before trying the lock —
+            // the other process's completion clears it — but it recorded
+            // neither a sync nor an error.
+            const state = await createKevRepository().getState();
+            expect(state?.lastSyncedAt ?? null).toBeNull();
+            expect(state?.lastError ?? null).toBeNull();
         } finally {
             await holder`SELECT pg_advisory_unlock(${KEV_APPLY_LOCK_KEY})`;
             holder.release();

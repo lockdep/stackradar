@@ -41,10 +41,15 @@ export async function upsertState<T extends SingleRowStateTable>(
  * letting a retry through, and the freshness the API reports has to keep
  * ageing. A failed run is not a sync.
  */
-export async function recordStateFailure(table: SingleRowStateTable, message: string): Promise<void> {
+export async function recordStateFailure<T extends SingleRowStateTable>(
+    table: T,
+    message: string,
+    extra: Partial<Omit<InferInsertModel<T>, "id" | "updatedAt">> = {},
+): Promise<void> {
     await upsertState(table, {
+        ...extra,
         lastError: message.slice(0, 2000),
-    } as Partial<InferInsertModel<SingleRowStateTable>>);
+    } as Partial<Omit<InferInsertModel<T>, "id" | "updatedAt">>);
 }
 
 /**

@@ -50,9 +50,58 @@ export const osvSyncState = pgTable("osv_sync_state", {
     // notices the gap and rebuilds.
     ecosystems: jsonb("ecosystems").$type<string[]>(),
 
+    // Where the running bootstrap is, for the app shell's banner on a fresh
+    // install (`GET /api/vulnerabilities/mirror`). Non-null only while
+    // `sync_status = 'full_refresh'`; the bootstrap writes it a few times a
+    // minute and clears it on every exit (`osv-sync/bootstrap-progress.ts`).
+    // One jsonb rather than nine columns because it is a transient snapshot,
+    // not a fact about the mirror: nothing reads it once the run has ended,
+    // and its shape follows the importer, not the schema.
+    bootstrapProgress: jsonb("bootstrap_progress").$type<BootstrapProgress>(),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * A running bootstrap's position, as `osv_sync_state.bootstrap_progress`
+ * stores it. Per archive: the global `all.zip` is one archive, a scoped
+ * mirror (`OSV_ECOSYSTEMS`) is one per ecosystem, imported in sequence.
+ */
+export interface BootstrapProgress {
+    /** When this bootstrap started. */
+    startedAt: string;
+    /** When this snapshot was written; a stale value means the run is stuck or its process died. */
+    updatedAt: string;
+    /** The archive being worked on, 1-based, of `archiveCount`. */
+    archiveIndex: number;
+    archiveCount: number;
+    /** The ecosystem directory of the current archive; null for the global `all.zip`. */
+    ecosystem: string | null;
+    /** `publishing` is the tail: every archive is in, the generation is being promoted and severities filled. */
+    phase: "downloading" | "importing" | "publishing";
+    /** Download position; `contentLength` null when the server did not say. */
+    bytesReceived: number;
+    contentLength: number | null;
+    /** Records imported from the current archive, of its `archiveEntries` (known once it is open). */
+    recordsProcessed: number;
+    archiveEntries: number | null;
+    /** Records imported from the archives already finished, so the banner can total across them. */
+    recordsFromEarlierArchives: number;
+    /**
+     * The run's plan, in import order — one entry per archive, `archiveCount`
+     * long, the current one at `archiveIndex - 1`. `records` is filled in as
+     * each archive finishes and is null for the current and the ones ahead,
+     * so the banner can tick ecosystems off by name rather than only naming
+     * the one in flight. A single `{ ecosystem: null }` for the global `all.zip`.
+     */
+    archives: BootstrapArchive[];
+}
+
+export interface BootstrapArchive {
+    ecosystem: string | null;
+    records: number | null;
+}
 
 /**
  * OSV Sync Failures Table

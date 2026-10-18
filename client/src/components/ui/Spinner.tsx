@@ -1,9 +1,10 @@
 interface SpinnerProps {
     className?: string;
-    size?: 'sm' | 'md' | 'lg';
+    size?: 'xs' | 'sm' | 'md' | 'lg';
 }
 
 const sizeMap = {
+    xs: 'size-3',
     sm: 'size-4',
     md: 'size-6',
     lg: 'size-8',

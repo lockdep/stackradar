@@ -44,11 +44,15 @@ You are asked to change the password before anything else loads. Do it.
 ## What you see first
 
 A yellow strip above every page says **Vulnerability database is being
-built**. The server bootstraps its own OSV mirror in the background for the
-default ecosystem list — about 1.2 GB compressed, 5–25 minutes depending on
-your connection — and EPSS and KEV right after. Until it finishes every
-image shows zero findings; the strip goes away on its own when the first
-generation is live. Nothing else waits for it: you can upload now.
+built**, with one line per feed. The server bootstraps its own OSV mirror in
+the background for the default ecosystem list — about 1.2 GB compressed,
+5–25 minutes depending on your connection — and EPSS and KEV right after;
+the strip shows which archive is downloading or importing, how far it is,
+and then each feed scoring the mirror. Until the OSV import finishes every
+image shows zero findings; the strip goes away on its own when all three
+feeds have landed, and turns red, with the error, if one of them fails (the
+server retries on its schedule). Nothing else waits for it: you can upload
+now.
 
 For a two-minute try-out, set `OSV_ECOSYSTEMS: Alpine` on the server in the
 Compose file before the first start. That mirror is ~40 MB, bootstraps in

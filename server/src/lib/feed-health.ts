@@ -26,3 +26,16 @@ export function isFeedStale(lastSyncedAt: Date | null | undefined, now = new Dat
     if (!lastSyncedAt) return true;
     return now.getTime() - lastSyncedAt.getTime() > FEED_STALE_AFTER_HOURS * 3600_000;
 }
+
+/**
+ * How long a `run_started_at` stamp is believed. A run that has not reported
+ * success or failure in this long did not finish quietly: its process died
+ * before `recordSuccess` / `recordFailure` could clear the stamp. Both feeds
+ * are a few minutes' work, so six hours is generous without being a day.
+ */
+export const FEED_RUN_STALE_AFTER_HOURS = 6;
+
+export function isFeedRunning(runStartedAt: Date | null | undefined, now = new Date()): boolean {
+    if (!runStartedAt) return false;
+    return now.getTime() - runStartedAt.getTime() <= FEED_RUN_STALE_AFTER_HOURS * 3600_000;
+}

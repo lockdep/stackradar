@@ -118,6 +118,7 @@ One row, constant PK, in `db/schema/threat-intel.ts`.
 | `entries_matched`    | Advisories the catalogue reached                     |
 | `entries_cleared`    | Advisories delisted on the last run — watch this one |
 | `last_error`         | Null when the last run succeeded                     |
+| `run_started_at`     | Set while a run is in progress, as for EPSS          |
 
 As with EPSS, a failed run records the error and leaves `last_synced_at` alone.
 

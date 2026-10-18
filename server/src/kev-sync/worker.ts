@@ -79,6 +79,8 @@ export function createKevSyncWorker(config: KevSyncConfig, repository: KevReposi
                 return { skipped: true, reason: "fresh" };
             }
 
+            await repository.markRunning();
+
             try {
                 const catalog = await fetchCatalog();
 

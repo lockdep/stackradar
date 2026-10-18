@@ -79,6 +79,8 @@ export interface SyncStateManager {
     /**
      * Set the current sync status (idle, full_refresh, incremental).
      * Should be set at the start of a sync and cleared to "idle" when done.
+     * Leaving `full_refresh` also drops `bootstrap_progress`: a snapshot of a
+     * run that has ended is a lie the banner would keep repeating.
      */
     setSyncStatus(status: SyncStatus): Promise<void>;
 
@@ -155,6 +157,7 @@ export function createSyncStateManager(
                     lastModifiedApplied: clampWatermark(maxModifiedTimestamp, now),
                     ecosystems,
                     syncStatus: "idle",
+                    bootstrapProgress: null,
                     consecutiveFailures: 0,
                     lastError: null,
                     updatedAt: now,
@@ -206,6 +209,7 @@ export function createSyncStateManager(
                 .update(osvSyncState)
                 .set({
                     syncStatus: status,
+                    ...(status !== "full_refresh" && { bootstrapProgress: null }),
                     updatedAt: new Date(),
                 })
                 .where(eq(osvSyncState.id, 1));
