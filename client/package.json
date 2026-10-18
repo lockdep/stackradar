@@ -42,7 +42,7 @@
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.3",
     "@headlessui/react": "^2.2.10",
-    "@node-rs/argon2": "2.2.1",
+    "@node-rs/argon2": "2.2.2",
     "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^0.577.0",
