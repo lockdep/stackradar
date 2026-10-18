@@ -160,7 +160,9 @@ export function createSyncRunners(osv: OsvSyncRuntime): SyncRunners {
     // for a CLI that exits and wrong for a process that lives for weeks:
     // an idle server would shut out every `pnpm osv-sync` a person ran by
     // hand, and a second replica for good. `shutdown()` is only the lock
-    // release; the next run re-acquires.
+    // release — and a no-op while a run is in progress, so releasing after a
+    // call the worker skipped (the hourly tick during the start-up bootstrap)
+    // leaves the running one its lock; the next run re-acquires.
     const releaseAfter = async <T>(run: () => Promise<T>): Promise<T> => {
         try {
             return await run();

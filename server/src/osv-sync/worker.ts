@@ -71,6 +71,14 @@ export function createOsvSyncWorker(
     runRepository: OsvSyncRunRepository,
 ): OsvSyncWorker {
     let lockAcquired = false;
+    // The entry point running in this process right now, if any. The monolith
+    // shares one worker between the start-up bootstrap and the hourly cron, and
+    // `lockAcquired` alone cannot tell "we hold the lock" from "the other entry
+    // point holds it": at the first top of the hour inside a bootstrap, the
+    // incremental run believed it held the lock, "recovered" the bootstrap's
+    // `full_refresh` status to idle — taking the banner's progress with it —
+    // and its release dropped the lock out from under the import still running.
+    let running: "initialization" | "incremental" | null = null;
 
     const deps: SyncPhaseDeps = {
         config,
@@ -101,14 +109,38 @@ export function createOsvSyncWorker(
         });
     }
 
-    function lockHeldResult(mode: "initialization" | "incremental"): SyncCycleResult {
+    function lockHeldResult(
+        mode: "initialization" | "incremental",
+        reason = "Advisory lock held by another instance",
+    ): SyncCycleResult {
         // Not a failure: `concurrencyPolicy: Forbid` makes this rare, but a
         // manual run overlapping the CronJob is a normal thing to do and must
         // not spend the Job's retries or fire an alert.
         return {
-            ...failedResult(mode, "Advisory lock held by another instance"),
+            ...failedResult(mode, reason),
             skipped: true,
         };
+    }
+
+    /**
+     * One run per process at a time. A second entry point while one is in
+     * progress is answered exactly like a lock held by another instance —
+     * skipped, not failed — before it reads or writes the state row.
+     */
+    async function oneAtATime(
+        mode: "initialization" | "incremental",
+        run: () => Promise<SyncCycleResult>,
+    ): Promise<SyncCycleResult> {
+        if (running) {
+            log.info({ running, requested: mode }, "A sync is already running in this process. Exiting.");
+            return lockHeldResult(mode, `A ${running} sync is already running in this process`);
+        }
+        running = mode;
+        try {
+            return await run();
+        } finally {
+            running = null;
+        }
     }
 
     /**
@@ -188,8 +220,8 @@ export function createOsvSyncWorker(
         }
     }
 
-    return {
-        async runCycle(): Promise<SyncCycleResult> {
+    async function runCycle(): Promise<SyncCycleResult> {
+        return oneAtATime("incremental", async () => {
             await stateManager.ensureInitialized();
 
             if (!(await tryAcquireLock())) {
@@ -238,9 +270,11 @@ export function createOsvSyncWorker(
                 await enqueueRescansAfterMirrorChange(result);
             }
             return result;
-        },
+        });
+    }
 
-        async forceFullRefresh(): Promise<SyncCycleResult> {
+    async function forceFullRefresh(): Promise<SyncCycleResult> {
+        return oneAtATime("initialization", async () => {
             await stateManager.ensureInitialized();
 
             if (!(await tryAcquireLock())) {
@@ -264,9 +298,11 @@ export function createOsvSyncWorker(
                 await enqueueRescansAfterMirrorChange(result);
             }
             return result;
-        },
+        });
+    }
 
-        async bootstrapIfNeeded(): Promise<SyncCycleResult> {
+    async function bootstrapIfNeeded(): Promise<SyncCycleResult> {
+        return oneAtATime("initialization", async () => {
             await stateManager.ensureInitialized();
 
             // Cheap pre-check before touching the lock. This runs on a schedule
@@ -306,7 +342,13 @@ export function createOsvSyncWorker(
                 await enqueueRescansAfterMirrorChange(result);
             }
             return result;
-        },
+        });
+    }
+
+    return {
+        runCycle,
+        forceFullRefresh,
+        bootstrapIfNeeded,
 
         async getMetrics(): Promise<{
             initialized: boolean;
@@ -331,6 +373,12 @@ export function createOsvSyncWorker(
         },
 
         async shutdown(): Promise<void> {
+            // The lock belongs to the run in progress; a caller releasing after
+            // a skipped call must not take it from under the one that holds it.
+            if (running) {
+                log.info({ running }, "Advisory lock kept: a sync is still running in this process");
+                return;
+            }
             if (lockAcquired) {
                 try {
                     await stateManager.releaseAdvisoryLock(config.advisoryLockId);
