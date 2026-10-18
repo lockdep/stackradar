@@ -219,8 +219,10 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # The server reports its commit alongside its version (lib/server-version.ts).
-          build-args: ${{ matrix.component == 'server' && format('GIT_SHA={0}', github.sha) || '' }}
+          # Both images report their commit alongside their version: the server
+          # in lib/server-version.ts, the client on the admin System tab.
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
           provenance: mode=max

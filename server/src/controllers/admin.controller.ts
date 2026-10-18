@@ -9,6 +9,7 @@ import {
     workloadRepository,
 } from "../repositories/index.js";
 import { fetchOsvRecord } from "../lib/osv-api.js";
+import { getSystemReport } from "../services/admin-system.service.js";
 import {
     adminListQuerySchema,
     adminJobsQuerySchema,
@@ -30,6 +31,14 @@ export const adminController = {
             ]);
 
             res.json({ stats, osvState });
+        } catch (error) {
+            next(error);
+        }
+    },
+
+    async getSystem(_req: Request, res: Response, next: NextFunction) {
+        try {
+            res.json(await getSystemReport());
         } catch (error) {
             next(error);
         }

@@ -35,6 +35,11 @@ RUN pnpm install --prod --frozen-lockfile --ignore-scripts
 # --- Runner ---
 FROM base AS runner
 ENV NODE_ENV=production
+# The commit this image was built from, shown beside the version on the
+# admin System tab (app/api/admin/system/route.ts). CI passes it; a local
+# build without it reports the package version alone.
+ARG GIT_SHA=""
+ENV GIT_SHA=${GIT_SHA}
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs

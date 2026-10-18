@@ -49,6 +49,7 @@ describe('AdminPage', () => {
         const html = render('community', true);
         expect(tabs(html)).toEqual([
             'Overview',
+            'System',
             'Users',
             'Images',
             'Vulnerabilities',
@@ -74,6 +75,7 @@ describe('AdminPage', () => {
         const html = render('cloud', false);
         expect(tabs(html)).toEqual([
             'Overview',
+            'System',
             'Organizations',
             'Feedback',
             'Images',

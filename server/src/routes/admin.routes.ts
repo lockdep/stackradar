@@ -6,6 +6,7 @@ const router = Router();
 
 router.get("/jobs", requireAuth, requireInternal, requireAdmin, adminController.getJobs);
 router.get("/overview", requireAuth, requireInternal, requireAdmin, adminController.getOverview);
+router.get("/system", requireAuth, requireInternal, requireAdmin, adminController.getSystem);
 router.get("/organizations", requireAuth, requireInternal, requireAdmin, adminController.getOrganizations);
 router.get(
     "/organizations/:orgId/clusters",

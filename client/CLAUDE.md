@@ -37,6 +37,11 @@ proxying rather than by a denylist):
   accounts with how each signs in, create a local account, set or reset a
   local account's password. Same session + `isAdmin` gate as the catch-all;
   404 unless local login is enabled
+- `admin/system` — the admin System tab: relays Express's
+  `GET /api/admin/system` report and adds this app's half (its version,
+  which sign-in methods are on, whether the `auth` schema is current
+  against this app's own migration journal). Names and booleans only,
+  never a client id or secret. Same session + `isAdmin` gate
 - `admin/chart-index` — its upstream is not Express: it relays the public
   chart index's key-gated `GET /internal/status` (`CHARTS_STATUS_URL` +
   `CHARTS_STATUS_KEY`) for the admin dashboard's Chart Index tab

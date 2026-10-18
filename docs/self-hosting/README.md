@@ -24,3 +24,17 @@ The chart's values reference is the
 in `lockdep/helm-charts`; the Compose file documents itself in its header.
 Questions go to [GitHub Discussions](https://github.com/lockdep/stackradar/discussions),
 defects to [Issues](https://github.com/lockdep/stackradar/issues/new/choose).
+
+## The administration page
+
+A platform admin (the bootstrap admin, or an account mapped to one through
+OIDC) has an **Administration** entry in the sidebar. Its **System** tab is
+the first place to look when something is off or before asking for help: it
+shows both images' versions, the edition and topology, every operator
+setting with the value in force and whether the environment set it, which
+sign-in methods are on, whether the server's and the client's schemas are
+current for the running build, and which OSV ecosystems the mirror carries
+against what `OSV_ECOSYSTEMS` asks for. The **Overview** tab is the
+pipeline's health — scanner, queue, mirror and feeds — and the other tabs
+are the data behind it: images, vulnerabilities, the matcher, jobs, and
+the accounts when local login is on.

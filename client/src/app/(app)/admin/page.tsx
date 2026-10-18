@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { RefreshCw, Shield } from 'lucide-react';
 import { TabBar, TabPanel, type TabBarItem } from '@/components/ui';
 import { OverviewTab } from '@/views/admin/OverviewTab';
+import { SystemTab } from '@/views/admin/SystemTab';
 import { OrganizationsTab } from '@/views/admin/OrganizationsTab';
 import { AdminOrgDetail } from '@/views/admin/AdminOrgDetail';
 import { ImagesTab } from '@/views/admin/ImagesTab';
@@ -33,6 +34,9 @@ interface AdminTab extends TabBarItem {
 
 const TABS: AdminTab[] = [
     { id: 'overview', name: 'Overview' },
+    // What this install is: versions, edition, topology, every knob's
+    // effective value, sign-in methods, both schemas' state. Read-only.
+    { id: 'system', name: 'System' },
     // The tenant list, and the drill-down into one tenant. A single-org
     // install has nothing to list: its one org is the install.
     { id: 'organizations', name: 'Organizations', requires: 'multiOrg' },
@@ -136,6 +140,9 @@ export default function AdminPage() {
 
             <TabPanel tabId="overview" active={activeTab === 'overview'}>
                 <OverviewTab refreshKey={refreshKey} onLoadingChange={setIsRefreshing} />
+            </TabPanel>
+            <TabPanel tabId="system" active={activeTab === 'system'}>
+                <SystemTab refreshKey={refreshKey} onLoadingChange={setIsRefreshing} />
             </TabPanel>
             {has('organizations') && (
                 <TabPanel tabId="organizations" active={activeTab === 'organizations'}>

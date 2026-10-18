@@ -352,6 +352,7 @@ export interface MatcherQualityData {
 
 export type Tab =
     | 'overview'
+    | 'system'
     | 'organizations'
     | 'users'
     | 'feedback'
