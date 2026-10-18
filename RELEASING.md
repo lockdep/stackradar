@@ -157,8 +157,10 @@ template's dropdown.
 5. starts `publish.yaml` on the tag (the tagged commit carries
    `[skip ci]`, so the tag push starts nothing by itself);
 6. bumps the branch to the next snapshot (`prepare-iteration: set version
-   to 0.3.0-snapshot [skip ci]`; the next patch on a release branch). That
-   push runs no CI either, which is fine: the next real commit does.
+   to 0.3.0-snapshot [skip ci]`; the next patch on a release branch; after
+   a prerelease, the snapshot it started from, `0.2.0-snapshot`, so the
+   stamped `0.2.0-rc.1` never stays on the branch). That push runs no CI
+   either, which is fine: the next real commit does.
 
 [`publish.yaml`](.github/workflows/publish.yaml), on the tag:
 

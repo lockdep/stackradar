@@ -121,10 +121,13 @@ jobs:
             next="${major}.${minor}.$((patch + 1))-snapshot"
           fi
 
-          # A prerelease does not consume the number: main stays on the same
-          # snapshot so the stable release that follows has it.
+          # A prerelease does not consume the number: the branch goes back to
+          # the snapshot of the version it just released, so the stable
+          # release that follows has it. Computed from the version rather
+          # than read back from package.json, which carries the previous
+          # prerelease if its restore never ran.
           if [[ "${prerelease}" == "true" ]]; then
-            next="${current}"
+            next="${major}.${minor}.${patch}-snapshot"
           fi
 
           # Through the API rather than `git ls-remote`: the checkout keeps no
@@ -208,9 +211,12 @@ jobs:
         run: gh workflow run publish.yaml --ref "v${VERSION}"
 
       # Dependency-Track's prepare-iteration: the branch moves on to the next
-      # snapshot so a build from it never carries a released number.
+      # snapshot so a build from it never carries a released number. After a
+      # prerelease "next" is the same snapshot the branch had before, which
+      # is still a change: the prepare-release commit above stamped the
+      # prerelease version, and leaving it there would make the next
+      # empty-version run resolve to a tag that already exists.
       - name: Set the next snapshot version
-        if: needs.prepare.outputs.prerelease == 'false'
         run: |
           set -euo pipefail
           node scripts/release-set-version.mjs "${NEXT}"
