@@ -36,6 +36,23 @@
   animation: spin-fast 0.35s linear infinite;
 }
 
+/* An indeterminate progress bar: a segment one third of the track wide that
+   runs across it and comes back round — see `ProgressBar` in `MirrorBanner`.
+   The travel is 300% of the segment's own width, so it starts and ends off
+   the track's ends and `overflow-hidden` on the track clips it. */
+@keyframes progress-indeterminate {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 300% 0;
+  }
+}
+
+@utility animate-progress-indeterminate {
+  animation: progress-indeterminate 1.4s ease-in-out infinite;
+}
+
 /* The "waiting for the first container" radar — see `WaitingForFirstData`.
 
    It is on this page for minutes, not the half-second a spinner is, so it is

@@ -128,7 +128,7 @@ async function importEcosystemArchives(
         const url = ecosystemArchiveUrl(config.osvStorageBaseUrl, ecosystemDir);
         const startedAt = Date.now();
         log.info({ ecosystemDir, url, archive: `${index + 1}/${scope.length}` }, "Importing ecosystem archive");
-        progress.startArchive({ index: index + 1, count: scope.length, ecosystem: ecosystemDir });
+        progress.startArchive(index + 1);
 
         const result = await zipProcessor.processZip(
             url,
@@ -202,7 +202,7 @@ export async function runBootstrap(deps: SyncPhaseDeps): Promise<SyncCycleResult
     // Still reported for observability — but it no longer gates reads, because
     // with the generation swap the live rows are never removed under a reader.
     await stateManager.setSyncStatus("full_refresh");
-    const progress = createBootstrapProgressReporter(stateManager);
+    const progress = createBootstrapProgressReporter(stateManager, scope);
 
     // A previous attempt that died before its cleanup ran left rows under this
     // same number (the build generation is always live + 1, so retries reuse
@@ -327,7 +327,7 @@ export async function runBootstrap(deps: SyncPhaseDeps): Promise<SyncCycleResult
 
         let result: ZipProcessorResult;
         if (scope === null) {
-            progress.startArchive({ index: 1, count: 1, ecosystem: null });
+            progress.startArchive(1);
             result = await zipProcessor.processZip(config.osvAllZipUrl, onRecord, zipOptions);
             progress.finishArchive(result.processedCount);
         } else {

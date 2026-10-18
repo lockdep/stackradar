@@ -32,6 +32,13 @@ export interface BootstrapProgress {
     recordsProcessed: number;
     archiveEntries: number | null;
     recordsFromEarlierArchives: number;
+    /** The run's plan in import order; `records` is set once an archive is in. */
+    archives: BootstrapArchive[];
+}
+
+export interface BootstrapArchive {
+    ecosystem: string | null;
+    records: number | null;
 }
 
 export interface MirrorStatus {
@@ -43,6 +50,8 @@ export interface MirrorStatus {
         lastError: string | null;
         ecosystems: string[] | null;
         bootstrap: BootstrapProgress | null;
+        recordsMirrored: number | null;
+        bootstrapDurationMs: number | null;
     };
     epss: {
         status: FeedStatus;
@@ -70,8 +79,27 @@ export interface FeedLine {
     role: string;
     status: FeedStatus;
     detail: string;
-    /** 0–1 when the current step's size is known; null draws no bar. */
-    fraction: number | null;
+    /**
+     * The bar under the line: 0–1 when the current step's size is known,
+     * `indeterminate` while work is in progress but nothing has sized it yet
+     * (the first seconds of a download, an archive whose entry count is not
+     * in), null draws none. A running feed always has a bar — one that
+     * appears a few seconds in reads as a stall before it.
+     */
+    bar: number | 'indeterminate' | null;
+    /**
+     * The feed's work ticked off item by item — the OSV import's ecosystems,
+     * one per archive — so a reader sees what is in as well as what is in
+     * flight. Null when the feed is one indivisible step.
+     */
+    steps: FeedStep[] | null;
+}
+
+export interface FeedStep {
+    label: string;
+    status: 'done' | 'running' | 'pending';
+    /** Where the step is, in a word or two: its record count once done, its phase while running. */
+    detail: string;
 }
 
 export type MirrorBannerState =
@@ -79,8 +107,8 @@ export type MirrorBannerState =
     | { kind: 'ready' }
     | {
           kind: 'building';
-          /** `danger` when nothing is running and something has failed; `attention` while work is in progress. */
-          tone: 'attention' | 'danger';
+          /** `danger` when nothing is running and something has failed; `info` while work is in progress. */
+          tone: 'info' | 'danger';
           headline: string;
           summary: string;
           feeds: FeedLine[];
@@ -100,41 +128,48 @@ function formatBytes(bytes: number): string {
 const elapsed = (since: string, now: number): string => formatDuration(Math.max(0, now - new Date(since).getTime()));
 
 function osvLine(osv: MirrorStatus['osv'], now: number): FeedLine {
-    const line = { key: 'osv' as const, name: 'OSV.dev', role: 'Advisory mirror', status: osv.status };
+    const line = { key: 'osv' as const, name: 'OSV.dev', role: 'Advisory mirror', status: osv.status, steps: null };
     switch (osv.status) {
-        case 'ready':
-            return {
-                ...line,
-                detail: osv.ecosystems ? `Mirrored: ${osv.ecosystems.join(', ')}` : 'Mirrored: every ecosystem',
-                fraction: null,
-            };
+        case 'ready': {
+            const parts = [osv.ecosystems ? `Mirrored: ${osv.ecosystems.join(', ')}` : 'Mirrored: every ecosystem'];
+            if (osv.recordsMirrored != null) {
+                parts.push(
+                    osv.bootstrapDurationMs != null
+                        ? `${num(osv.recordsMirrored)} records in ${formatDuration(osv.bootstrapDurationMs)}`
+                        : `${num(osv.recordsMirrored)} records`,
+                );
+            }
+            return { ...line, detail: parts.join(' · '), bar: null };
+        }
         case 'failed':
             return {
                 ...line,
                 detail: `The first import failed: ${osv.lastError ?? 'unknown error'}. The server retries on its schedule.`,
-                fraction: null,
+                bar: null,
             };
         case 'pending':
             return {
                 ...line,
                 detail: 'Not started yet. The server begins the first import as soon as it is up.',
-                fraction: null,
+                bar: null,
             };
         case 'running': {
             const b = osv.bootstrap;
-            if (!b) return { ...line, detail: 'Import running. Progress has not been reported yet.', fraction: null };
+            if (!b) {
+                return { ...line, detail: 'Import running. Progress has not been reported yet.', bar: 'indeterminate' };
+            }
 
             const archive =
                 b.archiveCount > 1
                     ? `${b.ecosystem ?? 'archive'} (archive ${b.archiveIndex} of ${b.archiveCount})`
                     : 'advisories';
             const parts: string[] = [];
-            let fraction: number | null = null;
+            let bar: FeedLine['bar'] = 'indeterminate';
             if (b.phase === 'downloading') {
                 parts.push(`Downloading ${archive}`);
                 if (b.contentLength) {
                     parts.push(`${formatBytes(b.bytesReceived)} of ${formatBytes(b.contentLength)}`);
-                    fraction = Math.min(1, b.bytesReceived / b.contentLength);
+                    bar = Math.min(1, b.bytesReceived / b.contentLength);
                 } else if (b.bytesReceived > 0) {
                     parts.push(formatBytes(b.bytesReceived));
                 }
@@ -142,7 +177,7 @@ function osvLine(osv: MirrorStatus['osv'], now: number): FeedLine {
                 parts.push(`Importing ${archive}`);
                 if (b.archiveEntries) {
                     parts.push(`${num(b.recordsProcessed)} of ${num(b.archiveEntries)} records`);
-                    fraction = Math.min(1, b.recordsProcessed / b.archiveEntries);
+                    bar = Math.min(1, b.recordsProcessed / b.archiveEntries);
                 } else {
                     parts.push(`${num(b.recordsProcessed)} records`);
                 }
@@ -152,7 +187,7 @@ function osvLine(osv: MirrorStatus['osv'], now: number): FeedLine {
             } else {
                 parts.push('Publishing the mirror');
                 parts.push(`${num(b.recordsFromEarlierArchives + b.recordsProcessed)} records imported`);
-                fraction = 1;
+                bar = 1;
             }
             parts.push(`${elapsed(b.startedAt, now)} elapsed`);
 
@@ -160,9 +195,33 @@ function osvLine(osv: MirrorStatus['osv'], now: number): FeedLine {
             if (sinceUpdate > PROGRESS_STALE_AFTER_MS) {
                 parts.push(`no progress reported for ${formatDuration(sinceUpdate)}; check the server log`);
             }
-            return { ...line, detail: parts.join(' · '), fraction };
+            return { ...line, detail: parts.join(' · '), bar, steps: archiveSteps(b) };
         }
     }
+}
+
+/**
+ * One step per archive of a scoped bootstrap, so the ecosystems already in
+ * show as ticked rather than disappearing behind the one in flight. The
+ * publishing tail has every archive in. The global `all.zip` is one step,
+ * which the detail line already narrates, so it gets no list.
+ */
+function archiveSteps(b: BootstrapProgress): FeedStep[] | null {
+    if (b.archives.length <= 1) return null;
+    return b.archives.map((archive, i): FeedStep => {
+        const label = archive.ecosystem ?? `Archive ${i + 1}`;
+        if (b.phase === 'publishing' || i < b.archiveIndex - 1) {
+            return {
+                label,
+                status: 'done',
+                detail: archive.records != null ? `${num(archive.records)} records` : 'Done',
+            };
+        }
+        if (i === b.archiveIndex - 1) {
+            return { label, status: 'running', detail: b.phase === 'downloading' ? 'Downloading' : 'Importing' };
+        }
+        return { label, status: 'pending', detail: 'Waiting' };
+    });
 }
 
 function feedLine(
@@ -172,7 +231,7 @@ function feedLine(
     now: number,
     text: { name: string; role: string; verb: string; ready: string; without: string },
 ): FeedLine {
-    const line = { key, name: text.name, role: text.role, status: feed.status, fraction: null };
+    const line = { key, name: text.name, role: text.role, status: feed.status, bar: null, steps: null };
     switch (feed.status) {
         case 'ready':
             return { ...line, detail: text.ready };
@@ -231,16 +290,14 @@ export function mirrorBannerState(status: MirrorStatus | null, now: number = Dat
                   kind: 'building',
                   tone: 'danger',
                   headline: 'Vulnerability database could not be built yet.',
-                  summary:
-                      'The first OSV import has not completed, so images show no findings. The server retries on its schedule; the error is below.',
+                  summary: 'Images show no findings until it succeeds. The server retries on its schedule.',
                   feeds,
               }
             : {
                   kind: 'building',
-                  tone: 'attention',
+                  tone: 'info',
                   headline: 'Vulnerability database is being built.',
-                  summary:
-                      'Images show no findings until the OSV import finishes — allow 5–25 minutes depending on your connection. This page updates on its own.',
+                  summary: 'Images show no findings until the import finishes, usually 5–25 minutes.',
                   feeds,
               };
     }
@@ -250,16 +307,14 @@ export function mirrorBannerState(status: MirrorStatus | null, now: number = Dat
               kind: 'building',
               tone: 'danger',
               headline: 'Exploitation data has not loaded.',
-              summary:
-                  'Findings are in, but Radar Scores rank on CVSS alone until EPSS and KEV complete. The server retries daily; the errors are below.',
+              summary: 'Radar Scores rank on CVSS alone until EPSS and KEV load. The server retries daily.',
               feeds,
           }
         : {
               kind: 'building',
-              tone: 'attention',
+              tone: 'info',
               headline: 'Vulnerability database is almost ready.',
-              summary:
-                  'Findings are in. Exploitation data is still loading, so Radar Scores will settle in the next few minutes. This page updates on its own.',
+              summary: 'Radar Scores settle once EPSS and KEV have loaded.',
               feeds,
           };
 }

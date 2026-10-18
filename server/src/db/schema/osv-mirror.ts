@@ -88,6 +88,19 @@ export interface BootstrapProgress {
     archiveEntries: number | null;
     /** Records imported from the archives already finished, so the banner can total across them. */
     recordsFromEarlierArchives: number;
+    /**
+     * The run's plan, in import order — one entry per archive, `archiveCount`
+     * long, the current one at `archiveIndex - 1`. `records` is filled in as
+     * each archive finishes and is null for the current and the ones ahead,
+     * so the banner can tick ecosystems off by name rather than only naming
+     * the one in flight. A single `{ ecosystem: null }` for the global `all.zip`.
+     */
+    archives: BootstrapArchive[];
+}
+
+export interface BootstrapArchive {
+    ecosystem: string | null;
+    records: number | null;
 }
 
 /**

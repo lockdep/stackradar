@@ -80,6 +80,12 @@ const progress = {
     recordsProcessed: 5000,
     archiveEntries: 12000,
     recordsFromEarlierArchives: 3000,
+    archives: [
+        { ecosystem: "Alpine", records: 3000 },
+        { ecosystem: "Debian", records: null },
+        { ecosystem: "Go", records: null },
+        { ecosystem: "npm", records: null },
+    ],
 };
 
 describe("buildMirrorStatus", () => {
@@ -94,11 +100,19 @@ describe("buildMirrorStatus", () => {
 
     it("reports a running bootstrap with its progress", () => {
         const status = buildMirrorStatus(
-            { osv: osv({ syncStatus: "full_refresh", bootstrapProgress: progress }), epss: null, kev: null },
+            {
+                osv: osv({ syncStatus: "full_refresh", bootstrapProgress: progress }),
+                epss: null,
+                kev: null,
+                // A rebuild in progress: the run that built the generation being replaced is not the banner's.
+                lastBootstrap: { recordsProcessed: 100, durationMs: 1000 },
+            },
             NOW,
         );
         expect(status.osv.status).toBe("running");
         expect(status.osv.bootstrap).toEqual(progress);
+        expect(status.osv.recordsMirrored).toBeNull();
+        expect(status.osv.bootstrapDurationMs).toBeNull();
     });
 
     it("drops a progress snapshot the state row carries outside a running bootstrap", () => {
@@ -153,10 +167,17 @@ describe("buildMirrorStatus", () => {
                 lastError: "later run failed",
             }),
             kev: kev({ lastSyncedAt: NOW, catalogVersion: "2026.10.16", entriesMatched: 1300 }),
+            lastBootstrap: { recordsProcessed: 312_480, durationMs: 860_000 },
         };
         const status = buildMirrorStatus(rows, NOW);
         expect(status.ready).toBe(true);
-        expect(status.osv).toMatchObject({ status: "ready", initialized: true, ecosystems: ["Alpine"] });
+        expect(status.osv).toMatchObject({
+            status: "ready",
+            initialized: true,
+            ecosystems: ["Alpine"],
+            recordsMirrored: 312_480,
+            bootstrapDurationMs: 860_000,
+        });
         expect(status.epss).toMatchObject({ status: "ready", scoreDate: "2026-10-16", cvesMatched: 41000 });
         expect(status.kev).toMatchObject({ status: "ready", catalogVersion: "2026.10.16", entriesMatched: 1300 });
     });

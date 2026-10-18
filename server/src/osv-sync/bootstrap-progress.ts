@@ -16,7 +16,7 @@
  * dropped — the bootstrap must not fail because its progress bar did.
  */
 
-import type { BootstrapProgress } from "../db/schema/osv-mirror.js";
+import type { BootstrapArchive, BootstrapProgress } from "../db/schema/osv-mirror.js";
 import type { SyncStateManager } from "./state.js";
 import { createLogger } from "../lib/logger.js";
 
@@ -26,13 +26,13 @@ const log = createLogger("osv-sync:bootstrap-progress");
 export const PROGRESS_WRITE_INTERVAL_MS = 2_000;
 
 export interface BootstrapProgressReporter {
-    /** A new archive is starting: phase `downloading`, written at once. */
-    startArchive(archive: { index: number; count: number; ecosystem: string | null }): void;
+    /** Archive `index` (1-based, into the scope the reporter was built with) is starting: phase `downloading`, written at once. */
+    startArchive(index: number): void;
     /** Download position for the current archive (throttled). */
     downloaded(bytesReceived: number, contentLength: number | undefined): void;
     /** Records imported from the current archive, of its entry count (throttled; the first call also flips the phase). */
     imported(recordsProcessed: number, archiveEntries: number | undefined): void;
-    /** The current archive is finished: its records join the running total the next archive reports. */
+    /** The current archive is finished: its count is recorded against it and joins the running total the next archive reports. */
     finishArchive(recordsProcessed: number): void;
     /** Every archive is in; the generation is being promoted and severities filled. Written at once. */
     publishing(): void;
@@ -40,13 +40,20 @@ export interface BootstrapProgressReporter {
     settle(): Promise<void>;
 }
 
+/**
+ * `scope` is the run's `config.ecosystems`: one archive per name, or the
+ * global `all.zip` when null. It is the plan every snapshot carries, so the
+ * banner knows the ecosystems still ahead as well as the ones already in.
+ */
 export function createBootstrapProgressReporter(
     stateManager: Pick<SyncStateManager, "updateState">,
+    scope: readonly string[] | null,
     options: { now?: () => Date; intervalMs?: number } = {},
 ): BootstrapProgressReporter {
     const now = options.now ?? (() => new Date());
     const intervalMs = options.intervalMs ?? PROGRESS_WRITE_INTERVAL_MS;
     const startedAt = now().toISOString();
+    const archives: BootstrapArchive[] = (scope ?? [null]).map((ecosystem) => ({ ecosystem, records: null }));
 
     let snapshot: BootstrapProgress | null = null;
     let completedRecords = 0;
@@ -81,19 +88,20 @@ export function createBootstrapProgressReporter(
     };
 
     return {
-        startArchive({ index, count, ecosystem }) {
+        startArchive(index) {
             snapshot = {
                 startedAt,
                 updatedAt: startedAt,
                 archiveIndex: index,
-                archiveCount: count,
-                ecosystem,
+                archiveCount: archives.length,
+                ecosystem: archives[index - 1]?.ecosystem ?? null,
                 phase: "downloading",
                 bytesReceived: 0,
                 contentLength: null,
                 recordsProcessed: 0,
                 archiveEntries: null,
                 recordsFromEarlierArchives: completedRecords,
+                archives: archives.map((a) => ({ ...a })),
             };
             write();
         },
@@ -120,7 +128,14 @@ export function createBootstrapProgressReporter(
         finishArchive(recordsProcessed) {
             completedRecords += recordsProcessed;
             if (!snapshot) return;
-            snapshot = { ...snapshot, phase: "importing", recordsProcessed };
+            const finished = archives[snapshot.archiveIndex - 1];
+            if (finished) finished.records = recordsProcessed;
+            snapshot = {
+                ...snapshot,
+                phase: "importing",
+                recordsProcessed,
+                archives: archives.map((a) => ({ ...a })),
+            };
             write();
         },
 

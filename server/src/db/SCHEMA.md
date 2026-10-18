@@ -534,7 +534,7 @@ Neither records `lastSyncedAt` on failure — the freshness the API reports has 
 
 ### `osv_sync_state`
 
-A single-row table (PK always `1`) tracking the overall sync state of the local OSV vulnerability mirror. Records whether initialization is complete, last poll time, watermark timestamps, current sync status, and failure counters — plus `bootstrapProgress`, a jsonb snapshot of where a running bootstrap is (archive, phase, bytes, records), non-null only during one, for the fresh-install banner.
+A single-row table (PK always `1`) tracking the overall sync state of the local OSV vulnerability mirror. Records whether initialization is complete, last poll time, watermark timestamps, current sync status, and failure counters — plus `bootstrapProgress`, a jsonb snapshot of where a running bootstrap is (the archive plan with each finished archive's record count, the current archive's phase, bytes and records), non-null only during one, for the fresh-install banner.
 
 > **There is no `osv_vulns` table, and no `osv_affected_packages`.** Earlier
 > revisions of this document described both, and downstream documents

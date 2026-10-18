@@ -50,6 +50,8 @@ describe("GET /api/vulnerabilities/mirror", () => {
                     lastError: null,
                     ecosystems: null,
                     bootstrap: null,
+                    recordsMirrored: null,
+                    bootstrapDurationMs: null,
                 },
                 epss: {
                     status: "pending",
@@ -83,6 +85,12 @@ describe("GET /api/vulnerabilities/mirror", () => {
                 recordsProcessed: 5000,
                 archiveEntries: 12_000,
                 recordsFromEarlierArchives: 3000,
+                archives: [
+                    { ecosystem: "Alpine", records: 3000 },
+                    { ecosystem: "Debian", records: null },
+                    { ecosystem: "Go", records: null },
+                    { ecosystem: "npm", records: null },
+                ],
             };
             await getTestDb()
                 .insert(schema.osvSyncState)
@@ -107,6 +115,26 @@ describe("GET /api/vulnerabilities/mirror", () => {
                 syncStatus: "incremental",
                 ecosystems: ["Alpine", "Debian"],
             });
+            await db.insert(schema.osvSyncRuns).values([
+                {
+                    id: "run-rejected",
+                    mode: "initialization",
+                    success: false,
+                    recordsProcessed: 10,
+                    durationMs: 5_000,
+                    startedAt: new Date("2026-10-10T07:00:00Z"),
+                    completedAt: new Date("2026-10-10T07:00:05Z"),
+                },
+                {
+                    id: "run-live",
+                    mode: "initialization",
+                    success: true,
+                    recordsProcessed: 312_480,
+                    durationMs: 860_000,
+                    startedAt: new Date("2026-10-10T07:45:40Z"),
+                    completedAt,
+                },
+            ]);
             await db.insert(schema.epssSyncState).values({
                 id: 1,
                 lastSyncedAt: completedAt,
@@ -131,6 +159,8 @@ describe("GET /api/vulnerabilities/mirror", () => {
                 initialized: true,
                 initCompletedAt: completedAt.toISOString(),
                 ecosystems: ["Alpine", "Debian"],
+                recordsMirrored: 312_480,
+                bootstrapDurationMs: 860_000,
             });
             expect(response.body.epss).toMatchObject({ status: "ready", scoreDate: "2026-10-09", cvesMatched: 41_000 });
             expect(response.body.kev).toMatchObject({

@@ -16,19 +16,19 @@ describe("createBootstrapProgressReporter", () => {
         vi.useRealTimers();
     });
 
-    function harness(intervalMs = 2_000) {
+    function harness(scope: readonly string[] | null, intervalMs = 2_000) {
         const writes: BootstrapProgress[] = [];
         const updateState = vi.fn(async (update: { bootstrapProgress?: BootstrapProgress | null }) => {
             writes.push(update.bootstrapProgress!);
         });
-        const reporter = createBootstrapProgressReporter({ updateState }, { intervalMs });
+        const reporter = createBootstrapProgressReporter({ updateState }, scope, { intervalMs });
         return { reporter, writes, updateState };
     }
 
     it("writes a phase change at once and throttles the ticks between", async () => {
-        const { reporter, writes } = harness();
+        const { reporter, writes } = harness(["Alpine", "Debian", "npm"]);
 
-        reporter.startArchive({ index: 1, count: 3, ecosystem: "Alpine" });
+        reporter.startArchive(1);
         await reporter.settle();
         expect(writes).toHaveLength(1);
         expect(writes[0]).toMatchObject({
@@ -38,6 +38,11 @@ describe("createBootstrapProgressReporter", () => {
             phase: "downloading",
             bytesReceived: 0,
             recordsFromEarlierArchives: 0,
+            archives: [
+                { ecosystem: "Alpine", records: null },
+                { ecosystem: "Debian", records: null },
+                { ecosystem: "npm", records: null },
+            ],
         });
 
         // Download ticks inside the interval are held back …
@@ -60,28 +65,52 @@ describe("createBootstrapProgressReporter", () => {
         expect(writes[2]).toMatchObject({ phase: "importing", recordsProcessed: 1000, archiveEntries: 50_000 });
     });
 
-    it("carries finished archives into the next archive's running total", async () => {
-        const { reporter, writes } = harness();
+    it("carries finished archives into the next archive's running total, and ticks them off by name", async () => {
+        const { reporter, writes } = harness(["Alpine", "Debian"]);
 
-        reporter.startArchive({ index: 1, count: 2, ecosystem: "Alpine" });
+        reporter.startArchive(1);
         reporter.imported(1000, 1200);
         reporter.finishArchive(1150);
-        reporter.startArchive({ index: 2, count: 2, ecosystem: "Debian" });
+        reporter.startArchive(2);
         await reporter.settle();
 
         const last = writes[writes.length - 1]!;
         expect(last).toMatchObject({
             archiveIndex: 2,
+            archiveCount: 2,
             ecosystem: "Debian",
             phase: "downloading",
             recordsProcessed: 0,
             recordsFromEarlierArchives: 1150,
+            archives: [
+                { ecosystem: "Alpine", records: 1150 },
+                { ecosystem: "Debian", records: null },
+            ],
         });
         expect(last.startedAt).toBe("2026-10-17T10:00:00.000Z");
+
+        // A snapshot is a value: a later finish does not rewrite the one already written.
+        reporter.finishArchive(900);
+        await reporter.settle();
+        expect(last.archives[1]).toEqual({ ecosystem: "Debian", records: null });
+        expect(writes[writes.length - 1]!.archives[1]).toEqual({ ecosystem: "Debian", records: 900 });
+    });
+
+    it("plans one unnamed archive for the global all.zip", async () => {
+        const { reporter, writes } = harness(null);
+
+        reporter.startArchive(1);
+        await reporter.settle();
+        expect(writes[0]).toMatchObject({
+            archiveIndex: 1,
+            archiveCount: 1,
+            ecosystem: null,
+            archives: [{ ecosystem: null, records: null }],
+        });
     });
 
     it("never overlaps writes, and sends the latest state once the write in flight lands", async () => {
-        const { reporter, writes, updateState } = harness(0);
+        const { reporter, writes, updateState } = harness(null, 0);
         let release!: () => void;
         updateState.mockImplementationOnce(
             (update) =>
@@ -93,7 +122,7 @@ describe("createBootstrapProgressReporter", () => {
                 }),
         );
 
-        reporter.startArchive({ index: 1, count: 1, ecosystem: null });
+        reporter.startArchive(1);
         reporter.imported(1000, undefined);
         reporter.imported(2000, undefined);
         expect(updateState).toHaveBeenCalledTimes(1);
@@ -105,10 +134,10 @@ describe("createBootstrapProgressReporter", () => {
     });
 
     it("drops a failed write and keeps reporting", async () => {
-        const { reporter, writes, updateState } = harness(0);
+        const { reporter, writes, updateState } = harness(null, 0);
         updateState.mockRejectedValueOnce(new Error("connection reset"));
 
-        reporter.startArchive({ index: 1, count: 1, ecosystem: null });
+        reporter.startArchive(1);
         await reporter.settle();
         reporter.publishing();
         await reporter.settle();

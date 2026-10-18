@@ -50,6 +50,9 @@ export interface MirrorStatus {
         ecosystems: string[] | null;
         /** The running bootstrap's position; null outside one. */
         bootstrap: BootstrapProgress | null;
+        /** Records the bootstrap that built the live generation imported, and how long it ran; null until it is ready. */
+        recordsMirrored: number | null;
+        bootstrapDurationMs: number | null;
     };
     epss: {
         status: FeedStatus;
@@ -94,7 +97,13 @@ function osvStatus(state: OsvSyncState | null): FeedStatus {
 const iso = (d: Date | null | undefined): string | null => (d ? d.toISOString() : null);
 
 export function buildMirrorStatus(
-    rows: { osv: OsvSyncState | null; epss: EpssState | null; kev: KevState | null },
+    rows: {
+        osv: OsvSyncState | null;
+        epss: EpssState | null;
+        kev: KevState | null;
+        /** The latest successful initialization run, if any. */
+        lastBootstrap?: { recordsProcessed: number; durationMs: number } | null;
+    },
     now: Date = new Date(),
 ): MirrorStatus {
     const osv = osvStatus(rows.osv);
@@ -111,6 +120,10 @@ export function buildMirrorStatus(
             // Only while a bootstrap runs: a snapshot a crashed run left
             // behind, before the next run resets the status, is not progress.
             bootstrap: osv === "running" ? (rows.osv?.bootstrapProgress ?? null) : null,
+            // Only once the mirror is live: a run that succeeded before a later
+            // rebuild was asked for describes a generation that is no longer there.
+            recordsMirrored: osv === "ready" ? (rows.lastBootstrap?.recordsProcessed ?? null) : null,
+            bootstrapDurationMs: osv === "ready" ? (rows.lastBootstrap?.durationMs ?? null) : null,
         },
         epss: {
             status: epss,
