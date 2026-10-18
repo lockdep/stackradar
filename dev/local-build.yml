@@ -1,0 +1,54 @@
+# The quickstart on images built from THIS checkout — the second file of
+#
+#   docker compose --project-directory . \
+#     -f deploy/compose/docker-compose.yml -f dev/local-build.yml up -d --build
+#
+# which scripts/fresh-local.sh runs for you, after throwing the previous
+# instance and its database away. Postgres, fixtures and environment are
+# deploy/compose/docker-compose.yml verbatim; this file replaces the two GHCR
+# images with `build:` blocks, moves the ports off the ones `pnpm dev`
+# holds, and uses a project name of its own so that `down --volumes` here
+# can never reach the data of a snapshot or release quickstart on the same
+# machine (both run as project `stackradar`).
+#
+# Build contexts are relative to the project directory, so run it from the
+# repository root with `--project-directory .` (the script does).
+#
+# Ports, all bound to 127.0.0.1 and all overridable from the shell:
+#   UI        LOCAL_UI_PORT   3100   (pnpm dev's client is 3000)
+#   API       LOCAL_API_PORT  8180   (pnpm dev's server is 8080)
+#   Postgres  LOCAL_DB_PORT   5445   (the root docker-compose.yml's is 5444)
+name: stackradar-local
+
+services:
+  server:
+    image: stackradar-server:local
+    build:
+      context: ./server
+      # Reported in `serverVersion`; the script passes the checkout's HEAD.
+      args:
+        GIT_SHA: ${GIT_SHA:-}
+    environment:
+      # The browser-reachable origins follow the ports below.
+      APP_URL: http://localhost:${LOCAL_UI_PORT:-3100}
+      PUBLIC_API_URL: http://localhost:${LOCAL_API_PORT:-8180}
+      # Empty means the community default list, as unset does. Set it in the
+      # shell for a fast fresh install: OSV_ECOSYSTEMS=Alpine scripts/fresh-local.sh
+      OSV_ECOSYSTEMS: ${OSV_ECOSYSTEMS:-}
+    ports: !override
+      - "127.0.0.1:${LOCAL_API_PORT:-8180}:3001"
+
+  client:
+    image: stackradar-client:local
+    build:
+      context: ./client
+      target: runner
+    environment:
+      PUBLIC_API_URL: http://localhost:${LOCAL_API_PORT:-8180}
+    ports: !override
+      - "127.0.0.1:${LOCAL_UI_PORT:-3100}:3000"
+
+  postgres:
+    # Reachable from the host for psql or Drizzle Studio.
+    ports:
+      - "127.0.0.1:${LOCAL_DB_PORT:-5445}:5432"

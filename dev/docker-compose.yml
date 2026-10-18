@@ -7,8 +7,9 @@
 # Everything else, fixtures included, is deploy/compose/docker-compose.yml
 # verbatim: this file only pins the tag through snapshot.env, which Compose
 # reads when interpolating the included file. Local source builds are the
-# per-app `pnpm dev` against the root docker-compose.yml's Postgres, not
-# this.
+# per-app `pnpm dev` against the root docker-compose.yml's Postgres, or the
+# same quickstart on images built from the checkout: local-build.yml next to
+# this file, run by scripts/fresh-local.sh.
 include:
   - path: ../deploy/compose/docker-compose.yml
     env_file: snapshot.env

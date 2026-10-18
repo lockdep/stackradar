@@ -137,7 +137,8 @@ docker compose -f deploy/compose/docker-compose.yml up -d   # the latest release
 quickstart on the `:snapshot` tag that CI pushes from every merge to
 `main`: Postgres, server (monolith) and client, migrations on boot, fixture
 secrets, ports bound to `127.0.0.1`. It is for trying the product, not for
-developing it; it builds nothing from your checkout.
+developing it; it builds nothing from your checkout — `scripts/fresh-local.sh`
+(§ *Building Container Images*) is the same stack on images built from it.
 
 ### Common server commands
 
@@ -313,17 +314,34 @@ every merge to `main`, and `publish.yaml` the versioned, multi-arch tags
 from a release tag. Both sign with Cosign. [RELEASING.md](RELEASING.md)
 is the release process.
 
-To run your local build in the quickstart, override the two image names
-with a second Compose file:
+To run the whole product on what you just built, from an empty database:
 
 ```sh
-cat > local-images.yml <<'YAML'
-services:
-  server: { image: stackradar-server:local }
-  client: { image: stackradar-client:local }
-YAML
-docker compose -f deploy/compose/docker-compose.yml -f local-images.yml up -d
+scripts/fresh-local.sh                        # wipe, build both images, up, wait until healthy
+scripts/fresh-local.sh --keep-data            # rebuild and restart, keep the database
+OSV_ECOSYSTEMS=Alpine scripts/fresh-local.sh  # a 2-minute mirror instead of the default list
 ```
+
+It runs the quickstart (`deploy/compose/docker-compose.yml`) with
+[`dev/local-build.yml`](dev/local-build.yml) on top: the same Postgres and
+fixture secrets, but the server and client images built from `./server`
+and `./client` instead of pulled from GHCR, and ports of its own so that it
+runs next to `pnpm dev`:
+
+| | Port | Move it with |
+|:--|:--|:--|
+| UI | `127.0.0.1:3100` | `LOCAL_UI_PORT` |
+| API | `127.0.0.1:8180` | `LOCAL_API_PORT` |
+| Postgres | `127.0.0.1:5445` | `LOCAL_DB_PORT` |
+
+The project name is `stackradar-local`, so its `down --volumes` cannot
+reach the data of a snapshot or release quickstart on the same machine.
+Sign in at <http://localhost:3100> with the fixture admin; the fixture
+scanner key uploads an SBOM exactly as in
+[docs/self-hosting/docker-compose.md](docs/self-hosting/docker-compose.md),
+against port 8180. It is the way to see a first boot — migrations, the
+default organisation, the fresh-install banner, the OSV import — on your
+branch rather than on `main`'s snapshot.
 
 ## Documentation
 

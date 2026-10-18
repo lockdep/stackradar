@@ -49,6 +49,10 @@ Both `.dockerignore` files exclude `.env*`, `.git` and `node_modules`.
   `deploy/compose/Makefile` rotates). Its header documents every variable.
 - `dev/docker-compose.yml`: the same file through Compose `include`, pinned
   to `:snapshot` by `dev/snapshot.env`.
+- `dev/local-build.yml`: an override that replaces the two images with
+  `build:` from `./server` and `./client` (project `stackradar-local`;
+  UI 3100, API 8180, Postgres 5445 so it runs beside `pnpm dev`).
+  `scripts/fresh-local.sh` runs it: `down --volumes`, build, `up -d --wait`.
 
 ## Topology and migrations
 
