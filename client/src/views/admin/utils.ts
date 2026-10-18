@@ -71,6 +71,18 @@ export const JOB_PENDING_WARNING_SECONDS = 15 * 60;
 export const JOB_PENDING_CRITICAL_SECONDS = 60 * 60;
 
 /**
+ * How old the newest container sighting may be before the inventory stage
+ * is worth a look.
+ *
+ * The agent's pod informer reports on every change and its sweep re-lists
+ * everything every six hours (`SWEEP_INTERVAL_MS`, the scanner's default),
+ * so a quiet cluster still writes within that. Past a sweep, nothing has
+ * reported; past a day, the agent is not running.
+ */
+export const INVENTORY_STALE_WARNING_SECONDS = 6 * 3600;
+export const INVENTORY_STALE_CRITICAL_SECONDS = 24 * 3600;
+
+/**
  * A cap as the server reports it (`AdminOrgLimits`): `null` is "no cap", and
  * renders as ∞ — SBOMs are uncapped on every tier, the community plan caps
  * nothing.

@@ -10,6 +10,7 @@ import { db, schema } from "../db/index.js";
 import { isFeedStale, FEED_STALE_AFTER_HOURS } from "../lib/feed-health.js";
 import type { JobStatus } from "../db/schema/jobs.js";
 import { edition } from "../edition.js";
+import { config } from "../config/index.js";
 import { ECOSYSTEMS_ENV_VAR, parseEcosystems } from "../osv-sync/ecosystems.js";
 
 import {
@@ -67,6 +68,52 @@ export interface AdminQueueHealth {
 function isTenantOrg() {
     return and(isNull(schema.organizations.deletedAt), eq(schema.organizations.system, false));
 }
+
+/**
+ * One cluster's scanner, as the Overview's first pipeline stage reads it.
+ * The health verdict (active / stale / offline / waiting) is the client's
+ * `getScannerHealth`, and "outdated" is its `isScannerOutdated` against the
+ * chart version only the client knows — so the server ships the facts and
+ * not a verdict, and the Overview cannot disagree with the cluster page.
+ */
+export interface AdminScannerRow {
+    id: string;
+    name: string;
+    orgId: string;
+    scannerVersion: string | null;
+    scannerLastSeenAt: Date | null;
+    kubernetesVersion: string | null;
+    /** `false` is a permissions failure the agent reported; `null` is an agent too old to say. Never the same thing. */
+    ownerMetadataCollected: boolean | null;
+}
+
+/**
+ * The pipeline's first three stages — scanner, inventory, SBOMs — as the
+ * freshest fact each has written. The queue and the mirror have their own
+ * readers (`queueHealth`, `getOsvState`, `getFeedsStatus`); these three had
+ * none, so a stopped scanner was invisible on the Overview until the queue
+ * ran dry for want of uploads.
+ */
+export interface AdminPipelineHealth {
+    scanner: {
+        /** `SCANNER_MIN_VERSION`; null when unset. */
+        minVersion: string | null;
+        /** Every tenant cluster, capped; `total` says whether the cap bit. */
+        clusters: AdminScannerRow[];
+        total: number;
+    };
+    inventory: {
+        /** The newest `workload_containers.last_seen_at`; null before the first report. */
+        newestSeenAt: Date | null;
+    };
+    sboms: {
+        /** The newest `sboms.created_at`; null before the first upload. */
+        newestCreatedAt: Date | null;
+    };
+}
+
+/** More clusters than this and the tile shows counts; the rows are still enough to count. */
+const SCANNER_ROWS_CAP = 1000;
 
 export interface AdminSystemStats {
     organizations: {
@@ -671,5 +718,49 @@ export const adminStatusRepository = {
     async getOsvState() {
         const [state] = await db.select().from(schema.osvSyncState).limit(1);
         return state ?? null;
+    },
+
+    async getPipelineHealth(): Promise<AdminPipelineHealth> {
+        const [clusterRows, clusterCount, containerRow, sbomRow] = await Promise.all([
+            db
+                .select({
+                    id: schema.clusters.id,
+                    name: schema.clusters.name,
+                    orgId: schema.clusters.orgId,
+                    scannerVersion: schema.clusters.scannerVersion,
+                    scannerLastSeenAt: schema.clusters.scannerLastSeenAt,
+                    kubernetesVersion: schema.clusters.kubernetesVersion,
+                    ownerMetadataCollected: schema.clusters.ownerMetadataCollected,
+                })
+                .from(schema.clusters)
+                // Tenant clusters only: the platform cluster has no scanner —
+                // the platform_scan job ingests in-process — so it would sit
+                // at "waiting" forever and colour the stage amber.
+                .innerJoin(schema.organizations, eq(schema.clusters.orgId, schema.organizations.id))
+                .where(isTenantOrg())
+                .orderBy(asc(schema.clusters.name))
+                .limit(SCANNER_ROWS_CAP),
+            db
+                .select({ total: count() })
+                .from(schema.clusters)
+                .innerJoin(schema.organizations, eq(schema.clusters.orgId, schema.organizations.id))
+                .where(isTenantOrg()),
+            db
+                .select({ newest: sql<Date | null>`max(${schema.workloadContainers.lastSeenAt})` })
+                .from(schema.workloadContainers),
+            db.select({ newest: sql<Date | null>`max(${schema.sboms.createdAt})` }).from(schema.sboms),
+        ]);
+
+        const asDate = (v: Date | string | null | undefined): Date | null => (v == null ? null : new Date(v));
+
+        return {
+            scanner: {
+                minVersion: config.scanner.minVersion || null,
+                clusters: clusterRows,
+                total: Number(clusterCount[0]?.total ?? 0),
+            },
+            inventory: { newestSeenAt: asDate(containerRow[0]?.newest) },
+            sboms: { newestCreatedAt: asDate(sbomRow[0]?.newest) },
+        };
     },
 };

@@ -7,7 +7,9 @@ import {
     adminExplorerRepository,
     clusterRepository,
     workloadRepository,
+    vulnerabilityMirrorRepository,
 } from "../repositories/index.js";
+import { buildMirrorStatus } from "../lib/mirror-status.js";
 import { fetchOsvRecord } from "../lib/osv-api.js";
 import { getSystemReport } from "../services/admin-system.service.js";
 import {
@@ -23,14 +25,23 @@ import {
 } from "../schemas/index.js";
 
 export const adminController = {
+    /**
+     * The Overview: the pipeline's five stages (scanner, inventory, SBOMs,
+     * queue, mirror and its two feeds) plus the figures. The mirror's
+     * fresh-install state is the same `buildMirrorStatus` the app shell's
+     * banner reads, so "still building" is one definition, not two.
+     */
     async getOverview(_req: Request, res: Response, next: NextFunction) {
         try {
-            const [stats, osvState] = await Promise.all([
+            const [stats, osvState, pipeline, feeds, feedStates] = await Promise.all([
                 adminStatusRepository.getSystemStats(),
                 adminStatusRepository.getOsvState(),
+                adminStatusRepository.getPipelineHealth(),
+                adminStatusRepository.getFeedsStatus(),
+                vulnerabilityMirrorRepository.getFeedStates(),
             ]);
 
-            res.json({ stats, osvState });
+            res.json({ stats, osvState, pipeline, feeds, mirror: buildMirrorStatus(feedStates) });
         } catch (error) {
             next(error);
         }

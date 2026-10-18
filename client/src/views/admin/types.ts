@@ -1,3 +1,5 @@
+import type { MirrorStatus } from '@/lib/mirror-status';
+
 interface VulnerabilityStats {
     /** Advisories the matcher can work with. Withdrawn ones are excluded here… */
     total: number;
@@ -246,9 +248,36 @@ export interface EcosystemEntry {
     count: number;
 }
 
+/** One cluster's scanner facts; the verdicts are the client's (`getScannerHealth`, `isScannerOutdated`). */
+export interface AdminScannerRow {
+    id: string;
+    name: string;
+    orgId: string;
+    scannerVersion: string | null;
+    scannerLastSeenAt: string | null;
+    kubernetesVersion: string | null;
+    /** `false` is a permissions failure the agent reported; `null` is an agent too old to say. */
+    ownerMetadataCollected: boolean | null;
+}
+
+/** The pipeline's first three stages as the freshest fact each has written. Null is "not yet", never "broken". */
+export interface PipelineHealth {
+    scanner: {
+        minVersion: string | null;
+        clusters: AdminScannerRow[];
+        total: number;
+    };
+    inventory: { newestSeenAt: string | null };
+    sboms: { newestCreatedAt: string | null };
+}
+
 export interface OverviewData {
     stats: SystemStats;
     osvState: OsvSyncState | null;
+    pipeline: PipelineHealth;
+    feeds: FeedsData;
+    /** The fresh-install state the app shell's banner reads, for the "still building" case. */
+    mirror: MirrorStatus;
 }
 
 export interface OrganizationsData {

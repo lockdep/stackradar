@@ -192,11 +192,14 @@ export function HealthTile({
     value,
     tone,
     detail,
+    children,
 }: {
     label: string;
     value: string | number;
     tone: HealthTone;
     detail: string;
+    /** Below the sentence: a link, or the one row the figure summarises. */
+    children?: React.ReactNode;
 }) {
     const box: Record<HealthTone, string> = {
         neutral: 'border-edge bg-surface-muted',
@@ -218,6 +221,7 @@ export function HealthTile({
                 {typeof value === 'number' ? formatNumber(value) : value}
             </p>
             <p className="text-xs text-ink-muted mt-1">{detail}</p>
+            {children}
         </div>
     );
 }
