@@ -430,6 +430,102 @@ describe("Worker sync status lifecycle", () => {
         });
     });
 
+    describe("one run per process at a time", () => {
+        /**
+         * The monolith's regression: the hourly incremental tick fired inside
+         * the start-up bootstrap, believed it held the lock, "recovered" the
+         * bootstrap's status to idle and released the lock under it.
+         */
+        it("skips an incremental run that fires while a bootstrap is in progress, and keeps the lock", async () => {
+            let status: SyncStatus = "idle";
+            const sm = createMockStateManager({
+                getState: vi.fn().mockImplementation(async () => ({
+                    id: 1,
+                    initialized: false,
+                    syncStatus: status,
+                    consecutiveFailures: 0,
+                    lastError: null,
+                    initCompletedAt: null,
+                    lastSuccessfulPollAt: null,
+                    lastModifiedSeen: null,
+                    lastModifiedApplied: null,
+                    lastFullRefreshAt: null,
+                    affectedPkgGeneration: 1,
+                    ecosystems: null,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                })),
+                setSyncStatus: vi.fn().mockImplementation(async (next: SyncStatus) => {
+                    status = next;
+                }),
+            });
+            let finishImport!: () => void;
+            vi.mocked(zipProcessor.processZip).mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        finishImport = () =>
+                            resolve({
+                                processedCount: 1_000,
+                                errorCount: 0,
+                                maxModifiedTimestamp: new Date("2024-01-01"),
+                                errors: [],
+                            });
+                    }),
+            );
+            buildWorker({ stateManager: sm });
+
+            const bootstrap = worker.bootstrapIfNeeded();
+            await vi.waitFor(() => expect(status).toBe("full_refresh"));
+
+            // The hourly tick, and the scheduler's release after it.
+            const tick = await worker.runCycle();
+            await worker.shutdown();
+
+            expect(tick.skipped).toBe(true);
+            expect(tick.errors[0]).toMatch(/already running in this process/);
+            expect(status).toBe("full_refresh");
+            expect(sm.setSyncStatus).not.toHaveBeenCalledWith("idle");
+            expect(sm.releaseAdvisoryLock).not.toHaveBeenCalled();
+            expect(sm.tryAcquireAdvisoryLock).toHaveBeenCalledTimes(1);
+
+            finishImport();
+            const result = await bootstrap;
+            expect(result.success).toBe(true);
+            expect(sm.markInitialized).toHaveBeenCalledTimes(1);
+
+            // Once the run is over, the release goes through.
+            await worker.shutdown();
+            expect(sm.releaseAdvisoryLock).toHaveBeenCalledTimes(1);
+        });
+
+        it("skips a second bootstrap requested while the first is still running", async () => {
+            let finishImport!: () => void;
+            vi.mocked(zipProcessor.processZip).mockImplementationOnce(
+                () =>
+                    new Promise((resolve) => {
+                        finishImport = () =>
+                            resolve({
+                                processedCount: 1_000,
+                                errorCount: 0,
+                                maxModifiedTimestamp: new Date("2024-01-01"),
+                                errors: [],
+                            });
+                    }),
+            );
+            buildWorker();
+
+            const first = worker.forceFullRefresh();
+            await vi.waitFor(() => expect(zipProcessor.processZip).toHaveBeenCalledTimes(1));
+            const second = await worker.bootstrapIfNeeded();
+
+            expect(second.skipped).toBe(true);
+            expect(zipProcessor.processZip).toHaveBeenCalledTimes(1);
+
+            finishImport();
+            expect((await first).success).toBe(true);
+        });
+    });
+
     describe("incremental sync", () => {
         function makeInitializedStateManager(overrides?: Partial<SyncStateManager>) {
             return createMockStateManager({
