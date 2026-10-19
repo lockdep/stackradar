@@ -30,9 +30,7 @@ export interface SendEmailInput extends EmailContent {
 }
 
 export type SendEmailResult =
-    | { status: "sent"; messageId: string }
-    | { status: "not_configured" }
-    | { status: "failed"; error: string };
+    { status: "sent"; messageId: string } | { status: "not_configured" } | { status: "failed"; error: string };
 
 /**
  * Transactional email over Resend's REST API. Uses `fetch` directly: the

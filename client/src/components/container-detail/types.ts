@@ -22,8 +22,7 @@ export interface DependenciesTabProps {
  * has not been inventoried yet).
  */
 export type VulnerabilitiesTabProps = (
-    | { containerId: string; imageId?: never }
-    | { imageId: string; containerId?: never }
+    { containerId: string; imageId?: never } | { imageId: string; containerId?: never }
 ) & {
     /**
      * The lens the table opens on when neither the URL nor the reader's last

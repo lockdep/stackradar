@@ -145,9 +145,7 @@ export function summariseSince(events: ActivityEvent[], since: Date, until: Date
                 summary.containersMoved += 1;
                 touch(event);
                 const delta = p["delta"] as
-                    | { introduced?: number; resolved?: number; introducedKev?: number }
-                    | null
-                    | undefined;
+                    { introduced?: number; resolved?: number; introducedKev?: number } | null | undefined;
                 /* A move's delta carries totals, not bands: count them as
                    unscored-agnostic totals so the headline is right, and
                    leave the per-band breakdown to the scans. */

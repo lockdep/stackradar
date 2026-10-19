@@ -10,13 +10,7 @@
 export type ImageControl = 'built' | 'third-party' | 'unknown';
 
 export type ControlSignal =
-    | 'rule'
-    | 'chart'
-    | 'official-image'
-    | 'private-registry'
-    | 'known-image'
-    | 'built-on-known'
-    | 'public-registry';
+    'rule' | 'chart' | 'official-image' | 'private-registry' | 'known-image' | 'built-on-known' | 'public-registry';
 
 export const CONTROL_LABEL: Record<ImageControl, string> = {
     built: 'Yours',

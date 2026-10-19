@@ -45,11 +45,7 @@ export interface AttributionCandidate {
 }
 
 export type AttributionRefusalReason =
-    | "no-candidates"
-    | "no-version-evidence"
-    | "no-version-match"
-    | "indistinguishable"
-    | "conflicting-installs";
+    "no-candidates" | "no-version-evidence" | "no-version-match" | "indistinguishable" | "conflicting-installs";
 
 /** Per-candidate score breakdown, kept for the evidence record and debug logs. */
 export interface CandidateScore {

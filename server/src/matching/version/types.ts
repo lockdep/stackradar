@@ -13,17 +13,7 @@
 
 /** How versions in an ecosystem are ordered. */
 export type Scheme =
-    | "semver"
-    | "golang"
-    | "apk"
-    | "dpkg"
-    | "rpm"
-    | "pep440"
-    | "maven"
-    | "gem"
-    | "nuget"
-    | "composer"
-    | "fuzzy";
+    "semver" | "golang" | "apk" | "dpkg" | "rpm" | "pep440" | "maven" | "gem" | "nuget" | "composer" | "fuzzy";
 
 /**
  * How much to trust an ordering.

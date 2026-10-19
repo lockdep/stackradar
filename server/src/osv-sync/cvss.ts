@@ -38,13 +38,7 @@ export interface CvssResult {
  * the Debian `urgency` and similar per-affected-entry text labels.
  */
 export type SeveritySource =
-    | "cvss_v3"
-    | "cvss_v4"
-    | "cvss_v2"
-    | "ubuntu"
-    | "database_specific"
-    | "ecosystem_specific"
-    | "heuristic";
+    "cvss_v3" | "cvss_v4" | "cvss_v2" | "ubuntu" | "database_specific" | "ecosystem_specific" | "heuristic";
 
 export interface SeverityInfo {
     /** Numeric score (0.0 – 10.0), null if not computable */
