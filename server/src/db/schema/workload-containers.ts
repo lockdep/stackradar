@@ -79,6 +79,19 @@ export const workloadContainers = pgTable(
          */
         runningPods: integer("running_pods"),
 
+        /**
+         * Names of the `imagePullSecrets` on the pods running this container
+         * — **names only, never contents**, so the Coverage card can tell an
+         * operator which Secrets to let the scanner read when a private
+         * registry rejects the pull. `NULL` is "not reported" (a scanner
+         * older than the field); `{}` is "the pods carry none" (node identity,
+         * or a public image). The two must stay distinct: collapsing them
+         * would turn an old scanner into a confident claim that no Secret
+         * exists, and the remediation would send the operator down the wrong
+         * path.
+         */
+        imagePullSecrets: text("image_pull_secrets").array(),
+
         firstSeenAt: timestamp("first_seen_at", { withTimezone: true }).notNull().defaultNow(),
         lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
 

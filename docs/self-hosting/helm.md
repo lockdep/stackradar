@@ -259,6 +259,16 @@ provider's equivalent), not the application's.
   check that `scanner.stackradar.existingSecret`, when set, holds
   `cluster-id` and `api-key`, and that the server's logs say
   "default organization and bootstrap cluster ready".
+- The cluster page's **Coverage** card says *Registry authentication
+  failed*: the cluster pulls from a private registry and the bundled
+  scanner has no credentials for it — the chart refuses to grant `secrets
+  get` cluster-wide, so nothing is read until you name the pull Secrets.
+  The card lists the blocked images and shows the exact values to add,
+  pre-filled with the Secret names your pods already use
+  (`scanner.scanner.resolveImagePullSecrets` and
+  `scanner.scanner.imagePullSecretNames` — the subchart's values sit under
+  the `scanner` alias). Pods that carry no pull Secret get the alternative,
+  a credential of the scanner's own (`scanner.dockerConfigSecret`).
 - The admin area's **OSV** tab shows the mirror's state, the ecosystems it
   carries against the configured list, and recent sync runs. With
   `metrics.serviceMonitor.enabled` and `metrics.prometheusRule.enabled`

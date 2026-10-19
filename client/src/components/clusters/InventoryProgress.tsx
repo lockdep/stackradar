@@ -16,10 +16,26 @@
  * used to be a bare count of `projects`, which outlived the workloads they
  * described, and the difference was clamped away rather than fixed.
  */
-export function InventoryProgress({ discovered, scanned }: { discovered: number; scanned: number }) {
+export function InventoryProgress({
+    discovered,
+    scanned,
+    blocked = 0,
+    failed = 0,
+}: {
+    discovered: number;
+    scanned: number;
+    /**
+     * Containers whose scan the registry rejected. They are not "generating
+     * SBOMs" and never will be until someone acts, so the line says so
+     * instead of counting them as progress that is merely slow.
+     */
+    blocked?: number;
+    /** Containers whose scan failed for any other reported reason. */
+    failed?: number;
+}) {
     if (discovered <= 0) return null;
 
-    const pending = discovered - scanned;
+    const pending = Math.max(0, discovered - scanned - blocked - failed);
     const pct = Math.round((scanned / discovered) * 100);
 
     /* Complete is a sentence, not a permanently-full progress bar. The bar
@@ -53,8 +69,24 @@ export function InventoryProgress({ discovered, scanned }: { discovered: number;
                 {discovered.toLocaleString()} container{discovered === 1 ? '' : 's'} discovered
                 {' · '}
                 {scanned.toLocaleString()} scanned
-                {' · '}
-                {pending.toLocaleString()} generating SBOMs
+                {blocked > 0 && (
+                    <>
+                        {' · '}
+                        <span className="text-danger">{blocked.toLocaleString()} blocked on registry credentials</span>
+                    </>
+                )}
+                {failed > 0 && (
+                    <>
+                        {' · '}
+                        <span className="text-attention">{failed.toLocaleString()} failing</span>
+                    </>
+                )}
+                {pending > 0 && (
+                    <>
+                        {' · '}
+                        {pending.toLocaleString()} generating SBOMs
+                    </>
+                )}
             </p>
         </div>
     );

@@ -118,7 +118,8 @@ being `null` rather than `{}`.
               "imageTag": "v0.28.1",         // null when digest-pinned
               "registry": "quay.io",
               "repository": "prometheus/alertmanager",
-              "runningPods": 1
+              "runningPods": 1,
+              "imagePullSecrets": ["regcred"]  // optional; names only, never contents
             }
           ]
         }
@@ -153,6 +154,7 @@ being `null` rather than `{}`.
 | `containers[].init` | bool | Init containers run, so their images can be vulnerable, but they do not serve traffic |
 | `containers[].imageTag` | string \| null | `null` for a digest-pinned deployment. Never invent `"latest"` |
 | `containers[].runningPods` | int ≥ 1 | Not always the workload's count — see [Container identity](#container-identity-includes-the-digest) |
+| `containers[].imagePullSecrets` | string[] \| null, optional | **Names** of the pods' `imagePullSecrets`, never contents. `null`/absent = not reported; `[]` = the pods carry none. See [Pull Secret names](#pull-secret-names-ride-the-container) |
 | `scanFailures[]` | array, optional | Why a digest in this report has no SBOM. Display-only; omitted when every scan succeeded. See [Scan failures](#scan-failures-are-display-only-classification) |
 | `scanFailures[].imageDigest` | string | References a digest present in this report's containers — the producer filters out failures for digests no longer running |
 | `scanFailures[].code` | string | `registry_auth` \| `registry_rate_limited` \| `scan_error`. **Open set**: the server stores an unknown code and the UI renders it as `scan_error`, so a newer scanner can add one without a server release |
@@ -283,6 +285,34 @@ a scanner restart reports with an empty failure memory, and that absence must
 not erase a still-true error. A failure whose digest stops running leaves the
 report (the producer filters to reported digests) and ages out with the image
 row.
+
+### Pull Secret names ride the container
+
+Added as an **additive optional field**, like `scanFailures`: a report without
+`containers[].imagePullSecrets` is valid and a server that predates it ignores
+the field, so there is no version bump.
+
+`imagePullSecrets` is the **names** of `pod.spec.imagePullSecrets` on the
+pods running the container, unioned across replicas. A Secret's contents never
+leave the cluster — the agent reads a pull Secret only when
+`scanner.resolveImagePullSecrets` is on, and nothing it reads is ever sent.
+The field exists for one reader: when a registry rejects the scanner's pull
+(`scanFailures[].code = "registry_auth"`), the Coverage card can say *which*
+Secrets to let the scanner read and render the `scanner.imagePullSecretNames`
+list pre-filled, instead of sending the operator to `kubectl` to find out.
+
+Three states, and the server keeps them apart (`workload_containers.image_pull_secrets`):
+
+- **absent / `null`** — not reported. A scanner older than the field. The UI
+  falls back to a lookup command.
+- **`[]`** — reported, the pods carry none. The images are public, or the
+  node pulls with cloud identity; the fix is a static credential or workload
+  identity for the scanner, not a list of names.
+- **`["regcred"]`** — reported. The fix is to name these.
+
+Names are the pod's, which is what the agent reads: the ServiceAccount
+admission plugin copies a ServiceAccount's `imagePullSecrets` onto each pod at
+creation, so a Secret attached only to the ServiceAccount still appears here.
 
 ## Semantics
 

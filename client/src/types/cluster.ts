@@ -112,6 +112,14 @@ type UnscannedContainer = {
     scanErrorCode: string | null;
     scanErrorHost: string | null;
     scanErrorAt: string | null;
+    /**
+     * Names of the pull Secrets on the pods running this container, as the
+     * scanner reported them — never contents. `null` when the scanner did
+     * not say (older than the field); `[]` when the pods carry none. The
+     * registry-auth remediation pre-fills `scanner.imagePullSecretNames`
+     * from these, and must treat the two empties differently.
+     */
+    imagePullSecrets: string[] | null;
 };
 
 /** Response of `GET /api/clusters/:id/coverage`. */

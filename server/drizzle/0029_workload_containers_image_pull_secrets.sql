@@ -1,0 +1,1 @@
+ALTER TABLE "workload_containers" ADD COLUMN "image_pull_secrets" text[];

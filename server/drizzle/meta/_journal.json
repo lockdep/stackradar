@@ -204,6 +204,13 @@
       "when": 1792265343243,
       "tag": "0028_sync_state_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792356009028,
+      "tag": "0029_workload_containers_image_pull_secrets",
+      "breakpoints": true
     }
   ]
 }

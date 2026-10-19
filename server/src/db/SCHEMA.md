@@ -118,6 +118,8 @@ The running thing: one container of one workload, on one image. Carries every **
 
 `imageTag` is `NULL` for a digest-pinned deployment — there is no tag, and inventing `"latest"` labels every distinct image identically. `init` flags init containers, which run (so their images can be vulnerable) but do not serve traffic.
 
+`image_pull_secrets` is the **names** of the pull Secrets on the pods running the container, as the inventory reported them — never their contents. It exists for one reader: the Coverage card's registry-auth remediation, which pre-fills `scanner.imagePullSecretNames` from it. `NULL` (not reported — a scanner older than the field) is different from `{}` (reported, the pods carry none); the second sends the operator to a static credential or workload identity, the first to a `kubectl` lookup, and collapsing them would pick for them.
+
 `imageId` is `ON DELETE RESTRICT`: an image with a container on it is in use.
 
 - **References:** `organizations.id`, `workloads.id`, `images.id` (`RESTRICT`)

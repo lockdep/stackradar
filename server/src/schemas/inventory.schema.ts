@@ -150,6 +150,20 @@ const containerSchema = z.object({
         .min(1)
         .nullish()
         .transform((v) => v ?? null),
+    /**
+     * Names of the pull Secrets on the pods running this container, so the
+     * Coverage card can pre-fill `scanner.imagePullSecretNames` when a
+     * registry rejects the pull. **Names only** — a Secret's contents never
+     * leave the cluster. Optional and additive (a v3 report without it is
+     * valid); `null` is "not reported", `[]` is "the pods carry none", and
+     * the server keeps the two apart. The cap is a sanity bound on a list
+     * that is one or two names in practice.
+     */
+    imagePullSecrets: z
+        .array(dnsName())
+        .max(32)
+        .nullish()
+        .transform((v) => v ?? null),
 });
 
 const workloadSchema = z.object({

@@ -471,6 +471,12 @@ export const workloadRepository = {
                 scanErrorCode: schema.images.lastScanErrorCode,
                 scanErrorHost: schema.images.lastScanErrorHost,
                 scanErrorAt: schema.images.lastScanErrorAt,
+                /*
+                 * The pull Secret names the pods carry, so the remediation can
+                 * name exactly what to let the scanner read. Null when the
+                 * scanner never said; the card falls back to a lookup command.
+                 */
+                imagePullSecrets: schema.workloadContainers.imagePullSecrets,
             })
             .from(schema.workloadContainers)
             .innerJoin(schema.workloads, eq(schema.workloadContainers.workloadId, schema.workloads.id))

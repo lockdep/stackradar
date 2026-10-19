@@ -52,6 +52,8 @@ export interface ContainerInput {
     registry: string | null;
     repository: string | null;
     runningPods: number | null;
+    /** Pull Secret names on the pods; `null` when the scanner did not report them. */
+    imagePullSecrets: string[] | null;
 }
 
 export interface WorkloadInput {
@@ -636,6 +638,7 @@ async function upsertContainers(
                     imageRef: c.imageRef,
                     imageTag: c.imageTag,
                     runningPods: c.runningPods,
+                    imagePullSecrets: c.imagePullSecrets,
                     firstSeenAt: reportedAt,
                     lastSeenAt: reportedAt,
                 });
@@ -660,6 +663,7 @@ async function upsertContainers(
                     imageRef: sql`excluded.image_ref`,
                     imageTag: sql`excluded.image_tag`,
                     runningPods: sql`excluded.running_pods`,
+                    imagePullSecrets: sql`excluded.image_pull_secrets`,
                     lastSeenAt: reportedAt,
                     updatedAt: reportedAt,
                 },

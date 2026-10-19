@@ -1016,4 +1016,114 @@ describe("POST /v1/inventory", () => {
             expect(res.body.workloads).toEqual([]);
         });
     });
+
+    describe("pull Secret names", () => {
+        function getCoverage() {
+            return request(app)
+                .get(`/api/clusters/${clusterId}/coverage`)
+                .set(
+                    createInternalHeaders({
+                        id: testData.user.id,
+                        email: testData.user.email,
+                        orgId: testData.org.id,
+                        orgName: testData.org.name,
+                        orgSlug: testData.org.slug,
+                    }),
+                );
+        }
+
+        async function containerRow() {
+            const [row] = await getTestDb().select().from(schema.workloadContainers);
+            return row!;
+        }
+
+        it("stores the names and surfaces them on the coverage rows, so the fix can be pre-filled", async () => {
+            const res = await post(
+                report({
+                    namespaces: [
+                        {
+                            name: "default",
+                            labels: {},
+                            workloads: [
+                                workload({
+                                    containers: [container({ imagePullSecrets: ["regcred", "registry-acme"] })],
+                                }),
+                            ],
+                        },
+                    ],
+                    scanFailures: [
+                        { imageDigest: DIGEST_A, code: "registry_auth", registryHost: "registry.example.com" },
+                    ],
+                }),
+            );
+            expect(res.status).toBe(200);
+            expect((await containerRow()).imagePullSecrets).toEqual(["regcred", "registry-acme"]);
+
+            const coverage = await getCoverage();
+            expect(coverage.body.workloads[0].imagePullSecrets).toEqual(["regcred", "registry-acme"]);
+        });
+
+        it("keeps 'not reported' (null) distinct from 'none' ([])", async () => {
+            // An older scanner omits the field: the card must offer a lookup,
+            // not claim the pods carry no Secret.
+            await post(report());
+            expect((await containerRow()).imagePullSecrets).toBeNull();
+            expect((await getCoverage()).body.workloads[0].imagePullSecrets).toBeNull();
+
+            // A current scanner saying "none" is a fact the card acts on.
+            await post(
+                report({
+                    namespaces: [
+                        {
+                            name: "default",
+                            labels: {},
+                            workloads: [workload({ containers: [container({ imagePullSecrets: [] })] })],
+                        },
+                    ],
+                }),
+            );
+            expect((await containerRow()).imagePullSecrets).toEqual([]);
+        });
+
+        it("replaces the names on every report, so a removed Secret stops being named", async () => {
+            await post(
+                report({
+                    namespaces: [
+                        {
+                            name: "default",
+                            labels: {},
+                            workloads: [workload({ containers: [container({ imagePullSecrets: ["regcred"] })] })],
+                        },
+                    ],
+                }),
+            );
+            await post(
+                report({
+                    namespaces: [
+                        {
+                            name: "default",
+                            labels: {},
+                            workloads: [workload({ containers: [container({ imagePullSecrets: ["other"] })] })],
+                        },
+                    ],
+                }),
+            );
+            expect((await containerRow()).imagePullSecrets).toEqual(["other"]);
+        });
+
+        it("rejects a name that is not a DNS-1123 name — the field carries names, never contents", async () => {
+            const res = await post(
+                report({
+                    namespaces: [
+                        {
+                            name: "default",
+                            labels: {},
+                            workloads: [workload({ containers: [container({ imagePullSecrets: ['{"auths":{}}'] })] })],
+                        },
+                    ],
+                }),
+            );
+            expect(res.status).toBe(400);
+        });
+    });
 });

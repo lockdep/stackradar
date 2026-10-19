@@ -3,24 +3,30 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { ChevronRight, CircleCheck, ExternalLink, KeyRound, TriangleAlert } from 'lucide-react';
 import { Badge, CodeBlock, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui';
+import { useRuntimeConfig } from '@/components/providers';
 import { usePollWhile, useResource, useRevalidateOnFocus } from '@/hooks';
 import { formatImageName, formatShortDigest } from '@/utils/formatters';
 import type { ClusterCoverage } from '@/types/cluster';
 import { InventoryProgress } from './InventoryProgress';
 import { COVERAGE_ANCHOR } from './RegistryAuthBanner';
-
-/**
- * How long a workload may sit undiscovered-to-scanned before we stop calling it
- * "in progress".
- *
- * Image pull plus syft is minutes, not half an hour, even for a large image on
- * a slow link. Past this the honest reading is that something is wrong, and
- * saying "generating SBOMs" would be the product lying about its own coverage.
- * This heuristic is now the *fallback*: when the scanner has reported a
- * failure reason, the reason wins — an auth failure surfaces immediately,
- * because it is known and there is nothing to wait out.
- */
-const STUCK_AFTER_MS = 30 * 60_000;
+import { useCluster } from './ClusterContext';
+import {
+    classifyRow,
+    createRegistrySecretCommand,
+    dockerConfigHelmCommand,
+    dockerConfigValuesYaml,
+    groupByImage,
+    pullSecretHelmCommand,
+    pullSecretKnowledge,
+    pullSecretsLookup,
+    pullSecretValuesYaml,
+    scannerInstallFor,
+    STATUS_ORDER,
+    type ImageGroup,
+    type PullSecretKnowledge,
+    type RowStatus,
+    type ScannerInstall,
+} from './coverageRemediation';
 
 /* Only ever polls while something is legitimately still in flight; see the
    `usePollWhile` call below. */
@@ -31,6 +37,7 @@ const STALE_AFTER_MS = 60_000;
 const subscribeToNothing = () => () => {};
 
 const PRIVATE_REGISTRY_DOCS_URL = 'https://stackradar.io/docs/install/private-registries';
+const WORKLOAD_IDENTITY_DOCS_URL = `${PRIVATE_REGISTRY_DOCS_URL}#workload-identity`;
 
 function waitedFor(since: string): string {
     const ms = Date.now() - new Date(since).getTime();
@@ -42,41 +49,8 @@ function waitedFor(since: string): string {
     return `${Math.floor(hours / 24)}d`;
 }
 
-type UnscannedContainer = ClusterCoverage['workloads'][number];
-
-/**
- * What a row without an SBOM *is*, worst first. The scanner's reported reason
- * outranks the elapsed-time heuristic — a known failure needs no 30-minute
- * wait, and a known-transient one must never be called stuck.
- */
-type RowStatus = 'auth_failed' | 'scan_failed' | 'stuck' | 'waiting' | 'rate_limited';
-
-const STATUS_ORDER: Record<RowStatus, number> = {
-    auth_failed: 0,
-    scan_failed: 1,
-    stuck: 2,
-    waiting: 3,
-    rate_limited: 4,
-};
-
-function classifyRow(w: UnscannedContainer): RowStatus {
-    switch (w.scanErrorCode) {
-        case 'registry_auth':
-            return 'auth_failed';
-        case 'registry_rate_limited':
-            /* Transient and self-healing via the scanner's own retry. Showing
-               the credentials remediation here would be wrong and would train
-               users to ignore the auth banner, so this state never joins the
-               failed group. */
-            return 'rate_limited';
-        case null:
-            return Date.now() - new Date(w.firstSeenAt).getTime() >= STUCK_AFTER_MS ? 'stuck' : 'waiting';
-        default:
-            /* `scan_error`, and any code a newer scanner invents: a failure
-               with no specific remediation. The scanner pod's logs carry the
-               detail the product deliberately does not transmit. */
-            return 'scan_failed';
-    }
+function plural(n: number, noun: string): string {
+    return `${n.toLocaleString()} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 function RowStatusBadge({ status, host }: { status: RowStatus; host: string | null }) {
@@ -107,13 +81,37 @@ function RowStatusBadge({ status, host }: { status: RowStatus; host: string | nu
     }
 }
 
-/**
- * The remedy already ships in the scanner's Helm chart; this block's whole job
- * is to connect the failure to it, copy-pasteably. One block above the table
- * rather than one per row, because credentials are per registry, not per
- * workload — every affected row is fixed by the same upgrade.
- */
-function RemediationStep({ n, children }: { n: number; children: React.ReactNode }) {
+function ImageName({ group }: { group: ImageGroup }) {
+    const digest = formatShortDigest(group.imageDigest);
+    return (
+        <span className="flex min-w-0 items-center gap-2 font-mono text-xs text-ink-muted" title={group.imageRef}>
+            <span className="truncate">{formatImageName(group.imageRef) ?? group.imageRef}</span>
+            {digest && (
+                <span className="shrink-0 rounded-sm bg-surface-hover px-1.5 py-0.5 text-ink-secondary">{digest}</span>
+            )}
+        </span>
+    );
+}
+
+/** `workload/container`, or how many of them, for a folded row. */
+function GroupContainers({ group }: { group: ImageGroup }) {
+    const [first] = group.containers;
+    if (group.containers.length === 1 && first) {
+        return (
+            <span className="block truncate font-medium text-ink">
+                {first.workloadName}/{first.containerName}
+            </span>
+        );
+    }
+    const names = group.containers.map((c) => `${c.namespace}/${c.workloadName}/${c.containerName}`).join('\n');
+    return (
+        <span className="block truncate font-medium text-ink" title={names}>
+            {plural(group.containers.length, 'container')}
+        </span>
+    );
+}
+
+function Step({ n, children }: { n: number; children: React.ReactNode }) {
     return (
         <p className="text-xs text-ink-secondary">
             <span className="font-semibold text-ink">{n}.</span> {children}
@@ -121,39 +119,100 @@ function RemediationStep({ n, children }: { n: number; children: React.ReactNode
     );
 }
 
-function RemediationOption({
-    n,
-    title,
-    whenTo,
-    children,
-}: {
-    n: number;
-    title: string;
-    whenTo: string;
-    children: React.ReactNode;
-}) {
+function Label({ children }: { children: React.ReactNode }) {
+    return <p className="text-[11px] font-medium tracking-wider text-ink-muted uppercase">{children}</p>;
+}
+
+function DocsLink({ href = PRIVATE_REGISTRY_DOCS_URL, children }: { href?: string; children: React.ReactNode }) {
     return (
-        <section className="min-w-0 overflow-hidden rounded-md border border-edge">
-            <header className="border-b border-edge bg-surface-muted px-3 py-2">
-                <div className="flex items-baseline gap-2">
-                    <span className="text-[11px] font-semibold tracking-wider text-ink-muted uppercase">
-                        Option {n}
-                    </span>
-                    <h4 className="text-xs font-semibold text-ink">{title}</h4>
-                </div>
-                <p className="mt-0.5 text-[11px] text-ink-muted">{whenTo}</p>
-            </header>
-            <div className="space-y-2 p-3">{children}</div>
-        </section>
+        <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-accent hover:underline"
+        >
+            {children}
+            <ExternalLink aria-hidden="true" className="size-3" />
+        </a>
     );
 }
 
-function OrDivider() {
+function Alternative({ summary, children }: { summary: string; children: React.ReactNode }) {
     return (
-        <div aria-hidden="true" className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-edge" />
-            <span className="text-[11px] font-medium tracking-wider text-ink-faint uppercase">or</span>
-            <div className="h-px flex-1 bg-edge" />
+        <details className="group/alt rounded-md border border-edge">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-ink-secondary hover:text-ink [&::-webkit-details-marker]:hidden">
+                <span className="inline-flex items-center gap-1">
+                    <ChevronRight
+                        aria-hidden="true"
+                        className="size-3.5 transition-transform group-open/alt:rotate-90"
+                    />
+                    {summary}
+                </span>
+            </summary>
+            <div className="space-y-2 border-t border-edge p-3">{children}</div>
+        </details>
+    );
+}
+
+/**
+ * The scanner reads the pull Secrets the affected pods already use. The
+ * chart turns the names into an RBAC `resourceNames` restriction, so this
+ * is the fix that grants the least: exactly those Secrets, nothing else in
+ * the cluster becomes readable.
+ */
+function ReusePullSecrets({
+    install,
+    names,
+    intro,
+}: {
+    install: ScannerInstall;
+    names: string[];
+    intro: React.ReactNode;
+}) {
+    return (
+        <div className="space-y-2">
+            <p className="text-xs text-ink-secondary">{intro}</p>
+            <Label>Add to your values</Label>
+            <CodeBlock code={pullSecretValuesYaml(install, names)} placeholders={names.length === 0} />
+            <Label>Or apply with Helm</Label>
+            <CodeBlock code={pullSecretHelmCommand(install, names)} placeholders />
+            <ChartVersionHint install={install} />
+        </div>
+    );
+}
+
+/**
+ * The bundled chart's version is not known here, so the command pins a
+ * placeholder. Saying where to read it off is cheaper than an operator
+ * discovering that an unpinned `helm upgrade` also upgraded StackRadar.
+ */
+function ChartVersionHint({ install }: { install: ScannerInstall }) {
+    if (install.kind === 'standalone' && install.chartVersion) return null;
+    return (
+        <p className="text-[11px] text-ink-muted">
+            <code className="font-mono">&lt;chart-version&gt;</code> is the chart version{' '}
+            <code className="font-mono">helm list --namespace stackradar</code> shows; pinning it keeps this change from
+            doubling as an upgrade.
+        </p>
+    );
+}
+
+/** The scanner gets a credential of its own, mounted as a docker config. */
+function OwnCredential({ install, host }: { install: ScannerInstall; host: string | null }) {
+    return (
+        <div className="space-y-2">
+            <Step n={1}>Create a registry Secret for the scanner, in its own namespace:</Step>
+            <CodeBlock code={createRegistrySecretCommand(install, host)} placeholders />
+            <Step n={2}>Point the chart at it:</Step>
+            <Label>Add to your values</Label>
+            <CodeBlock code={dockerConfigValuesYaml(install)} />
+            <Label>Or apply with Helm</Label>
+            <CodeBlock code={dockerConfigHelmCommand(install)} placeholders />
+            <ChartVersionHint install={install} />
+            <p className="text-[11px] text-ink-muted">
+                On EKS, GKE or AKS the scanner can use workload identity instead of a stored password:{' '}
+                <DocsLink href={WORKLOAD_IDENTITY_DOCS_URL}>cloud workload identity</DocsLink>.
+            </p>
         </div>
     );
 }
@@ -161,39 +220,12 @@ function OrDivider() {
 /** How many pre-filled lookup commands show before the rest fold away. */
 const INLINE_LOOKUPS = 3;
 
-/**
- * The `kubectl` that prints the pull Secret names of every pod in a
- * namespace. Pods, not controllers: the ServiceAccount admission plugin
- * copies a ServiceAccount's `imagePullSecrets` onto each pod at creation
- * (DigitalOcean's registry integration, for one, relies on this), so a
- * Deployment or Job template can be empty while its pods — and the scanner,
- * which reads the pod — see the Secret. Querying the template would print
- * nothing for exactly the setups this option is for.
- */
-function pullSecretsLookup(namespace: string): string {
-    return `kubectl get pods -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}: {.spec.imagePullSecrets[*].name}{"\\n"}{end}'`;
-}
-
-/**
- * Where the pods got a Secret the template never declared — and the only
- * place left to look once a finished Job's pods are gone.
- */
-function serviceAccountLookup(namespace: string): string {
-    return `kubectl get sa -n ${namespace} -o jsonpath='{range .items[*]}{.metadata.name}: {.imagePullSecrets[*].name}{"\\n"}{end}'`;
-}
-
-/**
- * One command per affected namespace — every pod in it shares the answer,
- * and one loop over all of them is something nobody reads. The first few
- * inline; the rest behind a fold so a wide failure does not bury step 2.
- */
-function PullSecretsLookups({ workloads }: { workloads: UnscannedContainer[] }) {
-    const distinct = [...new Set(workloads.map((w) => w.namespace))];
-    const inline = distinct.slice(0, INLINE_LOOKUPS);
-    const rest = distinct.slice(INLINE_LOOKUPS);
+function PullSecretLookups({ namespaces }: { namespaces: string[] }) {
+    const inline = namespaces.slice(0, INLINE_LOOKUPS);
+    const rest = namespaces.slice(INLINE_LOOKUPS);
     const block = (namespace: string) => (
         <div key={namespace} className="space-y-1">
-            <p className="text-[11px] font-mono text-ink-muted">{namespace}</p>
+            <p className="font-mono text-[11px] text-ink-muted">{namespace}</p>
             <CodeBlock code={pullSecretsLookup(namespace)} />
         </div>
     );
@@ -214,118 +246,158 @@ function PullSecretsLookups({ workloads }: { workloads: UnscannedContainer[] }) 
                     <div className="mt-2 space-y-2">{rest.map(block)}</div>
                 </details>
             )}
-            <p className="text-[11px] text-ink-muted">
-                No pods listed — a finished Job, say? The Secret usually comes from the namespace&apos;s ServiceAccount
-                instead, which is also why it never shows on the Deployment or CronJob itself:
-            </p>
-            <CodeBlock code={serviceAccountLookup(distinct[0] ?? '<namespace>')} placeholders />
         </div>
     );
 }
 
-function RegistryAuthRemediation({
-    hosts,
-    workloads,
-    open,
+function Fix({
+    knowledge,
+    install,
+    host,
+    namespaces,
 }: {
-    hosts: string[];
-    /** The auth-failed rows, worst-first, as the table renders them. */
-    workloads: UnscannedContainer[];
-    open?: boolean;
+    knowledge: PullSecretKnowledge;
+    install: ScannerInstall;
+    host: string | null;
+    namespaces: string[];
 }) {
-    const hostList = hosts.length > 0 ? hosts.join(', ') : 'a private registry';
-    const exampleHost = hosts[0] ?? '<registry-host>';
+    switch (knowledge.kind) {
+        case 'named': {
+            const list = knowledge.names.map((n, i) => (
+                <span key={n}>
+                    {i > 0 && (i === knowledge.names.length - 1 ? ' and ' : ', ')}
+                    <code className="font-mono text-ink">{n}</code>
+                </span>
+            ));
+            return (
+                <div className="space-y-3">
+                    <ReusePullSecrets
+                        install={install}
+                        names={knowledge.names}
+                        intro={
+                            <>
+                                The affected pods pull with the Secret{knowledge.names.length === 1 ? '' : 's'} {list}.
+                                Let the scanner read exactly those — the chart turns the list into an RBAC{' '}
+                                <code className="font-mono">resourceNames</code> restriction, so nothing else in the
+                                cluster becomes readable.
+                            </>
+                        }
+                    />
+                    <Alternative summary="Rather give the scanner a credential of its own?">
+                        <OwnCredential install={install} host={host} />
+                    </Alternative>
+                </div>
+            );
+        }
+        case 'none':
+            return (
+                <div className="space-y-3">
+                    <p className="text-xs text-ink-secondary">
+                        The affected pods carry no pull Secret, so the node authenticates on its own — cloud workload
+                        identity, or a registry attached to the cluster. The scanner has neither; give it a credential
+                        of its own.
+                    </p>
+                    <OwnCredential install={install} host={host} />
+                </div>
+            );
+        case 'unknown':
+            return (
+                <div className="space-y-3">
+                    <p className="text-xs text-ink-secondary">
+                        This scanner is older than the release that reports which pull Secrets its pods use, so look
+                        them up — different namespaces often use different Secrets, so check each:
+                    </p>
+                    <PullSecretLookups namespaces={namespaces} />
+                    <ReusePullSecrets
+                        install={install}
+                        names={[]}
+                        intro={
+                            <>
+                                Then let the scanner read exactly those — the chart turns the list into an RBAC{' '}
+                                <code className="font-mono">resourceNames</code> restriction, so nothing else in the
+                                cluster becomes readable. No Secret listed on the pods? The node authenticates on its
+                                own; give the scanner a credential instead (below).
+                            </>
+                        }
+                    />
+                    <Alternative summary="Give the scanner a credential of its own">
+                        <OwnCredential install={install} host={host} />
+                    </Alternative>
+                </div>
+            );
+    }
+}
+
+/**
+ * The failure, the images behind it and the fix, in that order and all
+ * visible. The remedy ships in the scanner's Helm chart; this block's job is
+ * to connect the failure to it, pre-filled wherever the inventory knows the
+ * answer. One block above the table rather than a line per container,
+ * because credentials are per registry, not per workload — every affected
+ * image is fixed by the same upgrade.
+ */
+export function RegistryAuthRemediation({
+    groups,
+    install,
+}: {
+    /** The auth-failed images, as the card folded them. */
+    groups: ImageGroup[];
+    install: ScannerInstall;
+}) {
+    const containers = groups.flatMap((g) => g.containers);
+    const hosts = [...new Set(groups.map((g) => g.scanErrorHost).filter((h): h is string => Boolean(h)))];
+    const namespaces = [...new Set(containers.map((c) => c.namespace))];
+    const knowledge = pullSecretKnowledge(containers);
+
     return (
-        <details open={open} className="group border-b border-edge">
-            <summary className="cursor-pointer list-none bg-danger-subtle px-5 py-3 [&::-webkit-details-marker]:hidden">
+        <section aria-label="Registry authentication failed" className="border-b border-edge">
+            <div className="bg-danger-subtle px-5 py-3">
                 <div className="flex items-start gap-2.5">
                     <KeyRound aria-hidden="true" className="mt-px size-4 shrink-0 text-danger" />
                     <div className="min-w-0 flex-1 text-xs text-danger">
-                        <p className="font-medium">Registry authentication failed ({hostList})</p>
+                        <p className="font-medium">
+                            Registry authentication failed
+                            {hosts.length > 0 && (
+                                <>
+                                    {' · '}
+                                    <span className="font-mono">{hosts.join(', ')}</span>
+                                </>
+                            )}
+                        </p>
                         <p className="mt-1">
-                            The scanner&apos;s pull was rejected, so these images will never get an SBOM until it has
-                            credentials. Waiting will not fix this one.
+                            The registry rejected the scanner&apos;s pull. {plural(containers.length, 'container')} on{' '}
+                            {plural(groups.length, 'image')} {containers.length === 1 ? 'has' : 'have'} no SBOM and will
+                            not get one until the scanner can authenticate — waiting does not fix this, the values below
+                            do.
                         </p>
                     </div>
                 </div>
-                <div className="mt-2 flex items-center gap-4 text-xs font-medium">
-                    <span className="flex items-center gap-1 text-danger group-hover:underline">
-                        <ChevronRight
-                            aria-hidden="true"
-                            className="size-3.5 transition-transform group-open:rotate-90"
-                        />
-                        How to fix
-                    </span>
-                    <a
-                        href={PRIVATE_REGISTRY_DOCS_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-accent hover:underline"
-                    >
-                        View docs
-                        <ExternalLink aria-hidden="true" className="size-3" />
-                    </a>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+                <div className="space-y-1.5">
+                    <Label>Blocked images</Label>
+                    <ul className="space-y-1">
+                        {groups.map((g) => (
+                            <li key={g.key} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+                                <ImageName group={g} />
+                                <span className="text-xs text-ink-muted">
+                                    {plural(g.containers.length, 'container')} in{' '}
+                                    <span className="font-mono">{g.namespaces.join(', ')}</span>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
                 </div>
-            </summary>
-            <div className="space-y-3 px-5 py-4">
-                <RemediationOption
-                    n={1}
-                    title="Reuse your containers' pull Secrets"
-                    whenTo="Use this when the affected pods already pull with imagePullSecrets."
-                >
-                    <RemediationStep n={1}>
-                        Find the Secret names each affected container pulls with — different namespaces often use
-                        different Secrets, so check each:
-                    </RemediationStep>
-                    <PullSecretsLookups workloads={workloads} />
-                    <RemediationStep n={2}>
-                        Let the scanner read exactly those Secrets — the chart turns the list into an RBAC{' '}
-                        <code className="font-mono">resourceNames</code> restriction:
-                    </RemediationStep>
-                    <CodeBlock
-                        code={`helm upgrade stackradar-scanner oci://ghcr.io/lockdep/charts/stackradar-scanner \\
-  --namespace stackradar --reuse-values \\
-  --set-string scanner.resolveImagePullSecrets=true \\
-  --set 'scanner.imagePullSecretNames={<secret-name>}'`}
-                        placeholders
-                    />
-                </RemediationOption>
-                <OrDivider />
-                <RemediationOption
-                    n={2}
-                    title="Give the scanner its own credential"
-                    whenTo="Use this when your pods pull via node identity and carry no pull Secrets — or to keep the scanner's access separate."
-                >
-                    <RemediationStep n={1}>Create a registry Secret for the scanner:</RemediationStep>
-                    <CodeBlock
-                        code={`kubectl create secret docker-registry stackradar-registry \\
-  --namespace stackradar \\
-  --docker-server=${exampleHost} \\
-  --docker-username=<username> --docker-password=<password>`}
-                        placeholders
-                    />
-                    <RemediationStep n={2}>Point the chart at it:</RemediationStep>
-                    <CodeBlock
-                        code={`helm upgrade stackradar-scanner oci://ghcr.io/lockdep/charts/stackradar-scanner \\
-  --namespace stackradar --reuse-values \\
-  --set dockerConfigSecret=stackradar-registry`}
-                    />
-                </RemediationOption>
+                <div className="space-y-1.5">
+                    <Label>How to fix</Label>
+                    <Fix knowledge={knowledge} install={install} host={hosts[0] ?? null} namespaces={namespaces} />
+                </div>
                 <p className="text-xs text-ink-muted">
-                    The error clears on its own once the next scan uploads. Details, including workload-identity setups:{' '}
-                    <a
-                        href={PRIVATE_REGISTRY_DOCS_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-accent hover:underline"
-                    >
-                        scanning private registries
-                    </a>
-                    .
+                    The scanner retries on its own; the error clears once the next scan uploads.{' '}
+                    <DocsLink>Scanning private registries</DocsLink>
                 </p>
             </div>
-        </details>
+        </section>
     );
 }
 
@@ -341,6 +413,10 @@ function RegistryAuthRemediation({
  * admits it cannot see it.
  */
 export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: string; className?: string }) {
+    const { edition } = useRuntimeConfig();
+    const { cluster } = useCluster();
+    const install = scannerInstallFor(edition, cluster.scannerVersion);
+
     /* Coverage is a secondary panel on a page that works without it. A
        failed load leaves the last good render — or nothing — rather than
        putting an error where the answer should be: the hook keeps `data`
@@ -352,9 +428,9 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
         refetch: revalidate,
     } = useResource<ClusterCoverage>(`/api/clusters/${clusterId}/coverage`);
 
-    /* Classified once, and the status travels with the row — the table renders
-       worst-first, so asking "what is this one" again per row would be a
-       second source of truth. */
+    /* Classified once, and the status travels with the row — everything
+       below renders worst-first, so asking "what is this one" again per row
+       would be a second source of truth. */
     const rows = useMemo(() => {
         const classified = (coverage?.workloads ?? []).map((w) => ({
             workload: w,
@@ -365,24 +441,14 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
         return classified.sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
     }, [coverage]);
 
-    const authFailedHosts = useMemo(
-        () => [
-            ...new Set(
-                rows
-                    .filter((r) => r.status === 'auth_failed')
-                    .map((r) => r.workload.scanErrorHost)
-                    .filter((h): h is string => Boolean(h)),
-            ),
-        ],
-        [rows],
-    );
-    const authFailedContainers = useMemo(
-        () => rows.filter((r) => r.status === 'auth_failed').map((r) => r.workload),
-        [rows],
-    );
-    const authFailedCount = authFailedContainers.length;
-    const stuckCount = rows.filter((r) => r.status === 'stuck' || r.status === 'scan_failed').length;
-    const pendingCount = rows.filter((r) => r.status === 'waiting' || r.status === 'rate_limited').length;
+    const groups = useMemo(() => groupByImage(rows), [rows]);
+    const authGroups = groups.filter((g) => g.status === 'auth_failed');
+    const otherGroups = groups.filter((g) => g.status !== 'auth_failed');
+
+    const count = (...statuses: RowStatus[]) => rows.filter((r) => statuses.includes(r.status)).length;
+    const blockedCount = count('auth_failed');
+    const failedCount = count('scan_failed', 'stuck');
+    const pendingCount = count('waiting', 'rate_limited');
 
     /* Polls only while something can genuinely resolve on its own — waiting
        scans, and rate-limited ones the scanner is retrying. Auth failures and
@@ -393,8 +459,7 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
 
     /* Deep-linked from the Dashboard's registry-auth banner. The card mounts
        empty and fills in after its own fetch, so the browser's hash scroll on
-       navigation finds nothing to scroll to; do it once the content exists,
-       and open the remediation the reader was sent here for. */
+       navigation finds nothing to scroll to; do it once the content exists. */
     const deepLinked = useSyncExternalStore(
         subscribeToNothing,
         () => window.location.hash === `#${COVERAGE_ANCHOR}`,
@@ -416,99 +481,90 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
         <div
             id={COVERAGE_ANCHOR}
             ref={cardRef}
-            className={`scroll-mt-6 bg-surface-raised rounded-md border border-edge ${className}`}
+            className={`scroll-mt-6 rounded-md border border-edge bg-surface-raised ${className}`}
         >
-            <div className="px-5 py-4 border-b border-edge">
+            <div className="border-b border-edge px-5 py-4">
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <h2 className="text-sm font-semibold text-ink-secondary">Coverage</h2>
-                        <p className="text-xs text-ink-muted mt-0.5">
+                        <p className="mt-0.5 text-xs text-ink-muted">
                             Containers running in this cluster, against the ones StackRadar has an SBOM for
                         </p>
                     </div>
                     {gap === 0 && <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-success" />}
                 </div>
                 <div className="mt-3">
-                    <InventoryProgress discovered={coverage.discovered} scanned={coverage.scanned} />
+                    <InventoryProgress
+                        discovered={coverage.discovered}
+                        scanned={coverage.scanned}
+                        blocked={blockedCount}
+                        failed={failedCount}
+                    />
                 </div>
             </div>
 
             {gap === 0 ? (
-                <p className="px-5 py-6 text-sm text-ink-muted text-center">
+                <p className="px-5 py-6 text-center text-sm text-ink-muted">
                     Every container the scanner can see has an SBOM.
                 </p>
             ) : (
                 <>
-                    {authFailedCount > 0 && (
-                        <RegistryAuthRemediation
-                            hosts={authFailedHosts}
-                            workloads={authFailedContainers}
-                            open={deepLinked}
-                        />
-                    )}
-                    {stuckCount > 0 && (
-                        <div className="flex items-start gap-2.5 px-5 py-3 border-b border-edge bg-attention-subtle">
-                            <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-attention mt-px" />
+                    {authGroups.length > 0 && <RegistryAuthRemediation groups={authGroups} install={install} />}
+                    {failedCount > 0 && (
+                        <div className="flex items-start gap-2.5 border-b border-edge bg-attention-subtle px-5 py-3">
+                            <TriangleAlert aria-hidden="true" className="mt-px size-4 shrink-0 text-attention" />
                             <p className="text-xs text-attention">
-                                {stuckCount === 1 ? 'One container is' : `${stuckCount} containers are`} failing to
+                                {failedCount === 1 ? 'One container is' : `${failedCount} containers are`} failing to
                                 scan, or waiting longer than an image pull and SBOM generation should take — often an
                                 image pull backoff or a scan that ran out of memory. The scanner pod logs carry the full
                                 error.
                             </p>
                         </div>
                     )}
-                    <Table aria-label="Containers without an SBOM">
-                        <TableHead>
-                            {/* The image is the first thing to go on a phone:
-                                the container cell already names the workload,
-                                the namespace and the failure, which is what
-                                the fix above is keyed on. */}
-                            <TableHeader className="w-1/3">Container</TableHeader>
-                            <TableHeader hideBelow="sm">Image</TableHeader>
-                            <TableHeader align="end" className="w-20 sm:w-28">
-                                Waiting
-                            </TableHeader>
-                        </TableHead>
-                        <TableBody>
-                            {rows.map(({ workload: w, status }) => {
-                                const digest = formatShortDigest(w.imageDigest);
-                                const isFailed =
-                                    status === 'auth_failed' || status === 'scan_failed' || status === 'stuck';
-                                return (
-                                    <TableRow key={`${w.namespace}/${w.workloadName}/${w.containerName}`}>
-                                        <TableCell className="max-w-0 w-1/3">
-                                            <span className="block truncate font-medium text-ink">
-                                                {w.workloadName}/{w.containerName}
-                                            </span>
-                                            <span className="flex items-center gap-2 min-w-0">
-                                                <span className="truncate text-xs text-ink-muted">{w.namespace}</span>
-                                                <RowStatusBadge status={status} host={w.scanErrorHost} />
-                                            </span>
-                                        </TableCell>
-                                        <TableCell hideBelow="sm" className="text-xs font-mono text-ink-muted max-w-0">
-                                            <span className="flex items-center gap-2 min-w-0" title={w.imageRef}>
-                                                <span className="truncate">
-                                                    {formatImageName(w.imageRef) ?? w.imageRef}
-                                                </span>
-                                                {digest && (
-                                                    <span className="shrink-0 rounded-sm bg-surface-hover px-1.5 py-0.5 text-ink-secondary">
-                                                        {digest}
+                    {otherGroups.length > 0 && (
+                        <Table aria-label="Containers without an SBOM">
+                            <TableHead>
+                                {/* The image is the first thing to go on a phone:
+                                    the container cell already names the workload,
+                                    the namespace and the failure. */}
+                                <TableHeader className="w-1/3">Container</TableHeader>
+                                <TableHeader hideBelow="sm">Image</TableHeader>
+                                <TableHeader align="end" className="w-20 sm:w-28">
+                                    Waiting
+                                </TableHeader>
+                            </TableHead>
+                            <TableBody>
+                                {otherGroups.map((g) => {
+                                    const isFailed = g.status === 'scan_failed' || g.status === 'stuck';
+                                    return (
+                                        <TableRow key={g.key}>
+                                            <TableCell className="w-1/3 max-w-0">
+                                                <GroupContainers group={g} />
+                                                <span className="flex min-w-0 items-center gap-2">
+                                                    <span className="truncate text-xs text-ink-muted">
+                                                        {g.namespaces.join(', ')}
                                                     </span>
-                                                )}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell align="end" className="w-20 sm:w-28 tabular-nums">
-                                            <span
-                                                className={isFailed ? 'text-attention font-medium' : 'text-ink-muted'}
-                                            >
-                                                {waitedFor(w.firstSeenAt)}
-                                            </span>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                        </TableBody>
-                    </Table>
+                                                    <RowStatusBadge status={g.status} host={g.scanErrorHost} />
+                                                </span>
+                                            </TableCell>
+                                            <TableCell hideBelow="sm" className="max-w-0">
+                                                <ImageName group={g} />
+                                            </TableCell>
+                                            <TableCell align="end" className="w-20 tabular-nums sm:w-28">
+                                                <span
+                                                    className={
+                                                        isFailed ? 'font-medium text-attention' : 'text-ink-muted'
+                                                    }
+                                                >
+                                                    {waitedFor(g.firstSeenAt)}
+                                                </span>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                            </TableBody>
+                        </Table>
+                    )}
                 </>
             )}
         </div>
