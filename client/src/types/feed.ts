@@ -30,11 +30,7 @@ export type ContainerEventType =
     | 'container.retagged';
 
 export type ActivityEventType =
-    | IssueEventType
-    | FindingEventType
-    | 'scan.criticals-increased'
-    | ContainerEventType
-    | 'scan.findings-changed';
+    IssueEventType | FindingEventType | 'scan.criticals-increased' | ContainerEventType | 'scan.findings-changed';
 
 interface ActivityEventBase {
     id: string;

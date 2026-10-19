@@ -13,14 +13,7 @@ const SEND_TIMEOUT_MS = 10_000;
  * rather than a custom one.
  */
 export type RedditTrackingType =
-    | "PAGE_VISIT"
-    | "VIEW_CONTENT"
-    | "SEARCH"
-    | "ADD_TO_CART"
-    | "ADD_TO_WISHLIST"
-    | "PURCHASE"
-    | "LEAD"
-    | "SIGN_UP";
+    "PAGE_VISIT" | "VIEW_CONTENT" | "SEARCH" | "ADD_TO_CART" | "ADD_TO_WISHLIST" | "PURCHASE" | "LEAD" | "SIGN_UP";
 
 export interface RedditConversionInput {
     trackingType: RedditTrackingType;
@@ -36,9 +29,7 @@ export interface RedditConversionInput {
 }
 
 export type RedditConversionResult =
-    | { status: "sent" }
-    | { status: "not_configured" }
-    | { status: "failed"; error: string };
+    { status: "sent" } | { status: "not_configured" } | { status: "failed"; error: string };
 
 /**
  * Reddit Ads Conversions API v3 — the server-to-server way to tell Reddit an

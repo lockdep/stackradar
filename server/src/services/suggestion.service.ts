@@ -52,11 +52,7 @@ import type { EolLine, FixRow } from "./remediation-rollup.service.js";
 const log = createLogger("suggestions");
 
 export type SuggestionType =
-    | "chart-upgrade"
-    | "image-tag-upgrade"
-    | "image-override"
-    | "chart-newer-unmeasured"
-    | "eol-migration";
+    "chart-upgrade" | "image-tag-upgrade" | "image-override" | "chart-newer-unmeasured" | "eol-migration";
 
 export interface SuggestionCluster {
     id: string;

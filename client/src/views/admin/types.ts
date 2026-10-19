@@ -310,12 +310,7 @@ export interface VulnerabilitiesData {
 
 export type JobStatus = 'pending' | 'scheduled' | 'processing' | 'completed' | 'failed' | 'cancelled';
 type JobType =
-    | 'vulnerability_scan'
-    | 'full_sync'
-    | 'scheduled_scan'
-    | 'chart_render'
-    | 'platform_scan'
-    | 'chart_repo_refresh';
+    'vulnerability_scan' | 'full_sync' | 'scheduled_scan' | 'chart_render' | 'platform_scan' | 'chart_repo_refresh';
 export type JobTrigger = 'manual' | 'sbom_upload' | 'schedule' | 'system';
 
 export interface AdminJob {
