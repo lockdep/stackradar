@@ -68,9 +68,25 @@ StackRadar is open source under AGPL-3.0. Self-host it with one
   provider, GitHub or Google.
 - **One Postgres, migrations on boot, no telemetry.**
 
-StackRadar does not do configuration audit, RBAC assessment or CIS
-benchmarks. [Trivy Operator](https://github.com/aquasecurity/trivy-operator)
-does, and the two run side by side without conflict.
+### StackRadar and Trivy Operator
+
+The question comes up first, so here is the short answer. StackRadar does
+not do configuration audit, RBAC assessment or CIS benchmarks;
+[Trivy Operator](https://github.com/aquasecurity/trivy-operator) does. The
+two watch the same pods, write to different places and run side by side
+without conflict.
+
+| | StackRadar | Trivy Operator |
+|:--|:--|:--|
+| Vulnerabilities on the images that are running | Yes | Yes |
+| A new advisory lands on a running image | Re-matched from the stored SBOM; no pull, no rescan | Found on the next scheduled rescan |
+| Ranking | CVSS, EPSS and CISA KEV folded into one score, summed per image, release and cluster | Severity counts per report |
+| Base image vs application layer | Separated on every finding | Not separated |
+| How the image got there | Helm release and Argo CD application on the page; the fix is a chart version | Workload owner only |
+| End-of-life base images | Verdict per finding, so an impossible fix is not on the list | No |
+| Configuration audit, RBAC, CIS benchmarks, exposed secrets | No | Yes |
+| Where the results live | One Postgres, with history | Report objects in etcd, latest only |
+| Clusters per dashboard | One (Community Edition), many (Cloud) | One per operator |
 
 ## How it works
 
@@ -200,6 +216,9 @@ the response time and the supported versions.
 
 - Questions and ideas: [GitHub Discussions](https://github.com/lockdep/stackradar/discussions)
 - Defects and enhancements: [GitHub Issues](https://github.com/lockdep/stackradar/issues)
+- What is coming: the [next milestone](https://github.com/lockdep/stackradar/milestones),
+  the issues labelled [`help wanted`](https://github.com/lockdep/stackradar/issues?q=is%3Aopen+label%3A%22help+wanted%22),
+  and the design plans in [docs/plans/](docs/plans/)
 - Using StackRadar? Add yourself to [ADOPTERS.md](ADOPTERS.md)
 
 ## Contributing

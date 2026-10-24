@@ -8,6 +8,7 @@ documentation is at [stackradar.io/docs](https://stackradar.io/docs).
 | [self-hosting/](self-hosting/) | The self-hosting manual: Helm walkthrough, Compose, users and local login, OIDC, your own Postgres, upgrading, backups |
 | [Chart values reference](https://github.com/lockdep/helm-charts/blob/main/charts/stackradar/README.md) | Every value of the `stackradar` chart, in `lockdep/helm-charts` |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | The system, its trust boundaries, the data model and the data flow end to end |
+| [plans/](plans/) | Design plans for work that is proposed or in progress: the roadmap, one document per change, with its status at the top |
 | [adr/](adr/) | Architecture decision records: why images are the unit of identity, why risk is two layers, why the aggregate is an unbounded sum |
 | [contracts/](contracts/) | The scanner wire format (`inventory-v3`) and the internal match endpoint |
 | [authorization-matrix.md](authorization-matrix.md) | Who can do what: roles, keys and the endpoints they reach |
