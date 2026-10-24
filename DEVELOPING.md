@@ -295,6 +295,64 @@ commit cannot, and the `publish` job holds the identity that signs the
 images. Dependabot's `github-actions` entry bumps the SHA and the comment
 together, so a new workflow only has to start out pinned.
 
+## Refreshing the EOL table
+
+[`server/src/lib/eol-releases.ts`](server/src/lib/eol-releases.ts) holds
+`EOL_DATES` (`family → release → ISO date`) and the provenance stamp
+`EOL_DATA_AS_OF`. The remediation rollup uses it to separate findings with
+no `fixedVersion` that are waiting on an upstream patch from findings on a
+distro release line that will never ship one.
+
+### Where the dates come from and which phase counts
+
+Dates are vendored from the distros' published release schedules as
+aggregated by [endoflife.date](https://endoflife.date/). For multi-phase
+distros, the date recorded is the end of the **last phase that ships
+security fixes to non-paying users**:
+
+| Family | Upstream schedule & `endoflife.date` feed | Phase recorded in `EOL_DATES` | Key after `releaseKey()` normalisation |
+|:--|:--|:--|:--|
+| `Alpine` | [alpinelinux.org/releases](https://alpinelinux.org/releases/) · [`/api/alpine-linux.json`](https://endoflife.date/api/alpine-linux.json) | Branch end-of-support (~2 years from release; `eol`) | Leading `v` stripped (`Alpine:v3.21` → `"3.21"`) |
+| `Debian` | [wiki.debian.org/LTS](https://wiki.debian.org/LTS) · [`/api/debian.json`](https://endoflife.date/api/debian.json) | End of Debian LTS (`eol`), the last free security-fix window — not regular security support (`support`) and not paid Extended LTS (`extendedSupport`) | Major release number (`Debian:12` → `"12"`) |
+| `Ubuntu` | [ubuntu.com/about/release-cycle](https://ubuntu.com/about/release-cycle) · [`/api/ubuntu.json`](https://endoflife.date/api/ubuntu.json) | End of standard security support (`eol`: 5 years for LTS, 9 months for interim releases). Paid Pro/ESM coverage (`extendedSupport`) is encoded in the OSV ecosystem string itself (`Ubuntu:Pro:…`) and returns `null` rather than consulting this table | `YY.MM` with `:LTS` suffix dropped (`Ubuntu:24.04:LTS` → `"24.04"`) |
+
+### Checklist
+
+1. Check each family in `EOL_DATES` against its upstream schedule (or the
+   corresponding `endoflife.date` JSON feed). Add newly published release
+   lines — future dates are deliberate because `eolVerdict` compares the
+   recorded date against the runtime clock — and update any revised end
+   dates.
+2. Bump `EOL_DATA_AS_OF` in
+   [`server/src/lib/eol-releases.ts`](server/src/lib/eol-releases.ts) to
+   the date of the check (`YYYY-MM-DD`).
+3. Run the unit test and formatting check:
+
+   ```sh
+   cd server
+   pnpm test:unit
+   pnpm format:check
+   ```
+
+### How the unit tests pin the behaviour
+
+[`server/tests/unit/lib/eol-releases.test.ts`](server/tests/unit/lib/eol-releases.test.ts)
+passes an explicit `now` timestamp to `eolVerdict(matchedEcosystem, now)`
+so assertions do not drift with the wall clock. The suite pins four rules
+that a table refresh must preserve:
+
+* A known release line on or after its `eolDate` returns
+  `{ eol: true, releaseLine, eolDate }`, and before it returns
+  `{ eol: false, … }`.
+* The verdict flips on the date comparison (`now >= eolDate`), not on
+  membership in `EOL_DATES`, so future release lines can be added as soon
+  as their schedule is published.
+* `Ubuntu:Pro:…` ecosystems return `null` even when standard support for
+  that release has ended.
+* Unknown families, unknown releases (`Alpine:edge`), rolling distros
+  (`Wolfi:rolling`) and package registries (`npm`, `PyPI`) return `null` —
+  unknown is never EOL.
+
 ## Building Container Images
 
 ```sh
