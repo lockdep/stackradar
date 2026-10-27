@@ -19,6 +19,10 @@ from that user is refused with `403 read_only_demo` in `requireAuth`
 (`middleware/auth.ts`) — the routes with no org context, which
 `organizations.demo` below cannot cover.
 
+`trial_consumed_at` (cloud) is stamped by the Stripe webhook when a
+subscription this user checked out first enters `trialing`; a later checkout
+by the same user carries no trial period (`cloud/billing/billing.controller.ts`).
+
 - **Referenced by:** `org_members`, `org_invites`, `api_keys`
 
 ### `organizations`

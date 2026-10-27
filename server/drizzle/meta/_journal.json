@@ -211,6 +211,13 @@
       "when": 1792356009028,
       "tag": "0029_workload_containers_image_pull_secrets",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793132926151,
+      "tag": "0030_users_trial_consumed_at",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@
 import type { Request, Response, NextFunction } from "express";
 import Stripe from "stripe";
 import { config } from "../../config/index.js";
-import { organizationRepository } from "../../repositories/index.js";
+import { organizationRepository, userRepository } from "../../repositories/index.js";
 import type { Organization } from "../../db/schema/index.js";
 import { AppError } from "../../middleware/error-handler.js";
 import { assertAdminOrOwner, asAuthed } from "../../middleware/auth.js";
@@ -11,6 +11,7 @@ import { getStripe } from "./stripe.js";
 import { planOfPriceId } from "./stripe-prices.js";
 import { getBetaSlots, invalidateBetaSlots, pickPrice } from "./beta-slots.service.js";
 import { createCheckoutSchema, createPortalSchema } from "./billing.schema.js";
+import { TRIAL_DAYS } from "./plans.js";
 
 const log = createLogger("billing.controller");
 
@@ -197,8 +198,17 @@ export async function cancelSubscriptionForOrgDeletion(org: Organization): Promi
 
 export const billingController = {
     /**
-     * Create a Stripe Checkout session to upgrade from Free to a paid plan
-     * (Pro or Team). Returns a URL the client redirects to.
+     * Create a Stripe Checkout session that starts a plan (Pro or Business)
+     * on an org without one. Returns a URL the client redirects to, and
+     * whether the session carries the free trial.
+     *
+     * Every plan starts with a `TRIAL_DAYS` free trial unless the acting
+     * user has had one (`users.trial_consumed_at`): the card is collected at
+     * checkout (`payment_method_collection: "always"`) and nothing is charged
+     * until the trial ends; a trial whose card went missing is cancelled
+     * rather than converted. A repeat user is charged from day one, and the
+     * response says so (`trial: false`) so the chooser can too.
+     *
      * Changes between paid plans go through the billing portal, not checkout —
      * checkout would create a second subscription alongside the existing one.
      * @route POST /api/billing/checkout
@@ -207,6 +217,9 @@ export const billingController = {
         try {
             const { auth } = asAuthed(req);
             const orgId = auth.orgId;
+            // The route is `requireInternal`, so this is a person, never a key.
+            const userId = auth.userId;
+            if (!userId) throw new AppError(403, "This endpoint is not available to API keys");
             const { plan: requestedPlan, interval, successUrl, cancelUrl } = createCheckoutSchema.parse(req.body);
             // Billing changes the whole org's plan — admin/owner only.
             await assertAdminOrOwner(req, orgId);
@@ -226,6 +239,11 @@ export const billingController = {
             // anything the client sends: the page shows the count, the
             // server enforces it.
             const { price, slots } = await pickPrice(requestedPlan, interval);
+
+            // One trial per person, decided by who is clicking, not by the
+            // org: the org is new (or lapsed), the person may not be.
+            const actor = await time("getUserById", userRepository.getUserById(userId));
+            const trial = actor?.trialConsumedAt == null;
 
             const stripe = getStripe();
 
@@ -270,18 +288,32 @@ export const billingController = {
                 // `priceBook` records whether this was a beta slot, so the
                 // Dashboard can answer "who got the beta price" without
                 // decoding price IDs.
+                // `userId` names who checked out, so the webhook can stamp
+                // *their* `trial_consumed_at` when the trial starts.
                 client_reference_id: orgId,
-                subscription_data: { metadata: { orgId, priceBook: price.book } },
+                subscription_data: {
+                    metadata: { orgId, priceBook: price.book, userId },
+                    ...(trial
+                        ? {
+                              trial_period_days: TRIAL_DAYS,
+                              trial_settings: { end_behavior: { missing_payment_method: "cancel" } },
+                          }
+                        : {}),
+                },
+                // The card is taken now, trial or not; Stripe would otherwise
+                // let a trial start without one, and the promise is "card
+                // required, nothing charged until it ends".
+                payment_method_collection: "always",
                 integration_identifier: CHECKOUT_INTEGRATION_IDENTIFIER,
                 success_url: successUrl,
                 cancel_url: cancelUrl,
             });
 
             log.info(
-                { orgId, sessionId: session.id, plan: requestedPlan, interval, priceBook: price.book, slots },
+                { orgId, sessionId: session.id, plan: requestedPlan, interval, priceBook: price.book, slots, trial },
                 "Stripe checkout session created",
             );
-            res.json({ url: session.url });
+            res.json({ url: session.url, trial });
         } catch (error) {
             next(error);
         }

@@ -1,4 +1,4 @@
-import { sql, eq, getTableColumns } from "drizzle-orm";
+import { sql, eq, and, isNull, getTableColumns } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { users, type User } from "../db/schema/index.js";
 
@@ -11,6 +11,18 @@ export const userRepository = {
     async isDemoUser(userId: string): Promise<boolean> {
         const [row] = await db.select({ demo: users.demo }).from(users).where(eq(users.id, userId)).limit(1);
         return row?.demo === true;
+    },
+
+    /**
+     * Stamp `trial_consumed_at` the first time a subscription this user
+     * checked out enters `trialing` (the Stripe webhook). Idempotent: an
+     * existing stamp is never moved, so a retried event cannot shift it.
+     */
+    async markTrialConsumed(userId: string, at: Date): Promise<void> {
+        await db
+            .update(users)
+            .set({ trialConsumedAt: at })
+            .where(and(eq(users.id, userId), isNull(users.trialConsumedAt)));
     },
 
     async getUserById(userId: string): Promise<User | null> {

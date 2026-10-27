@@ -32,6 +32,17 @@ export const users = pgTable(
          */
         demo: boolean("demo").notNull().default(false),
 
+        /**
+         * When a subscription this user checked out first entered Stripe's
+         * `trialing` status (cloud only; stamped by the Stripe webhook,
+         * `cloud/billing/billing.controller.ts`). One free trial per person:
+         * a later checkout by the same user carries no trial period and
+         * charges from day one, which closes the "cancel the trial, delete
+         * the org, sign up again" loop. Null until then, and forever null in
+         * the community edition.
+         */
+        trialConsumedAt: timestamp("trial_consumed_at", { withTimezone: true }),
+
         // Timestamps
         createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

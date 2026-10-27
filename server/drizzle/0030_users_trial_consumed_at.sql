@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "trial_consumed_at" timestamp with time zone;
