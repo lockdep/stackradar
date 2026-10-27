@@ -86,8 +86,9 @@ command runs inside `server/` or `client/`; and the server tests run
 against a real PostgreSQL started by Testcontainers, so Docker has to be
 up. The `.github/workflows/` gates (`ci-test`, `cloud-boundary`,
 `cross-app-drift`, `dead-exports`, `dependency-licenses`,
-`primer-token-drift`, `osv-schema-drift`) are what a pull request has to
-pass.
+`primer-token-drift`, `osv-schema-drift`, and `e2e` — the Playwright suite
+in `e2e/` over the Compose stack built from the checkout) are what a pull
+request has to pass.
 
 ### Shipping a change
 
