@@ -72,12 +72,13 @@ export function allowWithoutPlan(req: Request, _res: Response, next: NextFunctio
 /**
  * The gate for routes whose org is `req.auth.org` — the scanner's ingest
  * endpoints, where the org comes from the API key row on every request and
- * `requireOrg` is not mounted. Reads pass; nothing on the ingest surface is
- * a read, so in practice this is "refuse".
+ * `requireOrg` is not mounted. Method-blind on purpose: the one GET on that
+ * surface, the SBOM check, is the question before a scan, and a lapsed
+ * org's scanner should not scan.
  */
 export function requireActivePlan(req: Request, _res: Response, next: NextFunction): void {
     if (!req.auth) return next(new AppError(401, "Authentication required"));
-    if (!isReadMethod(req.method) && !orgHasActivePlan(req.auth.org)) return next(planRequiredError());
+    if (!orgHasActivePlan(req.auth.org)) return next(planRequiredError());
     next();
 }
 

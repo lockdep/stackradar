@@ -13,6 +13,7 @@ import {
     type SeedTestScenarioResult,
 } from "../../fixtures/seed-data.js";
 import { PLAN_REQUIRED_CODE } from "../../../src/lib/plan-gate.js";
+import { edition } from "../../../src/edition.js";
 
 const MINIMAL_SBOM = {
     bomFormat: "CycloneDX",
@@ -43,7 +44,8 @@ describe("SBOM plan limits", () => {
             testData = await seedTestScenario(getTestDb(), {}, { plan: "free" });
         });
 
-        it("refuses upload on an org without a plan (read-only, not a cap)", async () => {
+        // The gate is the cloud's; the community edition has no plans and uploads everything.
+        it.runIf(edition.billing)("refuses upload on an org without a plan (read-only, not a cap)", async () => {
             const digest = `sha256:${randomUUID().replace(/-/g, "").padEnd(64, "0")}`;
 
             const res = await request(app)

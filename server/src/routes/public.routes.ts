@@ -1,9 +1,9 @@
-import { Router, type RequestHandler } from "express";
+import { Router } from "express";
 import { sbomController } from "../controllers/sbom.controller.js";
 import { scannerController } from "../controllers/scanner.controller.js";
 import { requireAuth, requireScope } from "../middleware/auth.js";
 import { rateLimitByApiKey } from "../middleware/rate-limit.js";
-import { orgHasActivePlan, planRequiredError, requireActivePlan } from "../lib/plan-gate.js";
+import { requireActivePlan } from "../lib/plan-gate.js";
 
 /*
  * Per-key ingest limits (S8). Sized for a real scanner: an initial scan of a
@@ -14,13 +14,12 @@ import { orgHasActivePlan, planRequiredError, requireActivePlan } from "../lib/p
  */
 const sbomUploadLimit = rateLimitByApiKey({ capacity: 60, refillPerMinute: 30, name: "SBOM upload" });
 const inventoryLimit = rateLimitByApiKey({ capacity: 5, refillPerMinute: 2, name: "inventory report" });
+// One check precedes each scan, and the scanner checks only once it holds a
+// scan slot, so the real rate is bounded by its scan concurrency; this is
+// far above that, and a 429 is "deferred" to the scanner, never "missing".
+const checkLimit = rateLimitByApiKey({ capacity: 120, refillPerMinute: 60, name: "SBOM check" });
 
 const router = Router();
-
-const refuseCheckWithoutPlan: RequestHandler = (req, _res, next) => {
-    if (req.auth && !orgHasActivePlan(req.auth.org)) return next(planRequiredError());
-    next();
-};
 
 /*
  * The scanner ingest surface — the only endpoints that accept API keys.
@@ -57,8 +56,13 @@ router.post(
     sbomUploadLimit,
     sbomController.uploadCycloneDx,
 );
-// A GET, so `requireActivePlan` alone would let it through: the check is the
-// question before a scan, and a lapsed org's scanner should not scan.
-router.get("/sboms/check", requireAuth, requireScope("sbom:write"), refuseCheckWithoutPlan, sbomController.check);
+router.get(
+    "/sboms/check",
+    requireAuth,
+    requireScope("sbom:write"),
+    requireActivePlan,
+    checkLimit,
+    sbomController.check,
+);
 
 export default router;
