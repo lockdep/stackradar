@@ -200,12 +200,10 @@ describeCloud("read-only demo guard", () => {
 
     describe("a real org and user in the same database", () => {
         it("mutates as before", async () => {
+            // A paying org (the fixtures' default): the create goes through,
+            // and nothing here is the demo guard. That distinction is the point.
             const create = await request(app).post("/api/clusters").set(realHeaders).send({ name: "prod-1" });
-            // Free plan allows one cluster and `realCluster` already exists,
-            // so this is the plan limit — a 403 with a *different* code — not
-            // the demo guard. That distinction is the point.
-            expect(create.status).toBe(403);
-            expect(create.body.code).toBe("PLAN_LIMIT_EXCEEDED");
+            expect(create.status).toBe(201);
 
             const rename = await request(app)
                 .patch(`/api/organizations/${real.org.id}`)

@@ -95,7 +95,10 @@ export async function createOrganization(
       id,
       name,
       slug,
-      plan: options.plan || "free",
+      // A paying org by default: on the cloud an org without a plan is
+      // read-only (`lib/plan-gate.ts`), so a test that wants that state
+      // asks for `plan: "free"`.
+      plan: options.plan || "pro",
       color: options.color || "blue",
       demo: options.demo ?? false,
       system: options.system ?? false,

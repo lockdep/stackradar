@@ -90,10 +90,12 @@ describeCloud("alert settings API", () => {
         expect(freeRes.body.available).toBe(false);
     });
 
-    it("refuses writes on a plan without alerts, with a code the client branches on", async () => {
+    it("refuses writes on an org without a plan, with a code the client branches on", async () => {
+        // On the cloud the only plan without alerts is no plan at all, and the
+        // read-only gate (`lib/plan-gate.ts`) answers before the alerts' own check.
         const res = await request(app).patch(url(free)).set(headers(free)).send({ emailEnabled: false });
         expect(res.status).toBe(403);
-        expect(res.body.code).toBe("PLAN_REQUIRED");
+        expect(res.body.code).toBe("plan_required");
         const test = await request(app).post(url(free, "/test")).set(headers(free)).send({});
         expect(test.status).toBe(403);
     });

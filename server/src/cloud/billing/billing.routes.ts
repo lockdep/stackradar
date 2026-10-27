@@ -2,8 +2,13 @@
 import { Router } from "express";
 import { billingController } from "./billing.controller.js";
 import { requireAuth, requireInternal, requireOrg } from "../../middleware/auth.js";
+import { allowWithoutPlan } from "../../lib/plan-gate.js";
 
 const router = Router();
+
+// The way back in: an org without a plan is read-only everywhere else
+// (`lib/plan-gate.ts`), and checkout is how it gets one.
+router.use(allowWithoutPlan);
 
 // POST /api/billing/checkout — create Stripe Checkout session
 router.post("/checkout", requireAuth, requireInternal, requireOrg, billingController.createCheckout);

@@ -50,7 +50,8 @@ describe("GET /api/feed/movement", () => {
     beforeEach(async () => {
         await cleanAllData();
         const db = getTestDb();
-        testData = await createOrgWithOwner(db);
+        // No plan: the 30-day window the clamp test reads against (reads are not gated).
+        testData = await createOrgWithOwner(db, {}, { plan: "free" });
         clusterId = (await createCluster(db, testData.org.id, { name: "prod-eu" })).id;
     });
 

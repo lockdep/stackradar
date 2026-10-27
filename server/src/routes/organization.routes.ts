@@ -4,6 +4,7 @@ import { imageControlController } from "../controllers/image-control.controller.
 import { tierRulesController } from "../controllers/tier-rules.controller.js";
 import { alertsController } from "../controllers/alerts.controller.js";
 import { requireAuth, requireInternal } from "../middleware/auth.js";
+import { requireActivePlanForOrgParam } from "../lib/plan-gate.js";
 
 const router = Router();
 
@@ -16,6 +17,13 @@ const router = Router();
  * the scanner ingest surface and have no business here.
  */
 router.use(requireAuth, requireInternal);
+
+/*
+ * An org without a plan is read-only (`lib/plan-gate.ts`). These routes take
+ * their org from `:id` rather than `requireOrg`, so the gate is mounted here;
+ * it exempts `DELETE /:id`, the one write such an org must keep.
+ */
+router.use("/:id", requireActivePlanForOrgParam);
 
 // GET /api/organizations/:id - Get organization details with role
 router.get("/:id", organizationController.getOrganization);

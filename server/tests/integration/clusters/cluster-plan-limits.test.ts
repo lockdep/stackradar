@@ -6,6 +6,7 @@ import { getTestDb, cleanAllData } from "../../setup/test-db.js";
 import { createOrgWithOwner, createCluster, type CreateOrgWithOwnerResult } from "../../fixtures/seed-data.js";
 
 import { edition } from "../../../src/edition.js";
+import { PLAN_REQUIRED_CODE } from "../../../src/lib/plan-gate.js";
 // Cloud-only: this surface is unmounted in the community edition (`STACKRADAR_EDITION=community pnpm test` skips it).
 const describeCloud = describe.skipIf(!edition.isCloud);
 
@@ -39,9 +40,11 @@ describeCloud("Cluster plan limits", () => {
         it("should refuse the first cluster and say a plan is needed", async () => {
             const res = await request(app).post("/api/clusters").set(authHeaders()).send({ name: "my-cluster" });
 
+            // The read-only gate (`lib/plan-gate.ts`) answers before the
+            // limit does; the zero limit is the belt behind it.
             expect(res.status).toBe(403);
             expect(res.body.error).toMatch(/start a plan/i);
-            expect(res.body.code).toBe("PLAN_LIMIT_EXCEEDED");
+            expect(res.body.code).toBe(PLAN_REQUIRED_CODE);
         });
     });
 

@@ -7,6 +7,7 @@ import { createUser, createOrganization, addOrgMember } from "../../fixtures/see
 import type { Organization, User } from "../../../src/db/schema/index.js";
 
 import { edition } from "../../../src/edition.js";
+import { PLAN_REQUIRED_CODE } from "../../../src/lib/plan-gate.js";
 // Cloud-only: this surface is unmounted in the community edition (`STACKRADAR_EDITION=community pnpm test` skips it).
 const describeCloud = describe.skipIf(!edition.isCloud);
 
@@ -34,8 +35,8 @@ describeCloud("Member limit enforcement (POST /api/organizations/:id/invites)", 
         });
     }
 
-    describe("Free plan (limit: 1 member)", () => {
-        it("should reject an invite when the org already has 1 member (the owner)", async () => {
+    describe("No plan (limit: 1 member, and read-only)", () => {
+        it("should refuse an invite outright: the org has no plan", async () => {
             const db = getTestDb();
             const org = await createOrganization(db, { slug: "free-org", plan: "free" });
             await addOrgMember(db, owner.id, org.id, "owner");
@@ -45,9 +46,11 @@ describeCloud("Member limit enforcement (POST /api/organizations/:id/invites)", 
                 .set(inviteHeaders(org))
                 .send({ email: "newcomer@test.com", role: "member" });
 
+            // The read-only gate (`lib/plan-gate.ts`) answers before the
+            // member limit does; the limit of one is the belt behind it.
             expect(res.status).toBe(403);
-            expect(res.body.error).toMatch(/maximum of 1 member/i);
-            expect(res.body.error).toMatch(/upgrade your plan/i);
+            expect(res.body.code).toBe(PLAN_REQUIRED_CODE);
+            expect(res.body.error).toMatch(/start a plan/i);
         });
     });
 

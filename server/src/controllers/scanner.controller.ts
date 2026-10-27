@@ -4,6 +4,7 @@ import { AppError } from "../middleware/error-handler.js";
 import { clusterRepository, inventoryRepository, type InventoryReportInput } from "../repositories/index.js";
 import { inventoryReportSchema, SUPPORTED_INVENTORY_VERSIONS, isSupportedInventoryVersion } from "../schemas/index.js";
 import { config } from "../config/index.js";
+import { orgHasActivePlan } from "../lib/plan-gate.js";
 import { cloudHooks } from "../lib/cloud-hooks.js";
 import { createLogger, createQueryTimer } from "../lib/logger.js";
 import { asAuthed } from "../middleware/auth.js";
@@ -32,11 +33,18 @@ type Warning = { code: string; count?: number };
  * "this version is deprecated", "maintenance at 02:00" — and is omitted when
  * there is nothing to say, so the common response stays `{ok:true}`.
  */
-export function heartbeatResponse(): { ok: true; minScannerVersion?: string; message?: string } {
+export function heartbeatResponse(org?: { plan: string }): {
+    ok: true;
+    minScannerVersion?: string;
+    message?: string;
+    /** The org has no plan (`lib/plan-gate.ts`): inventory and uploads are being refused; the heartbeat is not. */
+    planRequired?: true;
+} {
     return {
         ok: true,
         ...(config.scanner.minVersion ? { minScannerVersion: config.scanner.minVersion } : {}),
         ...(config.scanner.message ? { message: config.scanner.message } : {}),
+        ...(org && !orgHasActivePlan(org) ? { planRequired: true } : {}),
     };
 }
 
@@ -146,7 +154,7 @@ export const scannerController = {
             if (kubernetesVersion) {
                 await clusterRepository.recordKubernetesVersion(req.auth.apiKey.clusterId, kubernetesVersion);
             }
-            res.json(heartbeatResponse());
+            res.json(heartbeatResponse(req.auth.org));
         } catch (error) {
             next(error);
         }

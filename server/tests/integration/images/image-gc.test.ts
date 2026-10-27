@@ -43,7 +43,8 @@ describe("deleteOrphanedImages", () => {
     beforeEach(async () => {
         await cleanAllData();
         const db = getTestDb();
-        testData = await createOrgWithOwner(db);
+        // No plan: the 30-day floor the GC is asserted against.
+        testData = await createOrgWithOwner(db, {}, { plan: "free" });
         cluster = await createCluster(db, testData.org.id, { name: "prod" });
     });
 

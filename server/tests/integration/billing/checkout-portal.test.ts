@@ -93,7 +93,8 @@ describeCloud("POST /api/billing/checkout", () => {
         resetBetaSlotsForTests();
         mockPricesList.mockResolvedValue(CATALOG);
         mockSubscriptionsList.mockResolvedValue({ data: [] });
-        testData = await createOrgWithOwner(getTestDb());
+        // The org checking out has no plan yet (the fixtures default to a paying one).
+        testData = await createOrgWithOwner(getTestDb(), {}, { plan: "free" });
     });
 
     const ownerHeaders = () =>
@@ -503,6 +504,28 @@ describeCloud("beta slot counter", () => {
                 team: { total: BETA_PRICE_SLOTS.team, claimed: BETA_PRICE_SLOTS.team },
             },
         });
+    });
+
+    it("GET /api/billing/pricing adds whether the caller's checkout would carry the trial", async () => {
+        stripeSlotsClaimed(0);
+        const headers = createInternalHeaders({
+            id: testData.user.id,
+            email: testData.user.email,
+            orgId: testData.org.id,
+        });
+
+        const fresh = await request(app).get("/api/billing/pricing").set(headers);
+        expect(fresh.status).toBe(200);
+        expect(fresh.headers["cache-control"]).toContain("private");
+        expect(fresh.body.trialEligible).toBe(true);
+
+        await getTestDb().update(users).set({ trialConsumedAt: new Date() }).where(eq(users.id, testData.user.id));
+        const repeat = await request(app).get("/api/billing/pricing").set(headers);
+        expect(repeat.body.trialEligible).toBe(false);
+
+        // The public counter says nothing about anybody.
+        const pub = await request(app).get("/v1/pricing");
+        expect(pub.body).not.toHaveProperty("trialEligible");
     });
 
     it("sums monthly and annual subscriptions into the plan's count", async () => {

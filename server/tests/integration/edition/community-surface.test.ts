@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import request from "supertest";
 import type { Express } from "express";
 import { createApp } from "../../../src/app.js";
-import { resolveEdition } from "../../../src/edition.js";
+import { edition, resolveEdition } from "../../../src/edition.js";
 import { createInternalHeaders, getTestApp } from "../../setup/test-app.js";
 import { getTestDb, cleanAllData } from "../../setup/test-db.js";
 import { createOrgWithOwner, type CreateOrgWithOwnerResult } from "../../fixtures/seed-data.js";
@@ -84,6 +84,25 @@ describe("community edition surface", () => {
         expect(Array.isArray(alerts.body.recipients)).toBe(true);
         const check = await request(app).get("/v1/sboms/check?imageDigest=sha256:abc");
         expect(check.status).toBe(401);
+    });
+
+    // The gate reads the process's edition, so this is proven by the
+    // community run of the suite (`STACKRADAR_EDITION=community pnpm test`).
+    it.runIf(!edition.billing)("an org without a plan is not read-only in the community edition", async () => {
+        const db = getTestDb();
+        const free = await createOrgWithOwner(db, { email: "free@community.test" }, { plan: "free", slug: "free" });
+        const res = await request(app)
+            .patch(`/api/organizations/${free.org.id}`)
+            .set(
+                createInternalHeaders({
+                    id: free.user.id,
+                    email: free.user.email,
+                    orgId: free.org.id,
+                    orgPlan: "free",
+                }),
+            )
+            .send({ name: "Renamed" });
+        expect(res.status).toBe(200);
     });
 
     it("the readiness probe reports the edition and no configuration problems", async () => {

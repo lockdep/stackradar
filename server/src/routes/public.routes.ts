@@ -1,8 +1,9 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { sbomController } from "../controllers/sbom.controller.js";
 import { scannerController } from "../controllers/scanner.controller.js";
 import { requireAuth, requireScope } from "../middleware/auth.js";
 import { rateLimitByApiKey } from "../middleware/rate-limit.js";
+import { orgHasActivePlan, planRequiredError, requireActivePlan } from "../lib/plan-gate.js";
 
 /*
  * Per-key ingest limits (S8). Sized for a real scanner: an initial scan of a
@@ -16,6 +17,11 @@ const inventoryLimit = rateLimitByApiKey({ capacity: 5, refillPerMinute: 2, name
 
 const router = Router();
 
+const refuseCheckWithoutPlan: RequestHandler = (req, _res, next) => {
+    if (req.auth && !orgHasActivePlan(req.auth.org)) return next(planRequiredError());
+    next();
+};
+
 /*
  * The scanner ingest surface — the only endpoints that accept API keys.
  * `requireScope("sbom:write")` enforces the key's `scopes` column (internal
@@ -27,15 +33,32 @@ const router = Router();
  * `cloud/index.ts` when the edition has it. A new `/v1` path also needs the
  * hosted ingress allow-list updated, or it answers 404 before reaching here.
  */
+/*
+ * An org without a plan (`lib/plan-gate.ts`) keeps its heartbeat — the agent
+ * stays up and is told `planRequired` — and loses the three writes: the
+ * inventory, the SBOM upload and the check that precedes it. The scanner
+ * treats a 403 on those as a report lost or a scan failed, never as a reason
+ * to exit, and the heartbeat is what its liveness probe reads.
+ */
 router.post("/heartbeat", requireAuth, requireScope("sbom:write"), scannerController.heartbeat);
-router.post("/inventory", requireAuth, requireScope("sbom:write"), inventoryLimit, scannerController.reportInventory);
+router.post(
+    "/inventory",
+    requireAuth,
+    requireScope("sbom:write"),
+    requireActivePlan,
+    inventoryLimit,
+    scannerController.reportInventory,
+);
 router.post(
     "/sboms/upload/cyclonedx",
     requireAuth,
     requireScope("sbom:write"),
+    requireActivePlan,
     sbomUploadLimit,
     sbomController.uploadCycloneDx,
 );
-router.get("/sboms/check", requireAuth, requireScope("sbom:write"), sbomController.check);
+// A GET, so `requireActivePlan` alone would let it through: the check is the
+// question before a scan, and a lapsed org's scanner should not scan.
+router.get("/sboms/check", requireAuth, requireScope("sbom:write"), refuseCheckWithoutPlan, sbomController.check);
 
 export default router;

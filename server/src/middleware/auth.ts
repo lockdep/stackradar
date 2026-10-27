@@ -10,6 +10,7 @@ import { userRepository } from "../repositories/user.repository.js";
 import { AppError } from "./error-handler.js";
 import { createLogger } from "../lib/logger.js";
 import { isReadMethod, readOnlyDemoError } from "../lib/demo.js";
+import { orgHasActivePlan, planRequiredError } from "../lib/plan-gate.js";
 import { hashApiKey } from "../lib/api-key.js";
 
 const log = createLogger("auth");
@@ -408,7 +409,10 @@ export function requireScope(scope: string) {
  * A **demo** org (`organizations.demo`) is read-only
  * for every internal request: the membership row carries the flag, so the
  * refusal costs no second query. It is `403` with code `read_only_demo` so
- * the client can say so rather than "Forbidden".
+ * the client can say so rather than "Forbidden". An org **without a plan**
+ * (`plan = 'free'` on the cloud, `lib/plan-gate.ts`) is read-only the same
+ * way, `403 plan_required`, except on the routers that opted out with
+ * `allowWithoutPlan` — billing and the org's own deletion.
  *
  * API-key requests already resolved their org from the key row in
  * `validateApiKey`; there is nothing further to verify here — which is also
@@ -434,6 +438,9 @@ export function requireOrg(req: Request, _res: Response, next: NextFunction): vo
             }
             if (membership.org.demo && !isReadMethod(req.method)) {
                 throw readOnlyDemoError();
+            }
+            if (!orgHasActivePlan(membership.org) && !isReadMethod(req.method) && !req.allowWithoutPlan) {
+                throw planRequiredError();
             }
             req.auth.role = membership.role;
             req.auth.org = {

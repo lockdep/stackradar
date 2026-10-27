@@ -363,16 +363,28 @@ export const billingController = {
      * front-ends next to the words that explain them; this endpoint carries
      * only the number that changes.
      *
-     * Unauthenticated, so it must stay cheap: the service caches the count,
-     * and the response is cacheable for the same minute. A Stripe outage
-     * answers 503 and the pages fall back to the offer without a count,
-     * never to a made-up one.
+     * Unauthenticated on `/v1`, so it must stay cheap: the service caches the
+     * count, and the response is cacheable for the same minute. A Stripe
+     * outage answers 503 and the pages fall back to the offer without a
+     * count, never to a made-up one.
+     *
+     * The in-app route knows who is asking and adds `trialEligible`: whether
+     * a checkout by this person would carry the free trial
+     * (`users.trial_consumed_at`), so the plan chooser can say "billing
+     * starts today" before the click rather than after it. Per-person, so
+     * that response is `private`.
      * @route GET /v1/pricing — in-cluster only, not on the API ingress
      * @route GET /api/billing/pricing
      */
-    async pricing(_req: Request, res: Response, next: NextFunction) {
+    async pricing(req: Request, res: Response, next: NextFunction) {
         try {
             const betaSlots = await getBetaSlots();
+            if (req.auth?.type === "internal") {
+                const actor = await userRepository.getUserById(req.auth.userId);
+                res.set("Cache-Control", "private, max-age=60");
+                res.json({ betaSlots, trialEligible: actor?.trialConsumedAt == null });
+                return;
+            }
             res.set("Cache-Control", "public, max-age=60");
             res.json({ betaSlots });
         } catch (error) {
