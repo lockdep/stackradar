@@ -1,0 +1,99 @@
+# End-to-end tests: the Compose quickstart built from the pull request's
+# checkout, seeded through the scanner API and driven through a browser by
+# Playwright (e2e/). It is the only gate that runs the product as a user
+# meets it — Postgres, the server with its in-process worker and sync
+# scheduler, the client with its BFF, local sign-in, migrations on boot.
+#
+# The stack is the same three containers deploy/compose/docker-compose.yml
+# starts, with dev/local-build.yml (images from this checkout) and
+# e2e/compose.e2e.yml (project name, a 40 MB Alpine mirror instead of the
+# 1.2 GB default, no Artifact Hub mirror) on top; e2e/scripts/stack.sh
+# assembles it and Playwright's global setup runs it. Nothing is mocked.
+name: End-to-end
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "server/**"
+      - "e2e/**"
+      - "deploy/compose/**"
+      - "dev/local-build.yml"
+      - ".github/workflows/e2e.yaml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "client/**"
+      - "server/**"
+      - "e2e/**"
+      - "deploy/compose/**"
+      - "dev/local-build.yml"
+      - ".github/workflows/e2e.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  playwright:
+    name: "playwright (compose, chromium)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: e2e/package.json
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: e2e/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check (prettier)
+        run: pnpm format:check
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # Global setup builds the two images from this checkout (`docker
+      # compose build`, a few minutes each), starts the stack, waits for both
+      # readiness probes and seeds it; the last step removes it, volume
+      # included, so a re-run of the job starts from an empty database.
+      - name: Build the images, start the stack, run the suite
+        run: pnpm test
+        env:
+          CI: "true"
+          GIT_SHA: ${{ github.sha }}
+
+      - name: Stack logs
+        if: always()
+        run: scripts/stack.sh logs --timestamps 2>&1 | tail -n 500 || true
+
+      - name: Playwright report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Tear the stack down
+        if: always()
+        run: scripts/stack.sh down

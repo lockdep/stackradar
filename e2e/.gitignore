@@ -1,0 +1,5 @@
+node_modules/
+test-results/
+playwright-report/
+# Signed-in browser state written by src/auth.setup.ts; valid for one stack only.
+.auth/
