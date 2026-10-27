@@ -33,47 +33,15 @@ describeCloud("Cluster plan limits", () => {
         testData = await createOrgWithOwner(getTestDb(), {}, { plan: "free" });
     });
 
-    describe("free plan (limit: 1 cluster)", () => {
-        it("should allow creating the first cluster", async () => {
+    describe("no plan (limit: 0 clusters)", () => {
+        // `free` is the stored value for an org without a subscription; the
+        // cloud has no Free plan, so such an org may not connect a cluster.
+        it("should refuse the first cluster and say a plan is needed", async () => {
             const res = await request(app).post("/api/clusters").set(authHeaders()).send({ name: "my-cluster" });
 
-            expect(res.status).toBe(201);
-        });
-
-        it("should reject a second cluster with 403", async () => {
-            await createCluster(getTestDb(), testData.org.id, { name: "existing" });
-
-            const res = await request(app).post("/api/clusters").set(authHeaders()).send({ name: "second-cluster" });
-
             expect(res.status).toBe(403);
-            expect(res.body.error).toMatch(/maximum of 1 cluster/i);
+            expect(res.body.error).toMatch(/start a plan/i);
             expect(res.body.code).toBe("PLAN_LIMIT_EXCEEDED");
-        });
-
-        it("should allow only one of several concurrent creates", async () => {
-            // The limit is checked inside the create transaction under a
-            // SELECT FOR UPDATE on the org row; without that lock, concurrent
-            // requests all pass the count and the org ends up over the cap.
-            const results = await Promise.all(
-                Array.from({ length: 5 }, (_, i) =>
-                    request(app)
-                        .post("/api/clusters")
-                        .set(authHeaders())
-                        .send({ name: `racer-${i}` }),
-                ),
-            );
-
-            expect(results.filter((r) => r.status === 201)).toHaveLength(1);
-            expect(results.filter((r) => r.status === 403)).toHaveLength(4);
-        });
-
-        it("should allow creating a cluster after the only cluster is deleted", async () => {
-            const cluster = await createCluster(getTestDb(), testData.org.id, { name: "existing" });
-            await request(app).delete(`/api/clusters/${cluster.id}`).set(authHeaders());
-
-            const res = await request(app).post("/api/clusters").set(authHeaders()).send({ name: "replacement" });
-
-            expect(res.status).toBe(201);
         });
     });
 
@@ -105,6 +73,41 @@ describeCloud("Cluster plan limits", () => {
             expect(res.status).toBe(403);
             expect(res.body.error).toMatch(/maximum of 5 cluster/i);
             expect(res.body.code).toBe("PLAN_LIMIT_EXCEEDED");
+        });
+
+        it("should allow only one of several concurrent creates at the limit", async () => {
+            // The limit is checked inside the create transaction under a
+            // SELECT FOR UPDATE on the org row; without that lock, concurrent
+            // requests all pass the count and the org ends up over the cap.
+            const db = getTestDb();
+            for (let i = 0; i < 4; i++) {
+                await createCluster(db, testData.org.id, { name: `cluster-${i}` });
+            }
+
+            const results = await Promise.all(
+                Array.from({ length: 5 }, (_, i) =>
+                    request(app)
+                        .post("/api/clusters")
+                        .set(authHeaders())
+                        .send({ name: `racer-${i}` }),
+                ),
+            );
+
+            expect(results.filter((r) => r.status === 201)).toHaveLength(1);
+            expect(results.filter((r) => r.status === 403)).toHaveLength(4);
+        });
+
+        it("should allow creating a cluster after one at the limit is deleted", async () => {
+            const db = getTestDb();
+            const clusters = [];
+            for (let i = 0; i < 5; i++) {
+                clusters.push(await createCluster(db, testData.org.id, { name: `cluster-${i}` }));
+            }
+            await request(app).delete(`/api/clusters/${clusters[0]!.id}`).set(authHeaders());
+
+            const res = await request(app).post("/api/clusters").set(authHeaders()).send({ name: "replacement" });
+
+            expect(res.status).toBe(201);
         });
     });
 });

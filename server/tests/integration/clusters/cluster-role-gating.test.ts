@@ -48,7 +48,7 @@ describeCloud("Cluster role gating", () => {
     beforeEach(async () => {
         await cleanAllData();
         const db = getTestDb();
-        testData = await createOrgWithOwner(db);
+        testData = await createOrgWithOwner(db, {}, { plan: "pro" });
         member = await createUser(db);
         await addOrgMember(db, member.id, testData.org.id, "member");
         admin = await createUser(db);

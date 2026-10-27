@@ -109,12 +109,13 @@ export const organizationRepository = {
     },
 
     /**
-     * Whether the user belongs to any live organization on the free plan.
+     * Whether the user belongs to any live organization without a plan
+     * (`plan = 'free'`, the stored value for no subscription).
      *
-     * Plan limits are per org, so without this check a user could take a
-     * second free cluster by creating a second free org. Membership, not
-     * ownership, is what counts: a free org holds exactly one member (the
-     * owner), and the rule is "one free org per person", not "per owner".
+     * One such org per person: without this check a user could collect
+     * dashboards by creating orgs they never start a plan on. Membership,
+     * not ownership, is what counts: such an org holds exactly one member
+     * (the owner), and the rule is "one per person", not "per owner".
      */
     async hasFreeOrganization(userId: string): Promise<boolean> {
         const [row] = await db

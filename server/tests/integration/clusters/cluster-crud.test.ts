@@ -36,7 +36,7 @@ describeCloud("Cluster CRUD", () => {
 
     beforeEach(async () => {
         await cleanAllData();
-        testData = await createOrgWithOwner(getTestDb());
+        testData = await createOrgWithOwner(getTestDb(), {}, { plan: "pro" });
     });
 
     // -------------------------------------------------------------------------

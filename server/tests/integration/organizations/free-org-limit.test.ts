@@ -9,11 +9,12 @@ import { organizations, type User } from "../../../src/db/schema/index.js";
 import { edition } from "../../../src/edition.js";
 
 /**
- * One free org per user (POST /api/users/organizations).
+ * One org without a plan per user (POST /api/users/organizations).
  *
- * Cluster limits are per org and every new org starts on the free plan, so
- * without this gate a user could take a second free cluster by creating a
- * second org. Upgrading or deleting the existing free org frees the slot.
+ * `free` is the stored value for an org with no subscription, and every
+ * new org starts that way, so without this gate a user could collect orgs
+ * they never start a plan on. Starting a plan on the existing org, or
+ * deleting it, frees the slot.
  */
 // Cloud-only: plans and the free-org limit are cloud billing; `STACKRADAR_EDITION=community pnpm test` skips it.
 const describeCloud = describe.skipIf(!edition.isCloud);
@@ -53,7 +54,7 @@ describeCloud("Free org limit (POST /api/users/organizations)", () => {
 
         expect(res.status).toBe(409);
         expect(res.body.code).toBe("FREE_ORG_LIMIT");
-        expect(res.body.error).toMatch(/already have a free organization/i);
+        expect(res.body.error).toMatch(/already have an organization without a plan/i);
     });
 
     it("should reject when the user is a non-owner member of a free org", async () => {

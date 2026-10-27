@@ -256,14 +256,14 @@ export const userController = {
             const { name } = createUserOrgSchema.parse(req.body);
             const time = createQueryTimer(log, { userId });
 
-            // One free org per user. New orgs always start on the free plan, so a
-            // user already in a free org would otherwise get a second free cluster
-            // slot just by creating another org. Upgrading or deleting the
-            // existing free org frees the slot.
+            // One org without a plan per user. New orgs start without one, so
+            // a user already in such an org would otherwise collect dashboards
+            // (and plan choosers) by creating more. Starting a plan on the
+            // existing org, or deleting it, frees the slot.
             if (await time("hasFreeOrganization", organizationRepository.hasFreeOrganization(userId))) {
                 throw new AppError(
                     409,
-                    "You already have a free organization. Upgrade it to add more clusters, or delete it to start a new one.",
+                    "You already have an organization without a plan. Start a plan on it, or delete it to create a new one.",
                     true,
                     "FREE_ORG_LIMIT",
                 );

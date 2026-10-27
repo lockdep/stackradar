@@ -1,40 +1,48 @@
 import { edition } from "../edition.js";
 
 /**
- * Plan limits for each subscription tier.
+ * Plan limits for each stored plan value.
  * Keep limits here — not in the database.
  * Changing limits is a product decision that belongs in code review.
  *
+ * ## `free` is "no active plan", not a tier
+ *
+ * The cloud has no Free plan since 2026-10-11: the community edition is the
+ * free tier, and every cloud plan starts with a card-required trial
+ * (`cloud/billing/plans.ts` `TRIAL_DAYS`). The stored value `free` stays —
+ * it is what `organizations.plan` holds for an org that has no subscription,
+ * new or lapsed — and its limits are what such an org may still do: read
+ * the dashboard, keep 30 days of history, connect **no** cluster. Every
+ * write on such an org is refused with `403 plan_required` (`lib/plan-gate.ts`),
+ * so `clusters: 0` is the belt to that gate's braces. The community edition
+ * is unaffected: `getPlanLimits` answers the community plan there whatever
+ * the column says.
+ *
  * ## Why images are unlimited on every tier
  *
- * Free was previously capped at 25 unique images/month. A modest production
- * cluster runs 30–60, so a new user installed the agent, hit the cap partway
- * through the first sweep, and saw a *partial — therefore wrong* — picture of
- * their own cluster on day one. That does not read as "limited", it reads as
- * "broken", and it happens at precisely the moment the product has to prove it
- * works.
+ * The old free tier was once capped at 25 unique images/month. A modest
+ * production cluster runs 30–60, so a new user installed the agent, hit the
+ * cap partway through the first sweep, and saw a *partial — therefore wrong*
+ * — picture of their own cluster on day one. That does not read as
+ * "limited", it reads as "broken", and it happens at precisely the moment
+ * the product has to prove it works.
  *
  * The rule that replaced it: **never charge for completeness of the current
  * picture.** The whole pitch is "you can finally see all of it", so every tier
  * sees all of it. What is charged for is history, cluster count, and seats —
  * the axes below that still carry finite numbers.
  *
- * That implies unlimited on the paid tiers too, not just Free: a 1,000-image
- * cap on Pro next to an unlimited Free tier would make the paid plan strictly
- * worse on that axis.
- *
  * > [!IMPORTANT]
  * > Unique images per month is the closest proxy this system has to marginal
  * > cost (SBOM storage, and the matching work each one triggers). Removing the
- * > cap moves the cost ceiling onto `clusters`, which is now the only thing
- * > bounding a free org's usage. If per-org cost becomes a problem, the lever
- * > to reach for is a rate limit on upload frequency — not a cap that silently
- * > truncates the inventory, which is the failure mode this change exists to
- * > remove. There is **no enforcement machinery left** to switch back on: the
- * > counter columns and `incrementMonthlyUploads` were deleted once every tier
- * > went unlimited, so a future cap starts from the rate-limit design, not
- * > from resurrecting the counter. `uniqueImagesPerMonth` below is display
- * > config — the settings UI and pricing page render it as "Unlimited".
+ * > cap moves the cost ceiling onto `clusters`. If per-org cost becomes a
+ * > problem, the lever to reach for is a rate limit on upload frequency — not
+ * > a cap that silently truncates the inventory, which is the failure mode
+ * > this change exists to remove. There is **no enforcement machinery left**:
+ * > the counter columns and `incrementMonthlyUploads` were deleted once every
+ * > tier went unlimited, so a future cap starts from the rate-limit design,
+ * > not from resurrecting the counter. `uniqueImagesPerMonth` below is
+ * > display config — the settings UI and pricing page render it as "Unlimited".
  *
  * ## What `historyDays` means — and what it must never mean
  *
@@ -55,16 +63,18 @@ import { edition } from "../edition.js";
  * exactly the "are we affected?" question the product exists to answer. A
  * `historyDays` check on an SBOM read is a bug, not a feature.
  *
+ * On `free` the window is also what a lapsed org's data lives on: history
+ * older than 30 days is swept within a day of the plan ending, which is the
+ * retention the marketing site's data-retention page states.
+ *
  * ## `alerts`
  *
  * Whether the plan gets the critical & KEV alerts (`services/alert.service.ts`).
- * Free does not: the free tier gated only
- * *scale* and so contained the entire value for a one-cluster team; alerts
- * are the first *outcome* gate. Free keeps the weekly digest. The worker
- * reads this on every pass, so a downgrade silences alerts and an upgrade
- * starts them, with no settings migration. Which *channels* an alert has
- * (webhook only, or email too) is the edition's decision, not the plan's —
- * `edition.alerting` in `src/edition.ts`.
+ * Both paid plans do, from the first day of the trial; an org without a plan
+ * does not. The worker reads this on every pass, so a lapse silences alerts
+ * and a new plan starts them, with no settings migration. Which *channels*
+ * an alert has (webhook only, or email too) is the edition's decision, not
+ * the plan's — `edition.alerting` in `src/edition.ts`.
  *
  * ## `community`
  *
@@ -83,12 +93,13 @@ import { edition } from "../edition.js";
  */
 export const PLAN_LIMITS = {
     free: {
-        clusters: 1,
+        // No plan, no cluster: the gate refuses the write anyway, and the
+        // limit says the same thing to anything that only reads the table.
+        clusters: 0,
         uniqueImagesPerMonth: Infinity,
         members: 1,
-        // 30 days: one month of trends and archive is enough to prove the
-        // history features work, and it matches the GC's default floor so
-        // the free tier needs no special casing anywhere.
+        // 30 days: what a lapsed org's history lives on, and the GC's
+        // default floor, so an org without a plan needs no special casing.
         historyDays: 30,
         alerts: false,
     },
@@ -125,7 +136,7 @@ export type PlanLimits = (typeof PLAN_LIMITS)[PlanType];
 /**
  * The limits that apply to an org on `plan`. In the community edition
  * every org is on the community plan whatever the column says; on the
- * cloud an unknown value is free, the safe direction for a limit.
+ * cloud an unknown value is free (no plan), the safe direction for a limit.
  */
 export function getPlanLimits(plan: string): PlanLimits {
     if (!edition.billing) return PLAN_LIMITS.community;

@@ -137,9 +137,13 @@ export const clusterRepository = {
                     .limit(1);
                 const [row] = await tx.select({ count: count() }).from(clusters).where(eq(clusters.orgId, data.orgId));
                 if ((row?.count ?? 0) >= opts.maxClusters) {
+                    // Zero is "no plan" (`config/plans.ts`): there is nothing
+                    // to upgrade from, only a plan to start.
                     throw new AppError(
                         403,
-                        `Your plan allows a maximum of ${opts.maxClusters} cluster(s). Upgrade to add more.`,
+                        opts.maxClusters === 0
+                            ? "Start a plan to connect a cluster."
+                            : `Your plan allows a maximum of ${opts.maxClusters} cluster(s). Upgrade to add more.`,
                         true,
                         "PLAN_LIMIT_EXCEEDED",
                     );

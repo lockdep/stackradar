@@ -83,10 +83,14 @@ export function PlanCard({
           ? { label: 'Recommended', className: 'bg-accent-emphasis' }
           : null;
 
+    /* Widened: the literal union of the limits table has no `1` in it any
+       more, and the labels are about the number, not the plan. */
+    const clusters: number = limits.clusters;
+    const members: number = limits.members;
     const features = [
-        limits.clusters === 1 ? '1 cluster' : `Up to ${limits.clusters} clusters`,
+        clusters === 0 ? 'No clusters' : clusters === 1 ? '1 cluster' : `Up to ${clusters} clusters`,
         plan === 'free' ? 'Unlimited images — your whole cluster' : 'Unlimited images',
-        limits.members === 1 ? '1 user' : `Up to ${limits.members} team members`,
+        members === 1 ? '1 user' : `Up to ${members} team members`,
         'Daily CVE re-checks',
         `${limits.retention} of history & saved SBOMs`,
         plan === 'free' ? 'Weekly email digest' : 'Critical & KEV alerts to email and Slack',

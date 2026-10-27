@@ -34,7 +34,7 @@ describeCloud("Cluster API key management", () => {
 
     beforeEach(async () => {
         await cleanAllData();
-        testData = await createOrgWithOwner(getTestDb());
+        testData = await createOrgWithOwner(getTestDb(), {}, { plan: "pro" });
     });
 
     // -------------------------------------------------------------------------
@@ -112,7 +112,7 @@ describeCloud("Cluster API key management", () => {
             await createClusterApiKey(db, legacy.id, testData.org.id, testData.user.id, { revealable: false });
             const without = await createCluster(db, testData.org.id, { name: "c-without" });
             // Another org's cluster never shows up.
-            const other = await createOrgWithOwner(db);
+            const other = await createOrgWithOwner(db, {}, { plan: "pro" });
             await createCluster(db, other.org.id, { name: "other" });
 
             const res = await request(app).get("/api/clusters/api-keys").set(authHeaders());
@@ -197,7 +197,7 @@ describeCloud("Cluster API key management", () => {
 
         it("should not reveal another org's key", async () => {
             const db = getTestDb();
-            const other = await createOrgWithOwner(db);
+            const other = await createOrgWithOwner(db, {}, { plan: "pro" });
             const cluster = await createCluster(db, other.org.id);
             await createClusterApiKey(db, cluster.id, other.org.id, other.user.id);
 

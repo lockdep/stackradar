@@ -104,7 +104,7 @@ describe('PlanCard', () => {
 
     it('offers the change-plan buttons when not read-only', () => {
         const html = render(false);
-        expect(html).toContain('Downgrade to Free');
+        expect(html).toContain('Downgrade to No plan');
         expect(html).toContain('Downgrade to Pro');
         expect(html).toContain('Your current plan');
     });
@@ -116,7 +116,7 @@ describe('PlanCard', () => {
         expect(html).not.toContain('Upgrade to');
         expect(html).toContain('Your current plan');
         // The tiers are still described.
-        expect(html).toContain('Free');
+        expect(html).toContain('No plan');
         expect(html).toContain('Pro');
     });
 });

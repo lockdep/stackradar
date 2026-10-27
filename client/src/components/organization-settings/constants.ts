@@ -30,8 +30,11 @@ export const USAGE_WARNING_THRESHOLD = 0.8;
  * `effectivePlan`.
  */
 export const PLAN_LIMITS = {
+    // "No plan": the stored value for an org with no subscription, new or
+    // lapsed. Read-only on the cloud, no cluster; 30 days is what its
+    // history lives on after a plan ends.
     free: {
-        clusters: 1,
+        clusters: 0,
         uniqueImagesPerMonth: Infinity,
         members: 1,
         sbomsStored: Infinity,
@@ -66,12 +69,14 @@ export const PLAN_LIMITS = {
 
 /**
  * The plans as they are sold, not as they are stored: the top tier's key
- * is `team` but its name is "Business". The prices live with the billing
- * UI (`cloud/billing/pricing.ts`); the names are needed everywhere a plan
- * is mentioned.
+ * is `team` but its name is "Business", and `free` — the stored value for
+ * an org without a subscription — is "No plan", because the cloud has no
+ * Free plan (the community edition is the free tier). The prices live with
+ * the billing UI (`cloud/billing/pricing.ts`); the names are needed
+ * everywhere a plan is mentioned.
  */
 export const PLAN_NAMES: Record<PlanType, string> = {
-    free: 'Free',
+    free: 'No plan',
     pro: 'Pro',
     team: 'Business',
     community: 'Community',
@@ -80,7 +85,7 @@ export const PLAN_NAMES: Record<PlanType, string> = {
 /**
  * The plan whose limits apply, given the edition: the community edition
  * has one plan for every org, and on the cloud an unknown stored value is
- * free — matching the server's `getPlanLimits`.
+ * free (no plan) — matching the server's `getPlanLimits`.
  */
 export function effectivePlan(plan: string | undefined, edition: Pick<Capabilities, 'billing'>): PlanType {
     if (!edition.billing) return 'community';

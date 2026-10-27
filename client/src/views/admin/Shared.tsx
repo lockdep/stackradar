@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { AlertCircle, CheckCircle, Table2 } from 'lucide-react';
 import { Spinner, VulnerabilityCounts } from '@/components/ui';
+import { PLAN_NAMES } from '@/components/organization-settings/constants';
 import { formatNumber, formatMax, type HealthTone } from './utils';
 import type { EcosystemEntry, SeverityCounts } from './types';
 
@@ -336,6 +337,10 @@ export function EcosystemChart({ entries }: { entries: EcosystemEntry[] }) {
 
 // ── PlanBadge ──────────────────────────────────────────────────────────────
 
+/**
+ * The stored plan value as it is sold: `team` is "Business", `free` is
+ * "No plan" (`PLAN_NAMES`); a value the client does not know is shown raw.
+ */
 export function PlanBadge({ plan }: { plan: string }) {
     const colors: Record<string, string> = {
         free: 'bg-surface-hover text-ink-secondary',
@@ -345,7 +350,7 @@ export function PlanBadge({ plan }: { plan: string }) {
         <span
             className={`text-xs px-1.5 py-0.5 rounded-sm font-medium ${colors[plan] ?? 'bg-surface-hover text-ink-secondary'}`}
         >
-            {plan}
+            {(PLAN_NAMES as Record<string, string>)[plan] ?? plan}
         </span>
     );
 }
