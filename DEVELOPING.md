@@ -263,6 +263,23 @@ pnpm test
 Client tests are unit tests over `src/**/*.test.{ts,tsx}` and need no
 database.
 
+### End to end
+
+```sh
+cd e2e
+pnpm install && pnpm exec playwright install chromium
+pnpm test
+```
+
+Playwright over the Compose quickstart built from the checkout: three
+containers (project `stackradar-e2e`, UI 3200, API 8280, Postgres 5446, so
+it runs beside `pnpm dev` and `fresh-local.sh`), seeded through the
+scanner API with the nginx SBOM fixture, driven through Chromium. The
+stack stays up between runs; `pnpm stack:down` removes it. Nothing is
+mocked, so it is the one suite that exercises sign-in, migrations on boot,
+the BFF and the job worker together. [e2e/README.md](e2e/README.md) has
+the layout and how to add a test.
+
 ### The gates a pull request runs
 
 | Workflow | What it checks |
@@ -274,6 +291,7 @@ database.
 | `dependency-licenses` | `node scripts/check-dependency-licenses.mjs`: every runtime dependency of each app carries a licence an AGPL-3.0 image may ship (runs when a manifest or lockfile changes; needs `pnpm install` first) |
 | `primer-token-drift` | `pnpm tokens:check`: `client/src/app/theme.css` is still what `@primer/primitives` generates |
 | `osv-schema-drift` | `node server/scripts/sync-osv-schema.mjs --verify`: the vendored OSV schema was not hand-edited (and weekly, that upstream has not moved) |
+| `e2e` | `pnpm test` in `e2e/`: the Playwright suite over the Compose stack built from the checkout, Chromium only (runs when an app, the Compose files or `e2e/` change) |
 | `snapshot` | Both images build (push disabled on a pull request) |
 | `codeql` | GitHub CodeQL over `server/src` and `client/src` |
 | `dco` | Every commit in the pull request carries a `Signed-off-by` trailer |

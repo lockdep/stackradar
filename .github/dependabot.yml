@@ -1,4 +1,5 @@
-# Dependency updates. Each app is its own pnpm project, so npm runs twice.
+# Dependency updates. Each app is its own pnpm project, and the e2e suite a
+# third, so npm runs three times.
 # Majors are left to a human in every ecosystem: a Next.js or Drizzle major
 # is a migration, not an update. The seven-day cooldown skips releases that
 # get yanked in their first week.
@@ -17,6 +18,17 @@ updates:
     - version-update:semver-major
 - package-ecosystem: npm
   directory: /client
+  schedule:
+    interval: weekly
+  cooldown:
+    default-days: 7
+  labels: [ "dependencies" ]
+  ignore:
+  - dependency-name: "*"
+    update-types:
+    - version-update:semver-major
+- package-ecosystem: npm
+  directory: /e2e
   schedule:
     interval: weekly
   cooldown:
