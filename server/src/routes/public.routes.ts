@@ -37,31 +37,32 @@ const router = Router();
  * stays up and is told `planRequired` — and loses the three writes: the
  * inventory, the SBOM upload and the check that precedes it. The scanner
  * treats a 403 on those as a report lost or a scan failed, never as a reason
- * to exit, and the heartbeat is what its liveness probe reads.
+ * to exit, and the heartbeat is what its liveness probe reads. The gate sits
+ * behind each route's rate limit, so a refusal costs a token like any answer.
  */
 router.post("/heartbeat", requireAuth, requireScope("sbom:write"), scannerController.heartbeat);
 router.post(
     "/inventory",
     requireAuth,
     requireScope("sbom:write"),
-    requireActivePlan,
     inventoryLimit,
+    requireActivePlan,
     scannerController.reportInventory,
 );
 router.post(
     "/sboms/upload/cyclonedx",
     requireAuth,
     requireScope("sbom:write"),
-    requireActivePlan,
     sbomUploadLimit,
+    requireActivePlan,
     sbomController.uploadCycloneDx,
 );
 router.get(
     "/sboms/check",
     requireAuth,
     requireScope("sbom:write"),
-    requireActivePlan,
     checkLimit,
+    requireActivePlan,
     sbomController.check,
 );
 
