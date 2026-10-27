@@ -226,6 +226,21 @@ export const organizationRepository = {
     },
 
     /**
+     * The organization's owner, for the mail that names a person (the
+     * founder alerts). Null for an org with no owner row — the community
+     * default before anyone has signed in, or a deleted org.
+     */
+    async getOwner(orgId: string): Promise<{ id: string; email: string; name: string | null } | null> {
+        const [row] = await db
+            .select({ id: users.id, email: users.email, name: users.name })
+            .from(orgMembers)
+            .innerJoin(users, eq(orgMembers.userId, users.id))
+            .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, "owner")))
+            .limit(1);
+        return row ?? null;
+    },
+
+    /**
      * Update organization plan
      */
     async updateOrganizationPlan(orgId: string, plan: PlanType, options: UpdatePlanOptions = {}): Promise<void> {

@@ -12,6 +12,7 @@ import { planOfPriceId } from "./stripe-prices.js";
 import { getBetaSlots, invalidateBetaSlots, pickPrice } from "./beta-slots.service.js";
 import { createCheckoutSchema, createPortalSchema } from "./billing.schema.js";
 import { TRIAL_DAYS } from "./plans.js";
+import { classifyPlanTransition, emitPlanTransitions } from "./plan-transitions.js";
 
 const log = createLogger("billing.controller");
 
@@ -45,6 +46,17 @@ function validateRedirectUrl(url: string, field: string): void {
  * as customer.subscription.deleted.
  */
 const PAID_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new Set(["active", "trialing", "past_due"]);
+
+/**
+ * Statuses a subscription can only have if its checkout never completed:
+ * `incomplete` is a first payment still being authenticated, and
+ * `incomplete_expired` one that never was. Everything else began as a plan
+ * the org had, so when none of them is paid any more the newest one's
+ * status is kept on the org row as how that plan ended (`canceled`,
+ * `unpaid`) — which is also what tells the client a `free` org has
+ * **lapsed** rather than never started.
+ */
+const NEVER_STARTED: ReadonlySet<Stripe.Subscription.Status> = new Set(["incomplete", "incomplete_expired"]);
 
 /**
  * Stripe caps expansion at 4 levels; `data.items.data.price.product` is 5
@@ -104,6 +116,12 @@ function pickCurrentSubscription(subscriptions: Stripe.Subscription[]): Stripe.S
     return paid[0] ?? null;
 }
 
+/** How the org's last plan ended, when it has none now: the newest once-paid subscription's status. */
+function endedStatus(subscriptions: Stripe.Subscription[]): Stripe.Subscription.Status | null {
+    const ended = subscriptions.filter((sub) => !NEVER_STARTED.has(sub.status)).sort((a, b) => b.created - a.created);
+    return ended[0]?.status ?? null;
+}
+
 /**
  * Recompute an org's plan from the customer's *current* subscriptions.
  *
@@ -114,6 +132,13 @@ function pickCurrentSubscription(subscriptions: Stripe.Subscription[]): Stripe.S
  * from the event's subscription would downgrade a paying customer. Deriving
  * from the customer's live state makes every event idempotent, order-proof,
  * and immune to being about the wrong subscription.
+ *
+ * The row being replaced is also the memory the trial events need: the
+ * transitions (`plan-transitions.ts`) are read off "what the org row said"
+ * against "what Stripe says now", written after the row, and never awaited.
+ * A trial is a subscription in `trialing` status — during it
+ * `current_period_end == trial_end`, so the stored period end is the date
+ * the Billing tab shows as "trial ends".
  */
 async function syncPlanForCustomer(customerId: string): Promise<void> {
     const org = await organizationRepository.getOrganizationByStripeCustomerId(customerId);
@@ -126,6 +151,7 @@ async function syncPlanForCustomer(customerId: string): Promise<void> {
         expand: SUBSCRIPTION_LIST_EXPAND,
     });
     const subscription = pickCurrentSubscription(list.data);
+    const transitions = classifyPlanTransition(org, subscription);
 
     const time = createQueryTimer(log, { orgId: org.id });
     if (subscription) {
@@ -142,22 +168,33 @@ async function syncPlanForCustomer(customerId: string): Promise<void> {
             }),
         );
         log.info(
-            { orgId: org.id, plan, subscriptionId: subscription.id, subscriptionStatus: subscription.status },
+            {
+                orgId: org.id,
+                plan,
+                subscriptionId: subscription.id,
+                subscriptionStatus: subscription.status,
+                transitions,
+            },
             "Plan updated from webhook",
         );
+        emitPlanTransitions({ org, transitions, subscription, plan });
     } else {
         // stripeCustomerId is kept so the org can resubscribe under the same
         // customer (billing history, saved cards); only the subscription goes.
+        // Its final status stays as the record that there *was* a plan —
+        // the client tells a lapsed org from a new one by it.
+        const ended = endedStatus(list.data);
         await time(
             "updateOrganizationPlan",
             organizationRepository.updateOrganizationPlan(org.id, "free", {
                 stripeSubscriptionId: null,
-                stripeSubscriptionStatus: null,
+                stripeSubscriptionStatus: ended,
                 stripeCurrentPeriodEnd: null,
                 stripeCancelAt: null,
             }),
         );
-        log.info({ orgId: org.id }, "Plan downgraded to free from webhook");
+        log.info({ orgId: org.id, endedStatus: ended, transitions }, "Plan ended from webhook; org has no plan");
+        emitPlanTransitions({ org, transitions, subscription: null, plan: "free" });
     }
 }
 
@@ -423,8 +460,13 @@ export const billingController = {
                 // checkout.session.completed, so upgrades are handled twice — idempotent.
                 // `deleted` fires when a subscription ends: cancel_at reached, immediate
                 // cancellation via portal, or payment retries exhausted.
+                // `trial_will_end` fires three days before a trial converts (and when a
+                // trial is cancelled with less than that left); it carries nothing the
+                // sync does not re-read, but it is one more delivery near the moment that
+                // matters most, in case the `updated` event is delayed.
                 case "customer.subscription.updated":
-                case "customer.subscription.deleted": {
+                case "customer.subscription.deleted":
+                case "customer.subscription.trial_will_end": {
                     const subscription = event.data.object as Stripe.Subscription;
                     invalidateBetaSlots();
                     const customerId = customerIdOf(subscription);

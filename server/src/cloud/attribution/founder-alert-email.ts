@@ -50,6 +50,20 @@ export interface ClusterAlertInput {
     adminUrl: string;
 }
 
+export interface TrialAlertInput {
+    /** `started`: a trial began (a card was saved). `converted`: the card was charged at the end of it. */
+    kind: "started" | "converted";
+    /** Who checked out; null when the org has no owner row to name. */
+    person: FounderAlertPerson | null;
+    org: { id: string; name: string };
+    plan: "pro" | "team";
+    interval: string | null;
+    priceBook: string | null;
+    trialEnd: Date | null;
+    subscriptionId: string;
+    adminUrl: string;
+}
+
 /** A row of the key/value list every alert is. */
 type Field = [label: string, value: string | null];
 
@@ -106,6 +120,54 @@ export function renderClusterAlert(input: ClusterAlertInput): EmailContent {
 }
 
 /** The same two alerts as a Slack `mrkdwn` message. */
+/** "Pro · monthly · beta price", from what the subscription says about itself. */
+function planLabel(input: TrialAlertInput): string {
+    const name = input.plan === "team" ? "Business" : "Pro";
+    const interval = input.interval === "year" ? "annual" : input.interval === "month" ? "monthly" : null;
+    const book = input.priceBook === "beta" ? "beta price" : input.priceBook === "standard" ? "standard price" : null;
+    return [name, interval, book].filter(Boolean).join(" · ");
+}
+
+export function renderTrialAlert(input: TrialAlertInput): EmailContent {
+    const who = input.person ? personLabel(input.person) : "unknown";
+    const subject =
+        input.kind === "started"
+            ? `Trial started: ${input.org.name} (${planLabel(input)})`
+            : `Trial converted: ${input.org.name} (${planLabel(input)})`;
+    const fields: Field[] = [
+        ["Organisation", input.org.name],
+        ["Plan", planLabel(input)],
+        ...(input.kind === "started" ? [["Trial ends", input.trialEnd?.toISOString() ?? null] as Field] : []),
+        ["Person", who],
+        ["Email", input.person?.email ?? null],
+        ["Org id", input.org.id],
+        ["Subscription", input.subscriptionId],
+    ];
+    return render({
+        subject,
+        preheader:
+            input.kind === "started"
+                ? `${who} saved a card and started a ${planLabel(input)} trial`
+                : `${who} is now paying for ${planLabel(input)}`,
+        intro:
+            input.kind === "started"
+                ? "Someone started a free trial. Nothing is charged until it ends; reply to this email to reach them."
+                : "A trial just converted to a paid plan. Reply to this email to say thanks.",
+        fields,
+        adminUrl: input.adminUrl,
+    });
+}
+
+export function renderTrialAlertSlack(input: TrialAlertInput): string {
+    const who = input.person ? personLabel(input.person) : "unknown";
+    const head = input.kind === "started" ? "*Trial started:*" : "*Trial converted:*";
+    return [
+        `${head} ${input.org.name} · ${planLabel(input)}`,
+        input.kind === "started" && input.trialEnd ? `Ends ${input.trialEnd.toISOString().slice(0, 10)} · ${who}` : who,
+        `<${input.adminUrl}|Open admin>`,
+    ].join("\n");
+}
+
 export function renderSignupAlertSlack(input: SignupAlertInput): string {
     const where = whereLabel(input.origin);
     return [

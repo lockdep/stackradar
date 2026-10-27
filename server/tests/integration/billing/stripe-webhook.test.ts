@@ -1,11 +1,12 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import type { Express } from "express";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getTestApp } from "../../setup/test-app.js";
 import { getTestDb, cleanAllData } from "../../setup/test-db.js";
 import { createOrgWithOwner } from "../../fixtures/seed-data.js";
-import { organizations } from "../../../src/db/schema/index.js";
+import { organizations, orgMembers, users } from "../../../src/db/schema/index.js";
+import { config } from "../../../src/config/index.js";
 import {
     SUBSCRIPTION_UPDATED,
     CHECKOUT_COMPLETED,
@@ -33,6 +34,18 @@ vi.mock("stripe", () => ({
 }));
 
 const LIST_EXPAND = ["data.items.data.price"];
+
+/* PostHog is the stubbed `fetch` (`services/posthog.service.ts` posts with it);
+   the key is set per test so the default run sends nothing. */
+const fetchMock = vi.fn();
+const posthog = config.posthog as { apiKey: string };
+const posthogCalls = () =>
+    fetchMock.mock.calls
+        .filter((c) => String(c[0]).endsWith("/i/v0/e"))
+        .map(
+            (c) =>
+                JSON.parse((c[1] as { body: string }).body) as { event: string; properties: Record<string, unknown> },
+        );
 
 /** What Stripe returns for `subscriptions.list` — the customer's live state. */
 function stripeHas(...subscriptions: object[]) {
@@ -96,12 +109,21 @@ describeCloud("POST /v1/webhooks/stripe", () => {
     beforeEach(async () => {
         await cleanAllData();
         vi.clearAllMocks();
+        vi.stubGlobal("fetch", fetchMock);
+        fetchMock.mockReset();
+        fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
+        posthog.apiKey = "";
         // Fixtures carry string product IDs; the default product has no plan
         // metadata, and the price catalog is not mocked here, so tiers fall
         // through to the logged "default to pro" path.
         mockProductsRetrieve
             .mockReset()
             .mockResolvedValue({ id: "prod_UXyM0ZmTgTHXOL", object: "product", metadata: {} });
+    });
+
+    afterEach(() => {
+        posthog.apiKey = "";
+        vi.unstubAllGlobals();
     });
 
     // -----------------------------------------------------------------------
@@ -171,7 +193,9 @@ describeCloud("POST /v1/webhooks/stripe", () => {
 
             await sendWebhook(app, trialingEvent);
 
-            expect((await getOrg(org.id)).plan).toBe("pro");
+            const updated = await getOrg(org.id);
+            expect(updated.plan).toBe("pro");
+            expect(updated.stripeSubscriptionStatus).toBe("trialing");
         });
 
         it("keeps org on pro while subscription is past_due (Stripe is still retrying payment)", async () => {
@@ -266,6 +290,162 @@ describeCloud("POST /v1/webhooks/stripe", () => {
 
             expect(res.status).toBe(200);
             expect(res.body.received).toBe(true);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    describe("trial bookkeeping", () => {
+        const TRIAL_END = 1_780_686_000;
+        const trialing = (overrides: Record<string, unknown> = {}) => ({
+            ...SUBSCRIPTION_UPDATED.data.object,
+            status: "trialing",
+            trial_start: TRIAL_END - 14 * 86_400,
+            trial_end: TRIAL_END,
+            items: {
+                ...SUBSCRIPTION_UPDATED.data.object.items,
+                data: [{ ...SUBSCRIPTION_UPDATED.data.object.items.data[0]!, current_period_end: TRIAL_END }],
+            },
+            ...overrides,
+        });
+        const eventWith = (object: object) => ({
+            ...SUBSCRIPTION_UPDATED,
+            data: { ...SUBSCRIPTION_UPDATED.data, object },
+        });
+
+        async function ownerOf(orgId: string) {
+            const [row] = await getTestDb()
+                .select({ user: users })
+                .from(orgMembers)
+                .innerJoin(users, eq(orgMembers.userId, users.id))
+                .where(and(eq(orgMembers.orgId, orgId), eq(orgMembers.role, "owner")));
+            return row!.user;
+        }
+
+        it("stamps trial_consumed_at on the person who checked out and captures trial_started", async () => {
+            posthog.apiKey = "phc_test";
+            const org = await seedFreeOrg(CUSTOMER_UPDATED);
+            const owner = await ownerOf(org.id);
+            expect(owner.trialConsumedAt).toBeNull();
+            const sub = trialing({ metadata: { orgId: org.id, priceBook: "beta", userId: owner.id } });
+            mockConstructEvent.mockReturnValue(eventWith(sub));
+            stripeHas(sub);
+
+            const res = await sendWebhook(app, eventWith(sub));
+
+            expect(res.status).toBe(200);
+            const updated = await getOrg(org.id);
+            expect(updated.plan).toBe("pro");
+            expect(updated.stripeSubscriptionStatus).toBe("trialing");
+            // During a trial the period end *is* the trial end: what the Billing tab shows.
+            expect(updated.stripeCurrentPeriodEnd?.getTime()).toBe(TRIAL_END * 1000);
+            await vi.waitFor(async () => {
+                const [u] = await getTestDb().select().from(users).where(eq(users.id, owner.id));
+                expect(u!.trialConsumedAt?.getTime()).toBe((TRIAL_END - 14 * 86_400) * 1000);
+            });
+            await vi.waitFor(() => expect(posthogCalls().map((c) => c.event)).toEqual(["trial_started"]));
+            expect(posthogCalls()[0]!.properties).toMatchObject({
+                org_id: org.id,
+                plan: "pro",
+                interval: "month",
+                price_book: "beta",
+                trial_end: new Date(TRIAL_END * 1000).toISOString(),
+            });
+        });
+
+        it("falls back to the org owner when the subscription names nobody, and never moves an existing stamp", async () => {
+            const org = await seedFreeOrg(CUSTOMER_UPDATED);
+            const owner = await ownerOf(org.id);
+            const earlier = new Date("2026-01-01T00:00:00Z");
+            await getTestDb().update(users).set({ trialConsumedAt: earlier }).where(eq(users.id, owner.id));
+            const sub = trialing({ metadata: {} });
+            mockConstructEvent.mockReturnValue(eventWith(sub));
+            stripeHas(sub);
+
+            await sendWebhook(app, eventWith(sub));
+
+            // Give the fire-and-forget side effects a tick, then prove nothing moved.
+            await new Promise((r) => setTimeout(r, 50));
+            const [u] = await getTestDb().select().from(users).where(eq(users.id, owner.id));
+            expect(u!.trialConsumedAt?.getTime()).toBe(earlier.getTime());
+        });
+
+        it("captures trial_converted when the same subscription goes trialing → active", async () => {
+            posthog.apiKey = "phc_test";
+            const org = await seedProOrg(CUSTOMER_UPDATED);
+            await getTestDb()
+                .update(organizations)
+                .set({ stripeSubscriptionStatus: "trialing" })
+                .where(eq(organizations.id, org.id));
+            mockConstructEvent.mockReturnValue(SUBSCRIPTION_UPDATED);
+            stripeHas(SUBSCRIPTION_UPDATED.data.object); // status "active", same id
+
+            await sendWebhook(app, SUBSCRIPTION_UPDATED);
+
+            expect((await getOrg(org.id)).stripeSubscriptionStatus).toBe("active");
+            await vi.waitFor(() => expect(posthogCalls().map((c) => c.event)).toEqual(["trial_converted"]));
+        });
+
+        it("captures trial_cancelled when a trialing subscription gains cancel_at", async () => {
+            posthog.apiKey = "phc_test";
+            const org = await seedProOrg(CUSTOMER_UPDATED);
+            await getTestDb()
+                .update(organizations)
+                .set({ stripeSubscriptionStatus: "trialing" })
+                .where(eq(organizations.id, org.id));
+            const sub = trialing({ cancel_at: TRIAL_END });
+            mockConstructEvent.mockReturnValue(eventWith(sub));
+            stripeHas(sub);
+
+            await sendWebhook(app, eventWith(sub));
+
+            const updated = await getOrg(org.id);
+            expect(updated.plan).toBe("pro");
+            expect(updated.stripeCancelAt?.getTime()).toBe(TRIAL_END * 1000);
+            await vi.waitFor(() => expect(posthogCalls().map((c) => c.event)).toEqual(["trial_cancelled"]));
+        });
+
+        it("handles customer.subscription.trial_will_end like any other subscription event", async () => {
+            const org = await seedFreeOrg(CUSTOMER_UPDATED);
+            const sub = trialing();
+            mockConstructEvent.mockReturnValue({ ...eventWith(sub), type: "customer.subscription.trial_will_end" });
+            stripeHas(sub);
+
+            const res = await sendWebhook(app, {});
+
+            expect(res.status).toBe(200);
+            expect(mockSubscriptionsList).toHaveBeenCalledOnce();
+            expect((await getOrg(org.id)).plan).toBe("pro");
+        });
+
+        it("captures plan_ended, keeping how the plan ended on the row, when a paid subscription is gone", async () => {
+            posthog.apiKey = "phc_test";
+            const org = await seedProOrg(CUSTOMER_DELETED);
+            await getTestDb()
+                .update(organizations)
+                .set({ stripeSubscriptionStatus: "active" })
+                .where(eq(organizations.id, org.id));
+            mockConstructEvent.mockReturnValue(SUBSCRIPTION_DELETED);
+            stripeHas(SUBSCRIPTION_DELETED.data.object);
+
+            await sendWebhook(app, SUBSCRIPTION_DELETED);
+
+            const updated = await getOrg(org.id);
+            expect(updated.plan).toBe("free");
+            expect(updated.stripeSubscriptionId).toBeNull();
+            expect(updated.stripeSubscriptionStatus).toBe("canceled");
+            await vi.waitFor(() => expect(posthogCalls().map((c) => c.event)).toEqual(["plan_ended"]));
+        });
+
+        it("leaves the status empty when the customer never had a plan (only an incomplete checkout)", async () => {
+            const org = await seedFreeOrg(CUSTOMER_UPDATED);
+            mockConstructEvent.mockReturnValue(CHECKOUT_COMPLETED);
+            stripeHas({ ...RETRIEVED_SUBSCRIPTION, status: "incomplete_expired" });
+
+            await sendWebhook(app, CHECKOUT_COMPLETED);
+
+            const updated = await getOrg(org.id);
+            expect(updated.plan).toBe("free");
+            expect(updated.stripeSubscriptionStatus).toBeNull();
         });
     });
 

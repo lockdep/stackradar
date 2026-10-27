@@ -9,11 +9,14 @@ const SEND_TIMEOUT_MS = 10_000;
  * The server-side funnel events. Names are the funnel's steps so the
  * PostHog funnel reads the way the plan was written: a drop at
  * `signup_completed` means the landing page is not landing, a drop at
- * `first_sbom_received` means the install is too hard. Add to this union
- * rather than passing free strings so the event vocabulary stays in one
- * place.
+ * `first_sbom_received` means the install is too hard, and the four plan
+ * events (`cloud/billing/plan-transitions.ts`) say whether the trial that
+ * follows was started, converted, cancelled, or how the plan ended. Add to
+ * this union rather than passing free strings so the event vocabulary stays
+ * in one place.
  */
-export type ServerEventName = "signup_completed" | "first_sbom_received";
+export type ServerEventName =
+    "signup_completed" | "first_sbom_received" | "trial_started" | "trial_converted" | "trial_cancelled" | "plan_ended";
 
 export interface ServerEventInput {
     event: ServerEventName;

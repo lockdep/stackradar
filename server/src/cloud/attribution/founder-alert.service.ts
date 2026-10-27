@@ -8,8 +8,11 @@ import {
     renderClusterAlertSlack,
     renderSignupAlert,
     renderSignupAlertSlack,
+    renderTrialAlert,
+    renderTrialAlertSlack,
     type ClusterAlertInput,
     type SignupAlertInput,
+    type TrialAlertInput,
 } from "./founder-alert-email.js";
 
 const log = logger.child({ module: "founder-alert" });
@@ -60,16 +63,31 @@ export const founderAlertService = {
             replyTo: input.person.email,
         });
     },
+
+    /**
+     * A trial started (a card was saved) or converted (it was charged). Keyed
+     * on the subscription, so a webhook retry does not re-alert and a second
+     * trial on the same org (a lapsed org starting again) does.
+     */
+    async notifyTrial(input: TrialAlertInput): Promise<FounderAlertResult> {
+        return deliver(input.kind === "started" ? "trial_started" : "trial_converted", input.org.id, {
+            email: () => renderTrialAlert(input),
+            slack: () => renderTrialAlertSlack(input),
+            idempotencyKey: `founder-alert/trial-${input.kind}/${input.subscriptionId}`,
+            replyTo: input.person?.email ?? null,
+        });
+    },
 };
 
 async function deliver(
-    kind: "signup" | "cluster",
+    kind: "signup" | "cluster" | "trial_started" | "trial_converted",
     orgId: string,
     message: {
         email: () => { subject: string; html: string; text: string };
         slack: () => string;
         idempotencyKey: string;
-        replyTo: string;
+        /** The person to reply to; null when the alert names nobody. */
+        replyTo: string | null;
     },
 ): Promise<FounderAlertResult> {
     if (!founderAlertService.isConfigured()) {
@@ -84,7 +102,7 @@ async function deliver(
         const result = await emailService.send({
             ...message.email(),
             to: config.founderAlerts.email,
-            replyTo: message.replyTo,
+            ...(message.replyTo ? { replyTo: message.replyTo } : {}),
             tags: { type: "founder_alert", kind },
             idempotencyKey: message.idempotencyKey,
         });
