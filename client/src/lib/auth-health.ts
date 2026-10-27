@@ -78,6 +78,11 @@ function missingAuthEnv(): string[] {
  *   - `UntrustedHost`: triggered by the *request's* Host header, so treating it
  *     as fatal would let anyone take a pod out of rotation with a forged Host.
  *     We cover that case with the AUTH_TRUST_HOST check above instead.
+ *   - `InvalidProvider`: triggered by the *request's* URL — a GET to
+ *     `/api/auth/callback` (or a made-up provider id) raises it. Latching it
+ *     let one anonymous request pull every pod out of the Service (prod
+ *     outage 2026-10-27). Provider misconfiguration is covered by
+ *     `authProviderProblems()` above instead.
  *   - `AdapterError`: transient database trouble, already covered by the
  *     readiness probe's own DB check.
  *   - every sign-in / OAuth / CSRF / session-token error: per-request failures
@@ -89,7 +94,6 @@ const CONFIGURATION_ERROR_TYPES = new Set([
     'MissingAdapterMethods',
     'MissingAuthorize',
     'InvalidEndpoints',
-    'InvalidProvider',
     'UnsupportedStrategy',
     'ExperimentalFeatureNotEnabled',
     'DuplicateConditionalUI',
