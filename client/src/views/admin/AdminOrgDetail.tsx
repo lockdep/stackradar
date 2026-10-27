@@ -92,7 +92,7 @@ export function AdminOrgDetail({ org, onBack }: { org: RecentOrg; onBack: () => 
                     <div className="mb-6 pb-6 border-b border-edge">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                             <h2 className="text-xl font-semibold text-ink">{org.name}</h2>
-                            <PlanBadge plan={org.plan} />
+                            <PlanBadge plan={org.plan} status={org.stripeSubscriptionStatus} />
                             {org.demo && <Badge variant="info">demo</Badge>}
                         </div>
                         <p className="text-xs text-ink-muted font-mono break-all">

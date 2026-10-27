@@ -4,19 +4,17 @@
 import { Check, Lock, Ticket } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { PLAN_LIMITS } from '@/components/organization-settings/constants';
-import { PLAN_DETAILS, formatDollars, priceView, type BillingInterval, type PlanSlots } from './pricing';
-
-/** The plans the cards draw: the three the cloud sells. */
-type PlanType = keyof typeof PLAN_DETAILS;
+import { PLAN_DETAILS, formatDollars, priceView, type BillingInterval, type PaidPlan, type PlanSlots } from './pricing';
 
 interface PlanCardProps {
-    plan: PlanType;
+    /** One of the two plans the cloud sells; there is no card for "no plan". */
+    plan: PaidPlan;
     /** Monthly or annual — the price the paid cards show and the checkout buys. */
     interval: BillingInterval;
     /** The plan's live beta-slot count; null while unknown (the offer renders without a count). */
     slots: PlanSlots | null;
     isCurrentPlan: boolean;
-    onSelect: (plan: PlanType) => void;
+    onSelect: (plan: PaidPlan) => void;
     isUpgrade: boolean;
     /** Paid orgs change plans in the billing portal, not via checkout. */
     viaPortal: boolean;
@@ -26,6 +24,10 @@ interface PlanCardProps {
     isAnyLoading?: boolean; // any card's action is in progress — disables button
     /** The live demo: the comparison stays, the select button goes. */
     readOnly?: boolean;
+    /** The plan chooser's wording ("Start free trial"); the Billing tab's default is "Upgrade to …". */
+    ctaLabel?: string;
+    /** The line under the button; defaults to the Billing tab's "Cancel anytime. No lock-in.". */
+    ctaNote?: string;
 }
 
 /**
@@ -60,13 +62,12 @@ export function PlanCard({
     isLoading,
     isAnyLoading,
     readOnly = false,
+    ctaLabel,
+    ctaNote,
 }: PlanCardProps) {
     const details = PLAN_DETAILS[plan];
     const limits = PLAN_LIMITS[plan];
-    // Paid tiers carry the beta-pricing value block; Free renders the same
-    // five rows with all but the price invisible so the feature lists start
-    // at the same height on every card.
-    const view = plan === 'free' ? null : priceView(plan, interval, slots);
+    const view = priceView(plan, interval, slots);
     const highlighted = isRecommended && !isCurrentPlan;
 
     // One visual hierarchy: the recommended card is the only one that shouts.
@@ -89,11 +90,11 @@ export function PlanCard({
     const members: number = limits.members;
     const features = [
         clusters === 0 ? 'No clusters' : clusters === 1 ? '1 cluster' : `Up to ${clusters} clusters`,
-        plan === 'free' ? 'Unlimited images — your whole cluster' : 'Unlimited images',
+        'Unlimited images — your whole cluster',
         members === 1 ? '1 user' : `Up to ${members} team members`,
         'Daily CVE re-checks',
         `${limits.retention} of history & saved SBOMs`,
-        plan === 'free' ? 'Weekly email digest' : 'Critical & KEV alerts to email and Slack',
+        'Critical & KEV alerts to email and Slack',
         ...(plan === 'team' ? ['Priority support'] : []),
     ];
 
@@ -111,76 +112,54 @@ export function PlanCard({
 
             <h3 className="text-lg font-semibold text-ink">{details.name}</h3>
 
-            {view ? (
-                /* The value block, in reading order: the struck standard
-                   price (labelled so it is never mistaken for a past price)
-                   → the beta price, in accent, as the hero → the saving →
-                   the lock → the slot counter. Once the slots are gone the
-                   strike disappears and the standard price is the hero. */
-                <div className="mt-3">
-                    <p className="flex min-h-6 items-center gap-x-2">
-                        {view.strike != null ? (
-                            <>
-                                <span className="text-base font-medium text-ink-faint line-through">
-                                    {formatDollars(view.strike)}
-                                </span>
-                                <span className="text-xs text-ink-faint">after the beta slots</span>
-                            </>
-                        ) : (
-                            <span className="text-xs text-ink-faint">Standard price</span>
-                        )}
-                        {view.saving && (
-                            <span className="ml-auto inline-flex items-center whitespace-nowrap rounded-md bg-accent-subtle px-2 py-0.5 text-xs font-semibold text-accent">
-                                {view.saving}
+            {/* The value block, in reading order: the struck standard
+                price (labelled so it is never mistaken for a past price)
+                → the beta price, in accent, as the hero → the saving →
+                the lock → the slot counter. Once the slots are gone the
+                strike disappears and the standard price is the hero. */}
+            <div className="mt-3">
+                <p className="flex min-h-6 items-center gap-x-2">
+                    {view.strike != null ? (
+                        <>
+                            <span className="text-base font-medium text-ink-faint line-through">
+                                {formatDollars(view.strike)}
                             </span>
-                        )}
-                    </p>
-                    <p className="mt-1 flex items-baseline gap-x-1.5">
-                        <span
-                            className={`text-4xl font-bold tracking-tight ${view.book === 'beta' ? 'text-accent' : 'text-ink'}`}
-                        >
-                            {formatDollars(view.amount)}
+                            <span className="text-xs text-ink-faint">after the beta slots</span>
+                        </>
+                    ) : (
+                        <span className="text-xs text-ink-faint">Standard price</span>
+                    )}
+                    {view.saving && (
+                        <span className="ml-auto inline-flex items-center whitespace-nowrap rounded-md bg-accent-subtle px-2 py-0.5 text-xs font-semibold text-accent">
+                            {view.saving}
                         </span>
-                        <span className="text-sm font-medium text-ink-muted">/month</span>
-                    </p>
-                    <p
-                        className={`mt-1 text-xs text-ink-faint ${view.billed ? '' : 'invisible'}`}
-                        aria-hidden={!view.billed}
+                    )}
+                </p>
+                <p className="mt-1 flex items-baseline gap-x-1.5">
+                    <span
+                        className={`text-4xl font-bold tracking-tight ${view.book === 'beta' ? 'text-accent' : 'text-ink'}`}
                     >
-                        {view.billed || '\u00a0'}
-                    </p>
-                    <p className="mt-3 flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-ink-muted">
-                        <Lock className="size-3.5 shrink-0 text-ink-muted" aria-hidden="true" />
-                        {view.book === 'beta' ? 'Price locked for as long as you subscribe' : 'Cancel anytime'}
-                    </p>
-                    <p
-                        className={`mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${view.book === 'beta' ? 'text-accent' : 'text-ink-muted'}`}
-                    >
-                        <Ticket className="size-3.5 shrink-0" aria-hidden="true" />
-                        {view.slotsLine}
-                    </p>
-                </div>
-            ) : (
-                /* Same five rows as the paid cards with all but the price
-                   invisible, so the tiers can be compared line by line. */
-                <div className="mt-3">
-                    <p className="invisible flex min-h-6 items-center text-base" aria-hidden="true">
-                        &nbsp;
-                    </p>
-                    <p className="mt-1 flex items-baseline gap-x-1.5 text-ink">
-                        <span className="text-4xl font-bold tracking-tight">{PLAN_DETAILS.free.price}</span>
-                    </p>
-                    <p className="invisible mt-1 text-xs" aria-hidden="true">
-                        &nbsp;
-                    </p>
-                    <p className="invisible mt-3 flex items-center text-xs font-medium" aria-hidden="true">
-                        &nbsp;
-                    </p>
-                    <p className="invisible mt-1.5 flex items-center text-xs font-medium" aria-hidden="true">
-                        &nbsp;
-                    </p>
-                </div>
-            )}
+                        {formatDollars(view.amount)}
+                    </span>
+                    <span className="text-sm font-medium text-ink-muted">/month</span>
+                </p>
+                <p
+                    className={`mt-1 text-xs text-ink-faint ${view.billed ? '' : 'invisible'}`}
+                    aria-hidden={!view.billed}
+                >
+                    {view.billed || '\u00a0'}
+                </p>
+                <p className="mt-3 flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-ink-muted">
+                    <Lock className="size-3.5 shrink-0 text-ink-muted" aria-hidden="true" />
+                    {view.book === 'beta' ? 'Price locked for as long as you subscribe' : 'Cancel anytime'}
+                </p>
+                <p
+                    className={`mt-1.5 flex items-center gap-1.5 whitespace-nowrap text-xs font-medium ${view.book === 'beta' ? 'text-accent' : 'text-ink-muted'}`}
+                >
+                    <Ticket className="size-3.5 shrink-0" aria-hidden="true" />
+                    {view.slotsLine}
+                </p>
+            </div>
 
             <p className="mt-4 text-sm text-ink-muted">{details.description}</p>
 
@@ -224,11 +203,11 @@ export function PlanCard({
                                 ? `Downgrade to ${details.name}`
                                 : viaPortal
                                   ? 'Change plan'
-                                  : `Upgrade to ${details.name}`}
+                                  : (ctaLabel ?? `Upgrade to ${details.name}`)}
                         </Button>
                         <p className="mt-2 text-center text-xs text-ink-muted">
                             {isUpgrade && !viaPortal
-                                ? 'Cancel anytime. No lock-in.'
+                                ? (ctaNote ?? 'Cancel anytime. No lock-in.')
                                 : 'Changed through the billing portal.'}
                         </p>
                     </>

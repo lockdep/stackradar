@@ -72,7 +72,7 @@ export function OrganizationsTab({
                                             </TableCell>
                                             <TableCell>
                                                 <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                    <PlanBadge plan={org.plan} />
+                                                    <PlanBadge plan={org.plan} status={org.stripeSubscriptionStatus} />
                                                     {org.demo && <Badge variant="info">demo</Badge>}
                                                 </span>
                                             </TableCell>

@@ -53,6 +53,8 @@ export interface AdminOrganization {
     name: string;
     slug: string;
     plan: string;
+    /** The Stripe subscription's status (`trialing`, `active`, `past_due`, …); null without one. */
+    stripeSubscriptionStatus: string | null;
     demo: boolean;
     createdAt: Date;
     memberCount: number;
@@ -197,6 +199,8 @@ export const adminRepository = {
                 name: schema.organizations.name,
                 slug: schema.organizations.slug,
                 plan: schema.organizations.plan,
+                // So the badge can say "trial" next to the plan.
+                stripeSubscriptionStatus: schema.organizations.stripeSubscriptionStatus,
                 // Stays in the list — an admin should see it — but badged by the
                 // client so its `team` plan with no Stripe customer is not mistaken
                 // for a paying account.

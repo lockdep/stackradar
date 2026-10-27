@@ -7,21 +7,12 @@ import { PlanCard } from './PlanCard';
  * The billing tab's cards, which are where the checkout and portal buttons
  * live. `readOnly` is the live demo: the comparison is kept — the demo org
  * is on Business, and the point is to show what the tiers are — but no card
- * offers a button that would open Stripe for a shared visitor account.
+ * offers a button that would open Stripe for a shared visitor account. The
+ * cloud sells two plans; there is no card for "no plan".
  */
 const render = (readOnly: boolean) =>
     renderToStaticMarkup(
         <>
-            <PlanCard
-                plan="free"
-                interval="month"
-                slots={null}
-                isCurrentPlan={false}
-                isUpgrade={false}
-                viaPortal
-                onSelect={() => {}}
-                readOnly={readOnly}
-            />
             <PlanCard
                 plan="pro"
                 interval="month"
@@ -104,9 +95,15 @@ describe('PlanCard', () => {
 
     it('offers the change-plan buttons when not read-only', () => {
         const html = render(false);
-        expect(html).toContain('Downgrade to No plan');
         expect(html).toContain('Downgrade to Pro');
         expect(html).toContain('Your current plan');
+    });
+
+    it("takes the chooser's wording for the button and the line under it", () => {
+        const html = renderPro({ ctaLabel: 'Start free trial', ctaNote: '14 days free · card required' });
+        expect(html).toContain('Start free trial');
+        expect(html).toContain('14 days free · card required');
+        expect(html).not.toContain('Upgrade to Pro');
     });
 
     it('keeps the comparison but drops every plan-change button when read-only', () => {
@@ -116,7 +113,7 @@ describe('PlanCard', () => {
         expect(html).not.toContain('Upgrade to');
         expect(html).toContain('Your current plan');
         // The tiers are still described.
-        expect(html).toContain('No plan');
+        expect(html).toContain('Business');
         expect(html).toContain('Pro');
     });
 });

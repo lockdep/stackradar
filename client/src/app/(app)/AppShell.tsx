@@ -10,9 +10,19 @@ import { Sidebar } from '@/components/Sidebar';
 import { MirrorBanner } from '@/components/MirrorBanner';
 import { SearchProvider } from '@/components/search';
 /* The cloud's surfaces, each drawn behind an `edition` check: the terms
-   gate, the live demo's banner and toast, the landing page's upgrade
-   intent. `@/cloud` is the one import the licence boundary allows here. */
-import { DemoBanner, DemoReadOnlyToast, TermsAcceptanceScreen, UpgradeIntent, useTermsGate } from '@/cloud';
+   gate, the plan chooser, the live demo's banner and toast, the landing
+   page's upgrade intent. `@/cloud` is the one import the licence boundary
+   allows here. */
+import {
+    DemoBanner,
+    PlanEndedBanner,
+    PlanGateScreen,
+    ReadOnlyToast,
+    TermsAcceptanceScreen,
+    UpgradeIntent,
+    planState,
+    useTermsGate,
+} from '@/cloud';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 
@@ -162,7 +172,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         isAccepting: termsAccepting,
         error: termsError,
     } = useTermsGate(organization ? (session?.user?.id ?? null) : null, demoMode || !edition.isCloud);
-    const { gate, markClusterReady, skip } = useOnboardingGate(organization?.id ?? null, edition.multiCluster);
+    // What the org's plan row means for the shell (`cloud/billing/plan-state.ts`):
+    // a new org sees the plan chooser and nothing else; a lapsed one sees the
+    // dashboard read-only. The demo org has a plan and is read-only its own way.
+    const plan = organization && !demoMode ? planState(organization, edition) : 'active';
+    // The wizard creates a cluster, which the server refuses without a plan.
+    const { gate, markClusterReady, skip } = useOnboardingGate(
+        organization?.id ?? null,
+        edition.multiCluster && plan === 'active',
+    );
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const router = useRouter();
 
@@ -183,6 +201,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         // the current version is accepted.
         if (termsGate === 'needed') {
             return <TermsAcceptanceScreen onAccept={acceptTerms} isAccepting={termsAccepting} error={termsError} />;
+        }
+        // Then the plan: a new org chooses one before anything else renders,
+        // because the server refuses every write until it has.
+        if (plan === 'never') {
+            return <PlanGateScreen key={organization.id} organization={organization} />;
         }
         if (gate === 'needed') {
             return (
@@ -221,6 +244,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         <DemoBanner />
                     </div>
                 )}
+                {/* An org whose plan ended: readable, read-only, and told so on
+                every page, in the demo banner's slot. */}
+                {plan === 'lapsed' && (
+                    <div className="lg:pl-72">
+                        <PlanEndedBanner />
+                    </div>
+                )}
                 {/* A fresh install's OSV bootstrap, said out loud on every page
                 until it has finished; renders nothing once the mirror is live. */}
                 <div className="lg:pl-72">
@@ -232,7 +262,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         {children}
                     </div>
                 </main>
-                {demoMode && <DemoReadOnlyToast />}
+                {(demoMode || plan === 'lapsed') && <ReadOnlyToast />}
             </div>
         </SearchProvider>
     );

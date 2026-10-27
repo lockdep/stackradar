@@ -7,6 +7,20 @@ export type BillingInterval = 'month' | 'year';
 /** The plans a checkout can buy. */
 export type PaidPlan = Exclude<PlanType, 'free' | 'community'>;
 
+/** The two, in the order the cards show them. */
+export const PAID_PLANS: readonly PaidPlan[] = ['pro', 'team'];
+
+/**
+ * How long the free trial every cloud plan starts with lasts. Mirrors
+ * `TRIAL_DAYS` in `server/src/cloud/billing/plans.ts`, which is what the
+ * checkout puts on the Stripe session; this copy only lets the chooser say
+ * the number. Gated by `scripts/check-cross-app-constants.mjs`; the
+ * marketing site's `lib/pricing.ts` carries the same number by hand.
+ */
+export const TRIAL_DAYS = 14;
+/** The one-line statement of the trial's terms, under the checkout button. */
+export const TRIAL_LINE = `${TRIAL_DAYS}-day free trial · card required · nothing charged until it ends`;
+
 /**
  * How many subscriptions each paid plan sells at the beta price. Mirrors
  * `BETA_PRICE_SLOTS` in `server/src/cloud/billing/plans.ts`, which is what
@@ -24,7 +38,9 @@ export interface PlanSlots {
 export type BetaSlots = Record<PaidPlan, PlanSlots>;
 
 /**
- * The two price books, in whole dollars. `beta` is what a subscription
+ * The two plans the cloud sells (there is no Free plan: `PLAN_NAMES.free`
+ * is "No plan", the state before a trial or after one ended), each with its
+ * two price books, in whole dollars. `beta` is what a subscription
  * created while the plan has a free slot pays, for as long as it stays
  * subscribed; `standard` is the pre-announced price after the slots (and at
  * the stable release). Annual is ten months' price. Both mirror the
@@ -34,12 +50,6 @@ export type BetaSlots = Record<PaidPlan, PlanSlots>;
  * resolved by lookup key on the server (`cloud/billing/stripe-prices.ts`).
  */
 export const PLAN_DETAILS = {
-    free: {
-        name: PLAN_NAMES.free,
-        description: 'For individuals evaluating or running a single cluster.',
-        price: '$0',
-        period: '',
-    },
     pro: {
         name: PLAN_NAMES.pro,
         description: 'For engineers running production workloads who need full visibility.',

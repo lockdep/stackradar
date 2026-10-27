@@ -28,6 +28,10 @@
  *     Per-plan numeric limits. Compared on the server's keys only: the
  *     client copy carries extra display-only fields (`retention`,
  *     `sbomsStored`) that have no server counterpart, and those are allowed.
+ *  3b. TRIAL_DAYS  server/src/cloud/billing/plans.ts  ⇄
+ *                  client/src/cloud/billing/pricing.ts
+ *     The free trial's length: the server puts it on the Stripe Checkout
+ *     session, the client only says the number.
  *  4. MIGRATION_LOCK_KEY  server/src/db/migrate.ts  ⇄  client/scripts/migrate.mjs
  *     Both apps migrate one database under one advisory lock; different
  *     keys would let a client and a server replica
@@ -204,6 +208,21 @@ compare(
     }
     compare("PLAN_LIMITS", FILES.serverPlans, FILES.clientPlans, serverKeyed, clientKeyed);
 }
+
+// 3b. The trial length the checkout sets and the chooser states.
+/** The integer out of `TRIAL_DAYS = <digits>`. */
+function extractTrialDays(rel) {
+    const m = stripComments(read(rel)).match(/TRIAL_DAYS\s*=\s*(\d+)/);
+    if (!m) fail(`could not find \`TRIAL_DAYS = <number>\` in ${rel} — was it renamed? Update ${FILES_SELF}.`);
+    return m ? Number(m[1]) : NaN;
+}
+compare(
+    "TRIAL_DAYS",
+    "server/src/cloud/billing/plans.ts",
+    "client/src/cloud/billing/pricing.ts",
+    extractTrialDays("server/src/cloud/billing/plans.ts"),
+    extractTrialDays("client/src/cloud/billing/pricing.ts")
+);
 
 // 4. The migration advisory lock, and the client's journal location.
 /** The numeric literal out of `MIGRATION_LOCK_KEY = <digits with optional _>`. */

@@ -234,6 +234,8 @@ export interface RecentOrg {
     name: string;
     slug: string;
     plan: string;
+    /** The Stripe subscription's status; `trialing` is badged. Absent from older servers. */
+    stripeSubscriptionStatus?: string | null;
     /** The live demo's org: read-only, its plan is not a sale. */
     demo?: boolean;
     createdAt: string;

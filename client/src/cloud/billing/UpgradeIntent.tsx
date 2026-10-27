@@ -9,10 +9,11 @@ import { ApiError, apiFetch, errorMessage } from '@/lib/api-client';
 
 /**
  * Landing-page pricing CTAs arrive as `/?intent=upgrade-<plan>` with an
- * optional `&interval=year` (see landing-page lib/pricing.ts). Not a trial:
- * checkout charges immediately. The price itself is the server's call
- * (beta slot or standard), never a parameter. Rendered by `AppShell` once
- * the organisation is known, on the cloud only.
+ * optional `&interval=year` (see landing-page lib/pricing.ts). The checkout
+ * carries the free trial unless this person has had one (the server's
+ * call, as is the price — beta slot or standard — never a parameter).
+ * Rendered by `AppShell` once the organisation is known, on the cloud only,
+ * and by the plan chooser a new org sees in its place.
  */
 export function UpgradeIntent() {
     const { organization, isLoading } = useOrganization();
