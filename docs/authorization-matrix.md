@@ -22,6 +22,7 @@ exists only in the cloud is a 404 in the community edition, never a 403.
 | **User (via the BFF)** | `X-Internal-Key` plus the identity headers the Next.js BFF sets from the Auth.js session; `requireOrg` re-verifies the `X-Org-Id` claim against `org_members` on every request. | Everything under `/api`, subject to the role rows below. |
 | **Platform admin** | `X-Is-Admin: true`, set by the BFF from the client's `auth.users.is_admin` (`createApiHeaders` sets it only for admins, and the BFF's catch-all rejects `admin/*` for anyone else). **The server does not re-verify it**: `requireAdmin` reads the header-derived `req.auth.isAdmin`, so the claim rests on `INTERNAL_SERVICE_KEY` never leaving the BFF. | `/api/admin/*` (28 routes). |
 | **Demo visitor** | `users.demo` / `organizations.demo`, set only by the seed script. | Reads only: every non-safe method is `403 read_only_demo` (`lib/demo.ts`, `middleware/auth.ts`). |
+| **Member of an org without a plan** (cloud) | `organizations.plan = 'free'`: no subscription — new, or lapsed after a trial or subscription ended. | Reads, billing (`/api/billing/*`) and `DELETE /api/organizations/:id` only: every other non-safe method is `403 plan_required` (`lib/plan-gate.ts`, `middleware/auth.ts`, `routes/organization.routes.ts`). Its scanner key keeps `POST /v1/heartbeat` (answered with `planRequired: true`) and loses inventory, upload and check. Never in the community edition. |
 
 Org roles are `owner`, `admin`, `member` (`org_members.role`).
 `requireAdminOrOwner` (`middleware/auth.ts`) admits the first two; the
@@ -32,8 +33,8 @@ owner-only checks are a local `requireOwner` helper in
 
 | Action | Route | Cloud | Community | Where |
 |---|---|---|---|---|
-| First login | `POST /api/users/setup` | Creates "`<name>`'s Organization" on the free plan with the user as **owner**; records terms acceptance, sends the welcome email, stores sign-up attribution (`cloud/hooks.ts`). | Joins the one organisation, slug `default`, plan `community`, seeded at start-up. **First user to sign in is its owner; every later user is a member.** No terms, no email, no attribution. | `controllers/user.controller.ts` `setup`; `services/default-org.service.ts` |
-| Create another organisation | `POST /api/users/organizations` | 201; `409 FREE_ORG_LIMIT` if the user is already in a free org. | **`403 single_organization`.** | `middleware/edition.ts` `requireMultiOrg` |
+| First login | `POST /api/users/setup` | Creates "`<name>`'s Organization" with **no plan** (`plan = 'free'`) and the user as **owner**; records terms acceptance, sends the welcome email, stores sign-up attribution (`cloud/hooks.ts`). The app then shows the plan chooser; a checkout starts a 14-day card-required trial (`cloud/billing/`). | Joins the one organisation, slug `default`, plan `community`, seeded at start-up. **First user to sign in is its owner; every later user is a member.** No terms, no email, no attribution. | `controllers/user.controller.ts` `setup`; `services/default-org.service.ts` |
+| Create another organisation | `POST /api/users/organizations` | 201; `409 FREE_ORG_LIMIT` if the user is already in an org without a plan. | **`403 single_organization`.** | `middleware/edition.ts` `requireMultiOrg` |
 | Rename, colour, digest toggle, default findings view | `PATCH /api/organizations/:id` | admin/owner | admin/owner | `organization.routes.ts` |
 | Delete the organisation | `DELETE /api/organizations/:id` | owner; the cloud cancels the Stripe subscription first and refuses if it cannot. | owner. (The seed recreates an empty `default` on the next start; nothing stops an owner from deleting their own install's data.) | `organization.controller.ts`, `cloud/hooks.ts` `beforeOrganizationDelete` |
 | Join a system org | any member write | Never: `addOrgMember` throws. | Never. | `organization.repository.ts` |
@@ -109,11 +110,25 @@ edition each is a **404**, not a 403 — the route does not exist there.
 
 | Surface | Route(s) | Who |
 |---|---|---|
-| Billing (checkout, portal, slot counter) | `/api/billing/*`, `/v1/pricing` | owner for checkout/portal; `/v1/pricing` is public |
+| Billing (checkout, portal, slot counter) | `/api/billing/*`, `/v1/pricing` | admin/owner for checkout/portal, on an org with or without a plan; `/v1/pricing` is public, `/api/billing/pricing` adds the caller's `trialEligible` |
 | Stripe and Resend webhooks | `/v1/webhooks/stripe`, `/v1/webhooks/resend` | signature-verified, no principal |
 | Feedback inbox | `/api/feedback`, `/api/admin/feedback` | member to send; platform admin to read |
 | Terms gate | `/api/users/terms*` | any signed-in user |
 | Digest and alert unsubscribe | `/v1/digest/unsubscribe`, `/v1/alerts/unsubscribe` | signed token, no session |
+
+## An organization without a plan (cloud only)
+
+The cloud has no Free plan: `organizations.plan = 'free'` means "no
+subscription", and such an org is read-only (`lib/plan-gate.ts`). A new org
+is one until its first checkout — the client shows it the plan chooser and
+nothing else — and a lapsed org is one after its trial or subscription
+ended; the client tells the two apart by whether the final subscription
+status is still on the row. Reads keep working so the dashboard stays
+readable; every write is `403 plan_required` except the way back in
+(billing) and the way out (deleting the org). The scanner's heartbeat keeps
+answering 200 with `planRequired: true`; its inventory, upload and check are
+refused. History on such an org is on the 30-day no-plan window
+(`config/plans.ts`).
 
 ## Live demo (cloud only)
 
