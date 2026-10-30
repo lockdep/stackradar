@@ -61,7 +61,7 @@ export const groupedFindingsQuerySchema = z.object({ ...tierQueryField });
  * org's lists nothing, because the org scope is still applied.
  */
 export const withinQueryFields = {
-    cluster: z.uuid().optional().catch(undefined),
+    cluster: z.guid().optional().catch(undefined),
     namespace: z.string().min(1).max(253).optional().catch(undefined),
 };
 
@@ -113,7 +113,7 @@ export const clusterRadarScoreQuerySchema = z.object({
 });
 
 export const clusterRadarScoreFindingsQuerySchema = z.object({
-    imageId: z.uuid("Invalid image ID"),
+    imageId: z.guid("Invalid image ID"),
     ...tierQueryField,
 });
 
@@ -155,5 +155,5 @@ export const clusterPackageOccurrencesQuerySchema = z.object({
 
 /** A `:clusterId` route param (the metrics routes name it this way). */
 export const clusterIdParamSchema = z.object({
-    clusterId: z.uuid("Invalid cluster ID"),
+    clusterId: z.guid("Invalid cluster ID"),
 });

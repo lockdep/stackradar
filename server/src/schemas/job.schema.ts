@@ -11,5 +11,5 @@ import { z } from "zod";
  * enqueued by the worker under the system org.
  */
 export const jobIdParamSchema = z.object({
-    id: z.uuid("Invalid job ID"),
+    id: z.guid("Invalid job ID"),
 });

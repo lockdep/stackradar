@@ -7,5 +7,5 @@ import { z } from "zod";
  * Used for validating entity IDs in URL parameters
  */
 export const uuidParamSchema = z.object({
-    id: z.uuid("Invalid ID format"),
+    id: z.guid("Invalid ID format"),
 });

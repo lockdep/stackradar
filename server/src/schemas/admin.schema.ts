@@ -30,7 +30,7 @@ export const adminJobsQuerySchema = adminListQuerySchema.extend({
 
 /** The `:id` of a job, on the retry action. */
 export const adminJobIdParamSchema = z.object({
-    id: z.uuid("Invalid job ID"),
+    id: z.guid("Invalid job ID"),
 });
 
 /** The `:feed` of a feed trigger. */
@@ -51,26 +51,26 @@ export const adminImagesQuerySchema = adminListQuerySchema.extend({
 });
 
 export const explorerImagesQuerySchema = z.object({
-    orgId: z.uuid("orgId is required"),
+    orgId: z.guid("orgId is required"),
 });
 
 export const explorerSbomsQuerySchema = z.object({
-    imageId: z.uuid("imageId is required"),
+    imageId: z.guid("imageId is required"),
 });
 
 export const explorerComponentsQuerySchema = adminListQuerySchema.extend({
-    sbomId: z.uuid("sbomId is required"),
+    sbomId: z.guid("sbomId is required"),
     search: z.string().optional(),
 });
 
 /** The `:orgId` route param on the per-org admin drill-downs. */
 export const adminOrgIdParamSchema = z.object({
-    orgId: z.uuid("Invalid organization ID"),
+    orgId: z.guid("Invalid organization ID"),
 });
 
 /** The `:componentId` route param on the explorer component detail. */
 export const adminComponentIdParamSchema = z.object({
-    componentId: z.uuid("Invalid component ID"),
+    componentId: z.guid("Invalid component ID"),
 });
 
 /** The `:id` of an OSV parse failure — a serial row id, not a UUID. */

@@ -13,4 +13,4 @@ export const createTierRuleSchema = z.object({
     reason: z.string().trim().max(500).nullable().optional(),
 });
 
-export const tierRuleIdParamSchema = z.object({ id: z.uuid(), ruleId: z.uuid() });
+export const tierRuleIdParamSchema = z.object({ id: z.guid(), ruleId: z.guid() });

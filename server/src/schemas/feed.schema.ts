@@ -9,7 +9,7 @@ export const feedQuerySchema = z.object({
     days: z.coerce.number().int().positive().max(730).default(30),
     limit: z.coerce.number().int().positive().max(500).default(200),
     cursor: z.string().min(1).max(200).optional(),
-    cluster: z.string().uuid().optional(),
+    cluster: z.guid().optional(),
 });
 
 /** The bands a movement row can be filtered on — the scored four; rows never exist on `unscored` alone. */
@@ -46,5 +46,5 @@ export const feedMovementQuerySchema = z.object({
 
 /** `GET /api/feed/movement/:imageId/findings?days=` — the findings behind one movement row. */
 export const feedMovementFindingsParamsSchema = z.object({
-    imageId: z.string().uuid(),
+    imageId: z.guid(),
 });

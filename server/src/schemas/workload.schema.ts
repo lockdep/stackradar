@@ -10,15 +10,15 @@ import { z } from "zod";
 
 /** A `workload_containers` row id — the unit the workload detail page renders. */
 export const workloadIdParamSchema = z.object({
-    id: z.uuid("Invalid workload container ID"),
+    id: z.guid("Invalid workload container ID"),
 });
 
 export const imageIdParamSchema = z.object({
-    id: z.uuid("Invalid image ID"),
+    id: z.guid("Invalid image ID"),
 });
 
 export const releaseIdParamSchema = z.object({
-    id: z.uuid("Invalid release ID"),
+    id: z.guid("Invalid release ID"),
 });
 
 /**
@@ -32,13 +32,13 @@ export const releaseIdParamSchema = z.object({
  * chart" is a legitimate intersection.
  */
 export const workloadListQuerySchema = z.object({
-    clusterId: z.uuid("Invalid cluster ID").optional(),
-    namespaceId: z.uuid("Invalid namespace ID").optional(),
-    releaseId: z.uuid("Invalid release ID").optional(),
-    applicationId: z.uuid("Invalid application ID").optional(),
-    imageId: z.uuid("Invalid image ID").optional(),
+    clusterId: z.guid("Invalid cluster ID").optional(),
+    namespaceId: z.guid("Invalid namespace ID").optional(),
+    releaseId: z.guid("Invalid release ID").optional(),
+    applicationId: z.guid("Invalid application ID").optional(),
+    imageId: z.guid("Invalid image ID").optional(),
 });
 
 export const clusterScopeQuerySchema = z.object({
-    clusterId: z.uuid("Invalid cluster ID").optional(),
+    clusterId: z.guid("Invalid cluster ID").optional(),
 });

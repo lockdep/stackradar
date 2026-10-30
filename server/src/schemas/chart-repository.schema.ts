@@ -14,7 +14,7 @@ import { z } from "zod";
  */
 
 export const chartRepositoryIdParamSchema = z.object({
-    id: z.uuid("Invalid chart repository ID"),
+    id: z.guid("Invalid chart repository ID"),
 });
 
 const httpUrl = z

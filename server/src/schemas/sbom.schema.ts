@@ -6,7 +6,7 @@ import { z } from "zod";
  * Schema for SBOM ID parameter
  */
 export const sbomIdParamSchema = z.object({
-    id: z.uuid("Invalid SBOM ID"),
+    id: z.guid("Invalid SBOM ID"),
 });
 
 /**
