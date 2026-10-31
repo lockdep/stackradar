@@ -8,6 +8,14 @@ export type ResolvedTheme = 'light' | 'dark';
 export const THEME_STORAGE_KEY = 'sr-theme';
 const CHANGE_EVENT = 'sr-theme-change';
 
+/**
+ * What a visitor gets before they have chosen anything: dark, to match the
+ * landing page. "System" is an explicit, stored choice, not the fallback, so a
+ * light-OS visitor lands on the same dark dashboard the marketing site showed.
+ * Must stay in sync with the pre-hydration script in app/layout.tsx.
+ */
+export const DEFAULT_THEME: ResolvedTheme = 'dark';
+
 interface ThemeContextValue {
     theme: ThemePreference;
     resolvedTheme: ResolvedTheme;
@@ -15,17 +23,17 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-    theme: 'system',
-    resolvedTheme: 'light',
+    theme: DEFAULT_THEME,
+    resolvedTheme: DEFAULT_THEME,
     setTheme: () => {},
 });
 
 function readPreference(): ThemePreference {
     try {
         const stored = localStorage.getItem(THEME_STORAGE_KEY);
-        if (stored === 'light' || stored === 'dark') return stored;
+        if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
     } catch {}
-    return 'system';
+    return DEFAULT_THEME;
 }
 
 function resolve(preference: ThemePreference): ResolvedTheme {
@@ -51,11 +59,11 @@ function subscribe(onChange: () => void) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-    const theme = useSyncExternalStore(subscribe, readPreference, () => 'system' as const);
+    const theme = useSyncExternalStore(subscribe, readPreference, () => DEFAULT_THEME);
     const resolvedTheme = useSyncExternalStore(
         subscribe,
         () => resolve(readPreference()),
-        () => 'light' as const,
+        () => DEFAULT_THEME,
     );
 
     // The inline script in layout.tsx applies the attribute pre-hydration;
@@ -66,8 +74,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     const setTheme = useCallback((preference: ThemePreference) => {
         try {
-            if (preference === 'system') localStorage.removeItem(THEME_STORAGE_KEY);
-            else localStorage.setItem(THEME_STORAGE_KEY, preference);
+            localStorage.setItem(THEME_STORAGE_KEY, preference);
         } catch {}
         window.dispatchEvent(new Event(CHANGE_EVENT));
     }, []);

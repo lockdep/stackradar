@@ -62,8 +62,10 @@ export default async function RootLayout({
     const demoMode = isDemoMode();
 
     // Applies the persisted theme before first paint so there is no flash of
-    // the wrong theme. Must stay in sync with THEME_STORAGE_KEY.
-    const themeInitScript = `(function(){try{var t=localStorage.getItem("sr-theme");if(t!=="light"&&t!=="dark"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="light"}})()`;
+    // the wrong theme. Dark is the default; only an explicit "system" choice
+    // consults the OS. Must stay in sync with THEME_STORAGE_KEY / DEFAULT_THEME
+    // in ThemeProvider.tsx.
+    const themeInitScript = `(function(){try{var t=localStorage.getItem("sr-theme");if(t==="system"){t=window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}else if(t!=="light"){t="dark"}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}})()`;
 
     return (
         <html lang="en" className="h-full bg-surface" suppressHydrationWarning>
