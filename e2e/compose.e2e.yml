@@ -1,0 +1,38 @@
+# The end-to-end stack: the Compose quickstart on images built from this
+# checkout, as e2e/scripts/stack.sh assembles it —
+#
+#   docker compose --project-directory . \
+#     -f deploy/compose/docker-compose.yml -f dev/local-build.yml -f e2e/compose.e2e.yml up -d --wait
+#
+# deploy/compose/docker-compose.yml is the product (Postgres, server, client,
+# fixture secrets, migrations on boot); dev/local-build.yml swaps the GHCR
+# images for `build:` blocks; this file is only what the tests need on top:
+#
+# - a project name of its own, so `down --volumes` here never reaches the
+#   database of `scripts/fresh-local.sh` (project `stackradar-local`) or of
+#   a snapshot quickstart (project `stackradar`);
+# - a mirror small enough to build during the run. `Alpine` is 40 MB and
+#   about two minutes, and it finds everything in the nginx:1.27-alpine SBOM
+#   the tests upload (server/tests/fixtures/). The findings test waits for
+#   that bootstrap; nothing else does;
+# - no Artifact Hub mirror (a 25 MB nightly download the tests never read);
+# - no restart policy: a container that dies during a run should stay dead
+#   and be read in the logs, not come back and hide the failure.
+#
+# Ports are dev/local-build.yml's LOCAL_* variables, which stack.sh sets to
+# 3200 (UI), 8280 (API) and 5446 (Postgres) so the stack runs beside
+# `pnpm dev` (3000/8080/5444) and fresh-local.sh (3100/8180/5445).
+name: stackradar-e2e
+
+services:
+  postgres:
+    restart: 'no'
+
+  server:
+    environment:
+      OSV_ECOSYSTEMS: ${E2E_OSV_ECOSYSTEMS:-Alpine}
+      ARTIFACT_HUB_SYNC_ENABLED: 'false'
+    restart: 'no'
+
+  client:
+    restart: 'no'

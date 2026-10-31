@@ -13,7 +13,9 @@ for the full picture. How to build and test is [DEVELOPING.md](DEVELOPING.md).
 | client | `client/` | [client/docs/adr/](client/docs/adr/) | Next.js 16 UI plus the BFF that is the only thing a browser talks to. Owns authentication (Auth.js) and the database's `auth` schema. |
 
 The two are independent pnpm projects (no root `package.json`, no workspace);
-run `pnpm` inside the app directory. System-wide decisions are in
+run `pnpm` inside the app directory. A third, `e2e/`, is the Playwright
+suite over both of them running as the Compose quickstart
+([e2e/README.md](e2e/README.md)); it ships nothing. System-wide decisions are in
 [docs/adr/](docs/adr/); the per-app directories above hold decisions that
 only concern that app.
 
