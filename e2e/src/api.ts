@@ -10,7 +10,7 @@ import { fixtures, stack } from './stack';
  * the browser or the BFF.
  */
 
-/** The one image the tests know by name: the fixture SBOM, deployed as one container. */
+/** The image the tests know by name: the fixture SBOM, deployed as one container. */
 export const nginx = {
     repository: 'nginx',
     registry: 'docker.io',
@@ -21,10 +21,31 @@ export const nginx = {
     container: 'nginx',
 } as const;
 
-function scannerHeaders(extra: Record<string, string> = {}): Record<string, string> {
+/**
+ * A container whose image the scanner could not pull: a private registry
+ * that refused the pull. No SBOM is ever uploaded for it, and the report
+ * carries the `registry_auth` failure, so it is what the coverage card,
+ * the "Not scanned" state and the auth banner are about.
+ */
+export const privateApi = {
+    repository: 'acme/private-api',
+    registry: 'registry.example.internal',
+    tag: '2.4.1',
+    imageRef: 'registry.example.internal/acme/private-api:2.4.1',
+    namespace: 'e2e-private',
+    workload: 'private-api',
+    container: 'api',
+    /** Any `sha256:` value: the scanner reads it off the node, here it is fixed so the seed is idempotent. */
+    digest: `sha256:${createHash('sha256').update('stackradar-e2e-private-api-2.4.1').digest('hex')}`,
+} as const;
+
+/** The scanner version the seed reports; what the cluster list shows in its Version column. */
+export const scannerVersion = '0.7.0';
+
+function scannerHeaders(extra: Record<string, string> = {}, key: string = stack.scannerKey): Record<string, string> {
     return {
-        'X-API-Key': stack.scannerKey,
-        'X-Scanner-Version': '0.7.0',
+        'X-API-Key': key,
+        'X-Scanner-Version': scannerVersion,
         ...extra,
     };
 }
@@ -50,51 +71,113 @@ export async function heartbeat(): Promise<void> {
     await failOn(res, 'POST /v1/heartbeat');
 }
 
-/** One namespace, one Deployment, one container running the fixture image. A full-set replacement, so it is idempotent. */
-export async function reportInventory(imageDigest: string): Promise<void> {
-    const report = {
+export interface InventoryOptions {
+    /** The nginx container's digest; omitted = the container is not in the report. */
+    nginxDigest?: string;
+    /** Include the private-registry container with its `registry_auth` failure. Default true. */
+    privateApi?: boolean;
+}
+
+/**
+ * The report a scanner would send for this stack: one Deployment per
+ * namespace, every container running one pod. A full-set replacement, so
+ * sending it twice is sending it once; leaving a container out removes it.
+ */
+export function inventoryReport({ nginxDigest, privateApi: withPrivate = true }: InventoryOptions): object {
+    const namespaces: object[] = [];
+    if (nginxDigest) {
+        namespaces.push({
+            name: nginx.namespace,
+            labels: { 'e2e.stackradar.io/suite': 'playwright' },
+            workloads: [
+                {
+                    kind: 'Deployment',
+                    name: nginx.workload,
+                    release: null,
+                    application: null,
+                    runningPods: 1,
+                    firstStartedAt: '2026-01-01T00:00:00.000Z',
+                    labels: { app: nginx.workload },
+                    containers: [
+                        {
+                            name: nginx.container,
+                            init: false,
+                            imageRef: nginx.imageRef,
+                            imageDigest: nginxDigest,
+                            imageTag: nginx.tag,
+                            registry: nginx.registry,
+                            repository: nginx.repository,
+                            runningPods: 1,
+                        },
+                    ],
+                },
+            ],
+        });
+    }
+    if (withPrivate) {
+        namespaces.push({
+            name: privateApi.namespace,
+            labels: { 'e2e.stackradar.io/suite': 'playwright' },
+            workloads: [
+                {
+                    kind: 'Deployment',
+                    name: privateApi.workload,
+                    release: null,
+                    application: null,
+                    runningPods: 1,
+                    firstStartedAt: '2026-01-01T00:00:00.000Z',
+                    labels: { app: privateApi.workload },
+                    containers: [
+                        {
+                            name: privateApi.container,
+                            init: false,
+                            imageRef: privateApi.imageRef,
+                            imageDigest: privateApi.digest,
+                            imageTag: privateApi.tag,
+                            registry: privateApi.registry,
+                            repository: privateApi.repository,
+                            runningPods: 1,
+                            imagePullSecrets: ['acme-registry'],
+                        },
+                    ],
+                },
+            ],
+        });
+    }
+    return {
         version: 3,
         reportedAt: new Date().toISOString(),
         informerSynced: true,
         ownerMetadataCollected: true,
         releases: [],
         applications: [],
-        namespaces: [
-            {
-                name: nginx.namespace,
-                labels: { 'e2e.stackradar.io/suite': 'playwright' },
-                workloads: [
-                    {
-                        kind: 'Deployment',
-                        name: nginx.workload,
-                        release: null,
-                        application: null,
-                        runningPods: 1,
-                        firstStartedAt: '2026-01-01T00:00:00.000Z',
-                        labels: { app: nginx.workload },
-                        containers: [
-                            {
-                                name: nginx.container,
-                                init: false,
-                                imageRef: nginx.imageRef,
-                                imageDigest,
-                                imageTag: nginx.tag,
-                                registry: nginx.registry,
-                                repository: nginx.repository,
-                                runningPods: 1,
-                            },
-                        ],
-                    },
-                ],
-            },
-        ],
+        scanFailures: withPrivate
+            ? [{ imageDigest: privateApi.digest, code: 'registry_auth', registryHost: privateApi.registry }]
+            : [],
+        namespaces,
     };
-    const res = await fetch(`${stack.apiUrl}/v1/inventory`, {
-        method: 'POST',
-        headers: scannerHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(report),
-    });
-    await failOn(res, 'POST /v1/inventory');
+}
+
+/**
+ * The endpoint allows a burst of five reports per key and refills two a
+ * minute (a scanner reports every few minutes); a suite run back to back
+ * with the last one can hit the limit, so a 429 is waited out, not failed.
+ */
+export async function reportInventory(options: InventoryOptions): Promise<void> {
+    for (let attempt = 0; ; attempt++) {
+        const res = await fetch(`${stack.apiUrl}/v1/inventory`, {
+            method: 'POST',
+            headers: scannerHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(inventoryReport(options)),
+        });
+        if (res.status === 429 && attempt < 4) {
+            const retryAfter = Number(res.headers.get('retry-after')) || 35;
+            await new Promise((r) => setTimeout(r, retryAfter * 1000));
+            continue;
+        }
+        await failOn(res, 'POST /v1/inventory');
+        return;
+    }
 }
 
 export interface UploadResult {
@@ -123,3 +206,6 @@ export async function uploadNginxSbom(imageDigest: string): Promise<UploadResult
     const created = (await res.json()) as { imageId: string; componentCount: number };
     return { created: true, imageId: created.imageId, componentCount: created.componentCount };
 }
+
+/** For the API spec: the same headers the seed uses, with a key of the caller's choosing. */
+export { scannerHeaders };
