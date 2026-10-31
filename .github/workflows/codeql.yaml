@@ -48,6 +48,20 @@ jobs:
             paths-ignore:
               - "**/*.test.ts"
               - "**/*.test.tsx"
+            # `js/missing-rate-limiting` flags every authenticated Express
+            # handler with no limiter it knows (express-rate-limit, express-brute,
+            # express-limiter, rate-limiter-flexible) in front of it. Ours it
+            # cannot see: the `/v1` ingest routes sit behind the per-key token
+            # bucket in `middleware/rate-limit.ts`, and the `/api` surface is
+            # cluster-only (the Next.js BFF is its one caller), where flooding
+            # is the Ingress's job (`limit-rps`; docs/self-hosting/helm.md,
+            # "Ingest rate limits and replicas"). Every one of its 80-odd
+            # findings was dismissed as won't fix, and renaming a route file
+            # raised them again as new, so the query is off rather than
+            # re-dismissed each time.
+            query-filters:
+              - exclude:
+                  id: js/missing-rate-limiting
 
       - uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
         with:
