@@ -37,7 +37,7 @@ export function ContainersGroupingCaption({
                     <>
                         <span className="font-medium text-ink-secondary">Worst first</span>
                         <span className="mx-1.5 text-ink-faint">·</span>
-                        Every running container in the organisation, by Radar Score.
+                        Every running container in the organisation, by Risk Score.
                     </>
                 ) : (
                     <>

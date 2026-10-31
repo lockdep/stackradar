@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** Zod schemas for `/api/clusters` and the org-wide Radar Score routes. */
+/** Zod schemas for `/api/clusters` and the org-wide Risk Score routes. */
 
 /**
  * A cluster name is a label for people, not an identifier for machines —
@@ -82,7 +82,7 @@ export const clusterVulnerabilitiesQuerySchema = z.object({
     offset: z.coerce.number().int().min(0).optional(),
     /* An unknown column or direction degrades to the default order, like the filters above. */
     sort: z
-        .enum(["radar", "severity", "cvss", "epss", "kev", "published", "packages", "images", "containers"])
+        .enum(["score", "severity", "cvss", "epss", "kev", "published", "packages", "images", "containers"])
         .optional()
         .catch(undefined),
     order: z.enum(["asc", "desc"]).optional().catch(undefined),
@@ -105,14 +105,14 @@ export const vulnerabilityIdParamSchema = z.object({
     vulnId: z.string().trim().min(1).max(100),
 });
 
-export const clusterRadarScoreQuerySchema = z.object({
+export const clusterRiskScoreQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(200).optional(),
     offset: z.coerce.number().int().min(0).optional(),
     /** "Yours / Third-party". Anything else — a stale or hand-edited link — is no filter. */
     control: z.enum(["yours", "third-party"]).optional().catch(undefined),
 });
 
-export const clusterRadarScoreFindingsQuerySchema = z.object({
+export const clusterRiskScoreFindingsQuerySchema = z.object({
     imageId: z.uuid("Invalid image ID"),
     ...tierQueryField,
 });

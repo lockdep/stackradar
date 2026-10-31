@@ -191,10 +191,10 @@ describe("the tier lens on every findings endpoint", () => {
         });
     }
 
-    it("GET /api/radar-score/findings and the cluster twin", async () => {
+    it("GET /api/risk-score/findings and the cluster twin", async () => {
         for (const url of [
-            `/api/radar-score/findings?imageId=${imageId}`,
-            `/api/clusters/${testData.cluster.id}/radar-score/findings?imageId=${imageId}`,
+            `/api/risk-score/findings?imageId=${imageId}`,
+            `/api/clusters/${testData.cluster.id}/risk-score/findings?imageId=${imageId}`,
         ]) {
             const all = await get(url);
             expect(all.body.findings).toHaveLength(4);

@@ -23,8 +23,8 @@ export {
     clusterVulnerabilitiesQuerySchema,
     clusterVulnerabilityOccurrencesQuerySchema,
     clusterPackageOccurrencesQuerySchema,
-    clusterRadarScoreQuerySchema,
-    clusterRadarScoreFindingsQuerySchema,
+    clusterRiskScoreQuerySchema,
+    clusterRiskScoreFindingsQuerySchema,
     clusterIdParamSchema,
 } from "./cluster.schema.js";
 

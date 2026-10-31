@@ -3,24 +3,24 @@
 import { Spinner, TableCell, TableRow, TierLensControl, TierLensEmpty } from '@/components/ui';
 import type { TierCounts, TierLens } from '@/lib/tier-lens';
 import { FindingsTable } from './FindingsTable';
-import type { ClusterRadarScoreFinding } from '@/types/cluster';
+import type { ClusterRiskScoreFinding } from '@/types/cluster';
 
 /** One image's findings fetch, cached for the session once loaded. */
 export type FindingsEntry =
     | { status: 'loading' }
     | { status: 'error' }
-    | { status: 'loaded'; findings: ClusterRadarScoreFinding[]; tierCounts?: TierCounts | undefined };
+    | { status: 'loaded'; findings: ClusterRiskScoreFinding[]; tierCounts?: TierCounts | undefined };
 
 /**
- * The expanded row under an image on the Radar Score tab: every finding that
+ * The expanded row under an image on the Risk Score tab: every finding that
  * adds up to the image's share, largest contribution first, each with the
  * public inputs its contribution was computed from.
  *
- * The list is the working behind the number — the reason the Radar Score is
+ * The list is the working behind the number — the reason the Risk Score is
  * an argument rather than a verdict. The image's row shows the sum; this shows
  * the addends, and the first few rows explain most of it.
  */
-export function RadarScoreFindingsRow({
+export function RiskScoreFindingsRow({
     imageLabel,
     score,
     entry,
@@ -86,7 +86,7 @@ function FindingsList({
     lens,
     onLensChange,
 }: {
-    findings: ClusterRadarScoreFinding[];
+    findings: ClusterRiskScoreFinding[];
     tierCounts: TierCounts | undefined;
     score: number;
     imageLabel: string;

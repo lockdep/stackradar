@@ -4,7 +4,7 @@ import { button, escapeHtml, renderLayout, type EmailContent } from "../email/la
 /**
  * The weekly digest. Plain-text first: every line below is
  * written for the `text` part and the HTML is the same lines with links.
- * The mail is the Dashboard's first screen in prose: the Radar Score and
+ * The mail is the Dashboard's first screen in prose: the Risk Score and
  * where it moved, the "Start here" rows, the week's new KEV matches and any
  * coverage gap only an operator can close.
  */
@@ -42,9 +42,9 @@ export interface DigestEmailInput {
     name: string | null;
     /** `YYYY-Www`. */
     week: string;
-    radarScore: number;
+    riskScore: number;
     /** Null when there is no snapshot a week old to compare with. */
-    radarScoreWeekAgo: number | null;
+    riskScoreWeekAgo: number | null;
     findingCount: number;
     topFindings: DigestFinding[];
     /** What "Start here" was drawn from — the org's default findings view. */
@@ -131,23 +131,23 @@ function upstreamLine(upstream: DigestUpstream | null): string | null {
 
 export function renderDigestEmail(input: DigestEmailInput): EmailContent {
     const greeting = input.name ? `Hi ${input.name},` : "Hi,";
-    const radarUrl = `${input.appUrl}/radar-score`;
+    const riskScoreUrl = `${input.appUrl}/risk-score`;
     const feedUrl = `${input.appUrl}/feed`;
-    const subject = `${input.orgName}: Radar Score ${fmt(input.radarScore)}, ${deltaLine(input.radarScore, input.radarScoreWeekAgo)}`;
+    const subject = `${input.orgName}: Risk Score ${fmt(input.riskScore)}, ${deltaLine(input.riskScore, input.riskScoreWeekAgo)}`;
 
     const textLines: string[] = [
         greeting,
         "",
         `Your weekly StackRadar summary for ${input.orgName} (week ${input.week}).`,
         "",
-        `Radar Score: ${fmt(input.radarScore)} — ${deltaLine(input.radarScore, input.radarScoreWeekAgo)}, summed over ${fmt(input.findingCount)} finding${input.findingCount === 1 ? "" : "s"}.`,
-        `See what drives it: ${radarUrl}`,
+        `Risk Score: ${fmt(input.riskScore)} — ${deltaLine(input.riskScore, input.riskScoreWeekAgo)}, summed over ${fmt(input.findingCount)} finding${input.findingCount === 1 ? "" : "s"}.`,
+        `See what drives it: ${riskScoreUrl}`,
         "",
     ];
     const baseLine = baseImageLine(input);
     if (input.topFindings.length > 0) {
         textLines.push(
-            `Start here — ${startHereIntro(input.startHereScope)}, exploited first, then by Radar Score contribution:`,
+            `Start here — ${startHereIntro(input.startHereScope)}, exploited first, then by Risk Score contribution:`,
             "",
         );
         for (const f of input.topFindings) {
@@ -218,9 +218,9 @@ export function renderDigestEmail(input: DigestEmailInput): EmailContent {
     const bodyHtml = `
 <p>${escapeHtml(greeting)}</p>
 <p>Your weekly StackRadar summary for <strong>${escapeHtml(input.orgName)}</strong> (week ${escapeHtml(input.week)}).</p>
-<p><strong>Radar Score ${fmt(input.radarScore)}</strong> — ${escapeHtml(deltaLine(input.radarScore, input.radarScoreWeekAgo))}, summed over ${fmt(input.findingCount)} finding${input.findingCount === 1 ? "" : "s"}.</p>
-${button(radarUrl, "See what drives the score")}
-<p><strong>Start here</strong> — ${escapeHtml(startHereIntro(input.startHereScope))}, exploited first, then by Radar Score contribution:</p>
+<p><strong>Risk Score ${fmt(input.riskScore)}</strong> — ${escapeHtml(deltaLine(input.riskScore, input.riskScoreWeekAgo))}, summed over ${fmt(input.findingCount)} finding${input.findingCount === 1 ? "" : "s"}.</p>
+${button(riskScoreUrl, "See what drives the score")}
+<p><strong>Start here</strong> — ${escapeHtml(startHereIntro(input.startHereScope))}, exploited first, then by Risk Score contribution:</p>
 ${findingsHtml}
 ${baseLine ? `<p style="color:#6b7280;">${escapeHtml(baseLine)}</p>` : ""}
 ${upstreamText ? `<p style="color:#6b7280;">${escapeHtml(upstreamText)} <a href="${escapeHtml(`${input.appUrl}/fixes`)}" style="color:#2563eb;">See the upgrades</a>.</p>` : ""}

@@ -185,7 +185,7 @@ export function ClusterChartsView() {
                         <TableHeader hideBelow="xl" align="end">
                             Images
                         </TableHeader>
-                        <TableHeader align="end">Radar Score</TableHeader>
+                        <TableHeader align="end">Risk Score</TableHeader>
                     </TableHead>
                     {releases.length === 0 ? (
                         <TableEmpty colSpan={7}>

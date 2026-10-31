@@ -4,7 +4,7 @@ Status: proposed 2026-10-22, nothing implemented. Written from a read of
 `server/src/middleware/auth.ts`, `server/src/routes/public.routes.ts`,
 `server/src/db/schema/api-keys.ts`, `server/src/repositories/cluster.repository.ts`,
 the read-side controllers (`remediation`, `vulnerability`, `image`,
-`component`, `search`, `radar-score`), `docs/authorization-matrix.md`,
+`component`, `search`, `risk-score`), `docs/authorization-matrix.md`,
 `docs/ARCHITECTURE.md` § 2, the chart's `ingress.yaml` and the hosted
 `network-policies.yaml`.
 
@@ -165,7 +165,7 @@ thin shape over an existing service:
 | `GET /v1/fixes` | `fixesForOrg` | `totals`, then `fixes[]` trimmed to `id, kind, measured, evidence, subject, release, from, to, bump, cluster, scope, control, cleared, riskRemoved, upperBound, containers, delivery, target`. `?include=no-recommendation` adds `noRecommendation[]`. `?cluster=`, `?control=`, `?measured=true` filter in the controller. |
 | `GET /v1/findings` | the service behind `vulnerabilityController.list` | the org's findings with `severity, kev, search, cluster, namespace, control, tier, sort, order, limit, offset`, the same comma-joined conventions as `clusterVulnerabilitiesQuerySchema`; each row carries `vulnId`, the identity, score contribution, counts of images and containers. |
 | `GET /v1/vulnerabilities/:vulnId` | `vulnerabilityController.overview`'s services | `vulnerability`, `occurrences` (images, then workloads per image), `exposure`, `remediation`. 404 outside the org, as today. |
-| `GET /v1/images` | `imageRepository` behind `imageController.getAll` | `?search=` over the reference, `?cluster=`, `?namespace=`, paged; rows `id, reference, digest, cluster, containers, counts, radarScore, control`. |
+| `GET /v1/images` | `imageRepository` behind `imageController.getAll` | `?search=` over the reference, `?cluster=`, `?namespace=`, paged; rows `id, reference, digest, cluster, containers, counts, riskScore, control`. |
 | `GET /v1/images/:id` | `findById`, `findStatsById`, `findDeployments`, `getUpgrade`, `getBaseUpgrade` | the image, where it runs (release, namespace, Argo application when known), its counts and score, the recommended move and the base rebuild when either exists. Findings are not inlined: `/v1/findings?image=` is the page for that. |
 | `GET /v1/images/:id/packages` | the component list behind `/api/components` scoped to one image | paged packages with `name, version, purl, ecosystem, layer (base/application), findings`; `?vulnerable=true` keeps only packages with findings. |
 | `GET /v1/packages` | `packageRepository.findPackageOccurrences` | `?name=&version=` (version optional, as the existing schema reads it), the running images and containers that carry it. This is "am I running log4j 2.14.1 anywhere". |

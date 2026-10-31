@@ -20,7 +20,7 @@ import {
     TotalRiskChip,
     UnderlineRadioGroup,
 } from '@/components/ui';
-import { RadarScoreFindingsRow, type FindingsEntry } from './RadarScoreFindingsRow';
+import { RiskScoreFindingsRow, type FindingsEntry } from './RiskScoreFindingsRow';
 import { useControlFilter, usePagedResource, useTierLens } from '@/hooks';
 import { apiFetch } from '@/lib/api-client';
 import { CONTROL_FILTERS, CONTROL_FILTER_HINT, CONTROL_FILTER_LABEL } from '@/lib/image-control';
@@ -29,7 +29,7 @@ import { PAGE_SIZE } from '@/lib/constants';
 import { TOTAL_RISK_HINT } from '@/lib/risk';
 import { formatShortDigest } from '@/utils/formatters';
 import { shortDigest } from '@/utils/containerUtils';
-import type { ClusterRadarScoreFinding, ClusterRadarScoreImage, ClusterRadarScoreResponse } from '@/types/cluster';
+import type { ClusterRiskScoreFinding, ClusterRiskScoreImage, ClusterRiskScoreResponse } from '@/types/cluster';
 
 /** How many containers a row names before folding the rest into "+N more". */
 const CONTAINERS_SHOWN = 2;
@@ -40,7 +40,7 @@ const CONTAINERS_SHOWN = 2;
  * its own), so several tags are listed and none leaves just the path; an
  * image with no name at all falls back to its short digest.
  */
-function imageLabel(image: ClusterRadarScoreImage): string {
+function imageLabel(image: ClusterRiskScoreImage): string {
     const path = [image.registry, image.repository].filter(Boolean).join('/');
     if (!path) return shortDigest(image.digest);
     return image.tags.length > 0 ? `${path}:${image.tags.join(', ')}` : path;
@@ -49,7 +49,7 @@ function imageLabel(image: ClusterRadarScoreImage): string {
 type Props = {
     /**
      * The BFF list endpoint; `/findings` hangs off it.
-     * `/api/clusters/:id/radar-score` on a cluster tab, `/api/radar-score`
+     * `/api/clusters/:id/risk-score` on a cluster tab, `/api/risk-score`
      * for the organization — same parameters, same response.
      */
     apiBase: string;
@@ -60,7 +60,7 @@ type Props = {
      * Cluster column and workload links go into each row's own cluster.
      */
     clusterId?: string;
-    /** Whose Radar Score the caption says this is ("prod-eu" / "This organization"). */
+    /** Whose Risk Score the caption says this is ("prod-eu" / "This organization"). */
     scopeName: string;
     /** `h1` where the list is the page, `h2` inside a tab. */
     headingLevel: 'h1' | 'h2';
@@ -75,7 +75,7 @@ type Props = {
 };
 
 /**
- * The Radar Score, taken apart.
+ * The Risk Score, taken apart.
  *
  * The Overview's (or Dashboard's) chart shows one number; this lists what it
  * is made of. The row unit is the **image**, because images are the only
@@ -85,11 +85,11 @@ type Props = {
  * appear as context on the row rather than as rows. Expanding an image lists
  * the findings that add up to its share, largest contribution first.
  *
- * The cluster Radar Score tab and the org-wide `/radar-score` page, which
+ * The cluster Risk Score tab and the org-wide `/risk-score` page, which
  * differ only in the endpoint they page over and in whether a row needs to
  * say which cluster it is in.
  */
-export function RadarScoreBreakdown({
+export function RiskScoreBreakdown({
     apiBase,
     contextKey,
     clusterId,
@@ -107,7 +107,7 @@ export function RadarScoreBreakdown({
     const [expanded, setExpanded] = useState<Set<string>>(new Set());
     const [entries, setEntries] = useState<Record<string, FindingsEntry>>({});
     /* The lens narrows the expanded findings only. The image rows and their
-       scores are the Radar Score itself, which never reads the lens. */
+       scores are the Risk Score itself, which never reads the lens. */
     const { lens, setLens } = useTierLens();
     const { control, setControl } = useControlFilter();
 
@@ -116,7 +116,7 @@ export function RadarScoreBreakdown({
             const key = `${contextKey}|${imageId}|${forLens}`;
             setEntries((prev) => ({ ...prev, [key]: { status: 'loading' } }));
             const params = withTierParam(new URLSearchParams({ imageId }), forLens);
-            apiFetch<{ findings: ClusterRadarScoreFinding[]; tierCounts?: TierCounts }>(`${apiBase}/findings?${params}`)
+            apiFetch<{ findings: ClusterRiskScoreFinding[]; tierCounts?: TierCounts }>(`${apiBase}/findings?${params}`)
                 .then(({ findings, tierCounts }) =>
                     setEntries((prev) => ({ ...prev, [key]: { status: 'loaded', findings, tierCounts } })),
                 )
@@ -147,7 +147,7 @@ export function RadarScoreBreakdown({
     };
 
     const { setOffset, data, error, isStale, isRefreshing, isLoaded, handleRefresh } =
-        usePagedResource<ClusterRadarScoreResponse>({
+        usePagedResource<ClusterRiskScoreResponse>({
             contextKey,
             scope: control,
             makeUrl: ({ limit, offset }) => {
@@ -155,17 +155,17 @@ export function RadarScoreBreakdown({
                 if (control !== 'all') params.set('control', control);
                 return `${apiBase}?${params}`;
             },
-            errorFallback: 'Failed to load the Radar Score breakdown',
+            errorFallback: 'Failed to load the Risk Score breakdown',
         });
 
     if (!isLoaded) {
-        return <LoadingBlock label="Loading Radar Score breakdown..." />;
+        return <LoadingBlock label="Loading Risk Score breakdown..." />;
     }
 
     if (error && !data) {
         return (
             <div className="flex flex-col items-center gap-3 py-24">
-                <p className="text-sm font-medium text-ink">Failed to load the Radar Score breakdown</p>
+                <p className="text-sm font-medium text-ink">Failed to load the Risk Score breakdown</p>
                 <p className="text-sm text-ink-muted">{error}</p>
                 <Button variant="secondary" onClick={handleRefresh} loading={isRefreshing}>
                     <RefreshCw aria-hidden="true" className="size-3.5" />
@@ -198,12 +198,12 @@ export function RadarScoreBreakdown({
                         }`}
                     >
                         <Gauge aria-hidden="true" className="size-4 text-ink-muted" />
-                        Radar Score
+                        Risk Score
                         <TotalRiskChip score={total} band={worstBand} title={TOTAL_RISK_HINT} />
                         {isStale && <Spinner size="sm" className="text-ink-faint" />}
                     </Heading>
                     <p className="mt-1 text-sm text-ink-muted">
-                        {scopeName}&apos;s Radar Score is the sum of {findingCount.toLocaleString()}{' '}
+                        {scopeName}&apos;s Risk Score is the sum of {findingCount.toLocaleString()}{' '}
                         {findingCount === 1 ? 'finding' : 'findings'} across {imageCount.toLocaleString()} scanned{' '}
                         {imageCount === 1 ? 'image' : 'images'}
                         {showClusters ? ' in every cluster' : ''}. Each row is one image&apos;s share, largest first;
@@ -256,7 +256,7 @@ export function RadarScoreBreakdown({
                     variant="secondary"
                     onClick={handleRefresh}
                     loading={isRefreshing}
-                    title="Refresh Radar Score breakdown"
+                    title="Refresh Risk Score breakdown"
                     className="shrink-0 pl-2 pr-2"
                 >
                     {!isRefreshing && <RefreshCw aria-hidden="true" className="size-3.5" />}
@@ -303,7 +303,7 @@ export function RadarScoreBreakdown({
                                 Findings
                             </TableHeader>
                             <TableHeader hideBelow="xl">Worst finding</TableHeader>
-                            <TableHeader align="end">Radar Score</TableHeader>
+                            <TableHeader align="end">Risk Score</TableHeader>
                         </TableHead>
                         {images.length === 0 ? (
                             <TableEmpty colSpan={columnCount}>{emptyText}</TableEmpty>
@@ -361,10 +361,10 @@ export function RadarScoreBreakdown({
                                                 {showClusters && (
                                                     <TableCell hideBelow="xl" className="text-xs">
                                                         <Link
-                                                            href={`/clusters/${image.clusterId}/radar-score`}
+                                                            href={`/clusters/${image.clusterId}/risk-score`}
                                                             onClick={(e) => e.stopPropagation()}
                                                             className="text-ink-secondary hover:text-accent hover:underline"
-                                                            title="This cluster’s own Radar Score breakdown"
+                                                            title="This cluster’s own Risk Score breakdown"
                                                         >
                                                             {image.clusterName}
                                                         </Link>
@@ -441,7 +441,7 @@ export function RadarScoreBreakdown({
                                                 </TableCell>
                                             </TableRow>
                                             {isExpanded && (
-                                                <RadarScoreFindingsRow
+                                                <RiskScoreFindingsRow
                                                     imageLabel={label}
                                                     score={image.score}
                                                     entry={entries[`${key}|${lens}`]}

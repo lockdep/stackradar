@@ -46,14 +46,14 @@ export type RiskBand = (typeof RISK_BANDS)[number]['band'];
  * The scales, in one sentence each. Kept here so the column header, the chip
  * and any future surface all describe the same number the same way.
  *
- * Naming (2026-08-19): **"Radar Score" is the branded name of the unbounded
+ * Naming (2026-08-19): **"Risk Score" is the branded name of the unbounded
  * aggregate** — the number unique to a customer's stack — never of the
  * per-finding 0–100, which is that finding's *contribution* to it. The brand
- * must read identically here, on the landing page and in /docs/radar-score;
+ * must read identically here, on the landing page and in /docs/risk-score;
  * flip all three or none.
  */
 export const RISK_SCALE_HINT =
-    'This finding’s contribution to the Radar Score, 0–100: CVSS severity weighted by EPSS exploitation likelihood, raised for findings on the CISA KEV list. Higher contributions get fixed first.';
+    'This finding’s contribution to the Risk Score, 0–100: CVSS severity weighted by EPSS exploitation likelihood, raised for findings on the CISA KEV list. Higher contributions get fixed first.';
 
 /**
  * The aggregate's sentence. One number per image, workload, release, cluster
@@ -63,7 +63,7 @@ export const RISK_SCALE_HINT =
  * exploitation-aware contribution rather than a severity constant.
  */
 export const TOTAL_RISK_HINT =
-    'Radar Score: the sum of every finding’s 0–100 contribution (CVSS weighted by EPSS exploitation likelihood, raised for CISA KEV findings). Unbounded — it falls as findings are fixed. Colour reflects the worst single finding.';
+    'Risk Score: the sum of every finding’s 0–100 contribution (CVSS weighted by EPSS exploitation likelihood, raised for CISA KEV findings). Unbounded — it falls as findings are fixed. Colour reflects the worst single finding.';
 
 export function riskBand(score: number | null | undefined): RiskBand {
     if (score == null) return 'none';

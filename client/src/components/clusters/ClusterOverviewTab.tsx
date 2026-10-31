@@ -152,13 +152,13 @@ export function ClusterOverviewTab({
                         what makes it a trend rather than a badge — it replaced
                         a static card above the fold that could only say "now". */}
                     <MetricsChartCard
-                        title="Radar Score"
+                        title="Risk Score"
                         description="Sum of every finding's 0–100 contribution across scanned images"
                         dataKey="riskScore"
                         data={snapshots}
                         deltaDirection="up-bad"
-                        href={`/clusters/${clusterId}/radar-score`}
-                        hrefTitle="See which images and findings make up the Radar Score"
+                        href={`/clusters/${clusterId}/risk-score`}
+                        hrefTitle="See which images and findings make up the Risk Score"
                     />
                     <MetricsChartCard
                         title="Vulnerabilities"

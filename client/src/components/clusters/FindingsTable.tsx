@@ -12,16 +12,16 @@ import {
 } from '@/components/ui';
 import { formatDate } from '@/utils/formatters';
 import { EpssCell } from './VulnerabilitySignalCells';
-import type { ClusterRadarScoreFinding } from '@/types/cluster';
+import type { ClusterRiskScoreFinding } from '@/types/cluster';
 import { vulnTitle } from '@/lib/vuln-title';
 
 /**
  * One finding per row — an advisory on a package in one image — in the same
  * column vocabulary as the cluster Vulnerabilities tab (severity, EPSS, KEV,
  * fix), plus the two things that tab's per-advisory rows fold away: which
- * package, and what the finding contributes to the image's Radar Score.
+ * package, and what the finding contributes to the image's Risk Score.
  *
- * Shared by every place that lists an image's findings (the Radar Score tab's
+ * Shared by every place that lists an image's findings (the Risk Score tab's
  * expanded image today), so the reader meets one table, not one per tab.
  * Nested by design: no container and no header fill, so it sits on the
  * expanded row's tinted backdrop without adding a third surface.
@@ -30,7 +30,7 @@ export function FindingsTable({
     findings,
     'aria-label': ariaLabel,
 }: {
-    findings: ClusterRadarScoreFinding[];
+    findings: ClusterRiskScoreFinding[];
     'aria-label': string;
 }) {
     return (
@@ -124,7 +124,7 @@ export function FindingsTable({
  * KEV with the catalogue fact inline — there is no further row to expand
  * here, so the listing date (and ransomware use) is the whole story.
  */
-function KevDateCell({ finding: f }: { finding: ClusterRadarScoreFinding }) {
+function KevDateCell({ finding: f }: { finding: ClusterRiskScoreFinding }) {
     if (!f.kevListedAt) {
         return (
             <span className="text-ink-muted" title="Not on the CISA Known Exploited Vulnerabilities catalogue">

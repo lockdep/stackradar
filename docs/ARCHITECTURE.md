@@ -232,11 +232,11 @@ Where the base ends (`images.base_image_ref` / `base_layer_count` / `base_detect
 
 **Yours vs third-party — a label on the image.** `images.control` / `control_detected_by` / `control_detail`, derived from the *repository* by `lib/image-control.ts`: org rule (`image_control_rules`, always wins) → delivered by a public chart whose rendered image set names the repository → Docker Official Image annotation → private registry → layer match against a known public image → vendor namespace → `unknown`, which recommendations treat as yours. A label, never a score — there is no per-repository score anywhere.
 
-Together they are the matrix that decides which recommendation exists: for an image the org builds, dependency bumps (`dependencyBumpCommand`) and a base rebuild (`services/base-upgrade.service.ts`: today's digest of the base's tag and the newest comparable newer tag, diffed against the image's base-bucket findings — "removes N of M"); for a third-party image, one action per image — the chart or tag upgrade — or "waiting on upstream". The Radar Score is partitioned by control on its page (`byControl`), the same sum, never a second score.
+Together they are the matrix that decides which recommendation exists: for an image the org builds, dependency bumps (`dependencyBumpCommand`) and a base rebuild (`services/base-upgrade.service.ts`: today's digest of the base's tag and the newest comparable newer tag, diffed against the image's base-bucket findings — "removes N of M"); for a third-party image, one action per image — the chart or tag upgrade — or "waiting on upstream". The Risk Score is partitioned by control on its page (`byControl`), the same sum, never a second score.
 
 ---
 
-## 5. The risk model (Radar Score)
+## 5. The risk model (Risk Score)
 
 Two layers, and the split is forced by the data model ([ADR 0005](adr/0005-risk-is-two-layers.md) + [ADR 0007](adr/0007-aggregate-risk-is-an-unbounded-sum.md)):
 
@@ -254,7 +254,7 @@ Because every input is a column of the same row, the daily EPSS refresh *is* the
 
 **Layer 2 — the aggregate is an unbounded sum** (ADR 0007, which replaced ADR 0005's bounded fold). A rollup's score is `Σ risk` over its distinct findings — Dependency-Track's "inherited risk" shape, but with EPSS/KEV inside every term (a KEV critical adds ~98; a never-exploited critical adds ~7). It composes (org = Σ clusters), it moves when you fix things, and it deliberately gives up worst-domination: **a rollup's colour band is its worst finding's band, never a threshold on the total.** Any UI that colours an aggregate with `riskBand(total)` is a bug. `RISK_BANDS` (critical ≥ 60, high ≥ 35, medium ≥ 20, low ≥ 1; `server/src/db/risk-model.ts`) are defined over a single finding only.
 
-Naming discipline: "Radar Score" is the unbounded aggregate; a finding's 0–100 value is its **contribution**; never describe it as "CVSS × EPSS × KEV" verbatim in UI copy.
+Naming discipline: "Risk Score" is the unbounded aggregate; a finding's 0–100 value is its **contribution**; never describe it as "CVSS × EPSS × KEV" verbatim in UI copy.
 
 ---
 
@@ -301,7 +301,7 @@ Two things people will assume that are not true:
 
 Next.js 16 + React 19, Tailwind v4, no data-fetching library (deliberate — plain `fetch` into `useState` via a small hook layer in `client/src/hooks/`: `useResource`, `usePagedResource` with debounce and stale-but-visible tables, `useRevalidateOnFocus`, `usePollWhile`).
 
-- **Shell:** routes under `app/(app)/` share the sidebar layout (`AppShell.tsx`): the dashboard at `/`, `/vulnerabilities`, `/packages`, `/containers`, `/images` (+ `/images/[id]`), `/clusters` (+ `/clusters/[id]` with tab sub-routes), `/releases/[id]`, `/radar-score`, `/feed`, `/admin`, `/org-settings`, `/profile`. Each renders a view from `src/views/`. Gates run in order: session → organisation setup → (cloud) terms → (cloud) the plan chooser until a new org has started a plan → onboarding until the org has its first cluster, all failing open on fetch errors; a lapsed org skips onboarding and renders read-only behind a banner (`cloud/billing/plan-state.ts`). `/login`, `/invite/[token]`, `/account/password` and `/demo` live outside the shell (the invite page fetches Express directly server-side, since the BFF 401s sessionless requests).
+- **Shell:** routes under `app/(app)/` share the sidebar layout (`AppShell.tsx`): the dashboard at `/`, `/vulnerabilities`, `/packages`, `/containers`, `/images` (+ `/images/[id]`), `/clusters` (+ `/clusters/[id]` with tab sub-routes), `/releases/[id]`, `/risk-score`, `/feed`, `/admin`, `/org-settings`, `/profile`. Each renders a view from `src/views/`. Gates run in order: session → organisation setup → (cloud) terms → (cloud) the plan chooser until a new org has started a plan → onboarding until the org has its first cluster, all failing open on fetch errors; a lapsed org skips onboarding and renders read-only behind a banner (`cloud/billing/plan-state.ts`). `/login`, `/invite/[token]`, `/account/password` and `/demo` live outside the shell (the invite page fetches Express directly server-side, since the BFF 401s sessionless requests).
 - **Active org:** tracked in *both* localStorage (browser preference) and the `sr_org_id` cookie (what the BFF validates and forwards), by `components/providers/OrganizationProvider.tsx`. The cloud edition's checkout handoff is `src/cloud/billing/UpgradeIntent.tsx`.
 - **Runtime config over build-time env:** `SCANNER_CHART_VERSION` and `POSTHOG_KEY` are read server-side in `app/layout.tsx` and passed as props — nothing is `NEXT_PUBLIC_`-inlined, so one image serves every environment, configured by the deployment (env). The edition object is fetched from the server's `GET /api/edition` and mirrored in `lib/edition.ts`.
 - **Cloud surfaces** are in `src/cloud/` and drawn behind an `edition` check — the `cloud-boundary` CI workflow keeps the rest of the client from importing them.

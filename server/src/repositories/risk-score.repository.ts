@@ -13,19 +13,19 @@ import {
 } from "../db/finding-tier.js";
 
 /**
- * One image's share of a Radar Score — the row unit of the Radar Score tab
- * (one cluster) and of the org-wide `/radar-score` page (every cluster).
+ * One image's share of a Risk Score — the row unit of the Risk Score tab
+ * (one cluster) and of the org-wide `/risk-score` page (every cluster).
  *
  * The image is the unit because it is the only one that *partitions* the
  * total: a finding belongs to exactly one image (ADR 0004) and an image to
  * exactly one cluster (ADR 0006), so the `score`s on this list add up to the
- * number on the Overview's Radar Score chart — and, summed across clusters,
+ * number on the Overview's Risk Score chart — and, summed across clusters,
  * to the Dashboard's. Workloads would not — two workloads on one image share
  * its findings, and listing them would count the same CVE twice. The
  * workloads running the image ride along as context so the reader can still
  * get from "this image" to "that deployment".
  */
-export type ClusterRadarScoreImage = {
+export type ClusterRiskScoreImage = {
     imageId: string;
     /** The cluster the image belongs to (ADR 0006) — the org page's Cluster column. */
     clusterId: string;
@@ -62,13 +62,13 @@ export type ClusterRadarScoreImage = {
 /**
  * One finding, with where it runs — the row unit of the Dashboard's "Start
  * here" block, which lists the handful of findings across every cluster
- * that move the org's Radar Score most.
+ * that move the org's Risk Score most.
  *
  * Finding-level rather than advisory-level (the Vulnerabilities list) or
  * image-level (the breakdown): "fix this package in this image" is the unit
  * of work, and the image link is where the upgrade recommendation lives.
  */
-export type TopFinding = ClusterRadarScoreFinding & {
+export type TopFinding = ClusterRiskScoreFinding & {
     /** On CISA KEV, or EPSS at or above `NOTABLE_EPSS` — sorted first. */
     exploited: boolean;
     imageId: string;
@@ -85,26 +85,26 @@ export type TopFinding = ClusterRadarScoreFinding & {
     containerCount: number;
 };
 
-/** `?control=` on the Radar Score image list. `yours` includes the images nothing has decided. */
+/** `?control=` on the Risk Score image list. `yours` includes the images nothing has decided. */
 export type ControlFilter = "yours" | "third-party";
 
 /**
- * The Radar Score, partitioned by who controls the image — the same sum, not
+ * The Risk Score, partitioned by who controls the image — the same sum, not
  * a second score. `yours` is `total − upstream` rather than its own rounded
  * sum, so the two always add up to the headline. There is deliberately no
  * third bucket: an unconfirmed image counts as yours (recommendations treat
  * it that way too), and `unconfirmedImages` says how many there are.
  */
-export type RadarScoreByControl = { yours: number; upstream: number; unconfirmedImages: number };
+export type RiskScoreByControl = { yours: number; upstream: number; unconfirmedImages: number };
 
-export type ClusterRadarScorePage = {
-    images: ClusterRadarScoreImage[];
+export type ClusterRiskScorePage = {
+    images: ClusterRiskScoreImage[];
     /**
-     * The scope's Radar Score — the sum of every image's `score`. Never
+     * The scope's Risk Score — the sum of every image's `score`. Never
      * narrowed by `?control=`: the filter chooses rows, the headline stays.
      */
     total: number;
-    byControl: RadarScoreByControl;
+    byControl: RiskScoreByControl;
     /** Images with at least one finding — what pagination pages over. */
     imageCount: number;
     findingCount: number;
@@ -119,7 +119,7 @@ export type ClusterRadarScorePage = {
  * input the formula uses is carried so the number can be argued with; the
  * score itself is read from the generated column, never recomputed.
  */
-export type ClusterRadarScoreFinding = {
+export type ClusterRiskScoreFinding = {
     vulnId: string;
     summary: string | null;
     packageName: string;
@@ -150,24 +150,24 @@ async function tierCountsOver(findings: ReturnType<typeof collapsedFindings>): P
 
 const SEVERITY_LEVELS = ["critical", "high", "medium", "low"] as const;
 
-function normaliseSeverity(level: string | null): ClusterRadarScoreFinding["severity"] {
+function normaliseSeverity(level: string | null): ClusterRiskScoreFinding["severity"] {
     const lowered = level?.toLowerCase() ?? "";
     return (SEVERITY_LEVELS as readonly string[]).includes(lowered)
-        ? (lowered as ClusterRadarScoreFinding["severity"])
+        ? (lowered as ClusterRiskScoreFinding["severity"])
         : null;
 }
 
-export const radarScoreRepository = {
+export const riskScoreRepository = {
     /**
      * Every image in scope carrying at least one finding, highest score
      * first. Same population as `clusterRiskScores` / `orgRiskRollup` in
      * `db/risk.ts`, so `total` here equals the Overview's (or, org-scoped,
-     * the Dashboard's) current Radar Score.
+     * the Dashboard's) current Risk Score.
      */
     async findImages(
         scope: FindingScope,
         options: { limit?: number | undefined; offset?: number | undefined; control?: ControlFilter | undefined } = {},
-    ): Promise<ClusterRadarScorePage> {
+    ): Promise<ClusterRiskScorePage> {
         const limit = Math.min(options.limit ?? 50, 200);
         const offset = options.offset ?? 0;
         const controlWhere =
@@ -282,7 +282,7 @@ export const radarScoreRepository = {
                       )
                       .orderBy(asc(schema.namespaces.name), asc(schema.workloads.name));
 
-        const workloadsByImage = new Map<string, ClusterRadarScoreImage["workloads"]>();
+        const workloadsByImage = new Map<string, ClusterRiskScoreImage["workloads"]>();
         const tagsByImage = new Map<string, Set<string>>();
         for (const w of workloadRows) {
             const tags = tagsByImage.get(w.imageId) ?? new Set<string>();
@@ -342,7 +342,7 @@ export const radarScoreRepository = {
         scope: FindingScope,
         imageId: string,
         tiers?: TierLens,
-    ): Promise<LensedFindings<ClusterRadarScoreFinding>> {
+    ): Promise<LensedFindings<ClusterRiskScoreFinding>> {
         const findings = collapsedFindings(and(deployedImagesIn(scope), eq(schema.images.id, imageId))!);
 
         const tierCountsPromise = tierCountsOver(findings);

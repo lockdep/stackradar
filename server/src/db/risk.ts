@@ -253,10 +253,10 @@ export async function releaseRiskScores(releaseIds: string[]): Promise<Map<strin
  * Under ADR 0006 an image belongs to exactly one cluster, so a finding does
  * too: the key is `images.cluster_id` and there is nothing to un-multiply.
  * Scoped by `deployedImagesInClusters` — the deployed-or-new rule every other
- * cluster surface applies — so this total, the Radar Score tab's headline and
+ * cluster surface applies — so this total, the Risk Score tab's headline and
  * the cluster's finding counts all describe one population. Without it,
  * digests that stopped running but sit in GC retention kept contributing,
- * and the Overview read more than double the Radar Score tab.
+ * and the Overview read more than double the Risk Score tab.
  */
 export async function clusterRiskScores(clusterIds: string[]): Promise<Map<string, RiskRollup>> {
     if (clusterIds.length === 0) return new Map();

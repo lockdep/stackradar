@@ -137,7 +137,7 @@ export function ImagesCaption({
             <p className="text-xs text-ink-muted">
                 <span className="font-medium text-ink-secondary">Worst first</span>
                 <span className="mx-1.5 text-ink-faint">·</span>
-                Every running image in the organisation, by Radar Score.
+                Every running image in the organisation, by Risk Score.
             </p>
             <p className="whitespace-nowrap text-xs text-ink-muted">
                 {narrowed && <span>Matching: </span>}

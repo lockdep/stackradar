@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import {
     clusterRepository,
     packageRepository,
-    radarScoreRepository,
+    riskScoreRepository,
     vulnerabilityRepository,
     workloadRepository,
     type ClusterWithApiKeyStatus,
@@ -15,8 +15,8 @@ import {
     clusterVulnerabilitiesQuerySchema,
     clusterVulnerabilityOccurrencesQuerySchema,
     clusterPackageOccurrencesQuerySchema,
-    clusterRadarScoreQuerySchema,
-    clusterRadarScoreFindingsQuerySchema,
+    clusterRiskScoreQuerySchema,
+    clusterRiskScoreFindingsQuerySchema,
     uuidParamSchema,
 } from "../schemas/index.js";
 import { clusterRiskScores, emptyRiskRollup, orgRiskRollup, type RiskRollup } from "../db/risk.js";
@@ -427,23 +427,23 @@ export const clusterController = {
     },
 
     /**
-     * The Radar Score tab: every scanned image in the cluster with its share
-     * of the cluster's Radar Score, largest first. `total` is the cluster's
-     * current Radar Score — the same fold the Overview chart's latest point
+     * The Risk Score tab: every scanned image in the cluster with its share
+     * of the cluster's Risk Score, largest first. `total` is the cluster's
+     * current Risk Score — the same fold the Overview chart's latest point
      * is captured from.
      *
-     * @route GET /api/clusters/:id/radar-score
+     * @route GET /api/clusters/:id/risk-score
      */
-    async radarScore(req: Request, res: Response, next: NextFunction) {
+    async riskScore(req: Request, res: Response, next: NextFunction) {
         try {
             const { auth } = asAuthed(req);
             const cluster = req.cluster!;
-            const query = clusterRadarScoreQuerySchema.parse(req.query);
+            const query = clusterRiskScoreQuerySchema.parse(req.query);
             const time = createQueryTimer(log, { clusterId: cluster.id, orgId: auth.orgId });
 
             const page = await time(
-                "findClusterRadarScoreImages",
-                radarScoreRepository.findImages(
+                "findClusterRiskScoreImages",
+                riskScoreRepository.findImages(
                     { clusterId: cluster.id },
                     {
                         limit: query.limit,
@@ -460,21 +460,21 @@ export const clusterController = {
     },
 
     /**
-     * The findings that add up to one image's share of the Radar Score —
-     * the Radar Score tab's expand-row fetch. Largest contribution first.
+     * The findings that add up to one image's share of the Risk Score —
+     * the Risk Score tab's expand-row fetch. Largest contribution first.
      *
-     * @route GET /api/clusters/:id/radar-score/findings
+     * @route GET /api/clusters/:id/risk-score/findings
      */
-    async radarScoreFindings(req: Request, res: Response, next: NextFunction) {
+    async riskScoreFindings(req: Request, res: Response, next: NextFunction) {
         try {
             const { auth } = asAuthed(req);
             const cluster = req.cluster!;
-            const query = clusterRadarScoreFindingsQuerySchema.parse(req.query);
+            const query = clusterRiskScoreFindingsQuerySchema.parse(req.query);
             const time = createQueryTimer(log, { clusterId: cluster.id, orgId: auth.orgId });
 
             const result = await time(
-                "findClusterRadarScoreFindings",
-                radarScoreRepository.findImageFindings(
+                "findClusterRiskScoreFindings",
+                riskScoreRepository.findImageFindings(
                     { clusterId: cluster.id },
                     query.imageId,
                     parseTierParam(query.tier),

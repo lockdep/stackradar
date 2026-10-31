@@ -93,7 +93,7 @@ export interface FixListItem {
      * the base image.
      */
     cleared: { findings: number; kev: number; high: number; introduced: number; byScope?: ScopeCounts } | null;
-    /** Radar Score contribution the move removes — the rank key; null when unmeasured. */
+    /** Risk Score contribution the move removes — the rank key; null when unmeasured. */
     riskRemoved: number | null;
     /**
      * An unmeasured chart bump's "could address up to" bound: Σ risk and

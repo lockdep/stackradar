@@ -95,7 +95,7 @@ function ClusterTabs({ id, children }: { id: string; children: ReactNode }) {
     const tabs = [
         { href: `/clusters/${id}`, name: 'Overview', icon: LayoutDashboard },
         { href: `/clusters/${id}/containers`, name: 'Containers', icon: Container },
-        { href: `/clusters/${id}/radar-score`, name: 'Radar Score', icon: Gauge },
+        { href: `/clusters/${id}/risk-score`, name: 'Risk Score', icon: Gauge },
         { href: `/clusters/${id}/vulnerabilities`, name: 'Vulnerabilities', icon: ShieldAlert },
         { href: `/clusters/${id}/charts`, name: 'Charts', icon: SiHelm },
         { href: `/clusters/${id}/packages`, name: 'Packages', icon: Boxes },

@@ -13,11 +13,11 @@ import {
  * Two numbers, and the working.
  *
  * A **finding** contributes 0–100 ({@link RiskChip}); a **group** — image,
- * workload, release, cluster, org — carries the **Radar Score**, the unbounded
+ * workload, release, cluster, org — carries the **Risk Score**, the unbounded
  * sum of those contributions ({@link TotalRiskChip}, ADR 0007). The brand name
  * belongs to the sum, never the per-finding number (`lib/risk.ts`). The two
  * are deliberately rendered differently: the finding chip wears its `/100`
- * denominator inside a pill, the Radar Score is a bare number — no pill, no
+ * denominator inside a pill, the Risk Score is a bare number — no pill, no
  * background, just tabular figures with thousands separators — and its colour
  * comes from the group's *worst finding* rather than from the number itself.
  *
@@ -38,7 +38,7 @@ const bandStyles: Record<RiskBand, string> = {
     none: 'text-ink-muted bg-surface-muted ring-edge',
 };
 
-/** The Radar Score is a number in a column, not a badge: colour only, no box. */
+/** The Risk Score is a number in a column, not a badge: colour only, no box. */
 const totalBandText: Record<RiskBand, string> = {
     critical: 'text-danger',
     high: 'text-danger',
@@ -86,7 +86,7 @@ export function RiskChip({
 }
 
 /**
- * A group's Radar Score — the unbounded sum of its findings' contributions.
+ * A group's Risk Score — the unbounded sum of its findings' contributions.
  *
  * No denominator, because there is none: the number falls as findings are
  * fixed and has no ceiling. And no pill: a total is a magnitude to be read
@@ -185,7 +185,7 @@ export function RiskCell({ risk }: { risk: RiskRollup | null }) {
     if (!risk) return <TotalRiskChip score={null} />;
 
     const title = [
-        `Radar Score ${Math.round(risk.score).toLocaleString()} — summed over ${risk.findingCount} finding${risk.findingCount === 1 ? '' : 's'}`,
+        `Risk Score ${Math.round(risk.score).toLocaleString()} — summed over ${risk.findingCount} finding${risk.findingCount === 1 ? '' : 's'}`,
         risk.topFinding ? `Worst finding: ${risk.topFinding.vulnId} (${Math.round(risk.topFinding.risk)}/100)` : null,
         risk.kevCount > 0 ? `${risk.kevCount} on CISA KEV` : null,
         risk.exploitedCount > 0 ? `${risk.exploitedCount} with EPSS ≥ 0.1` : null,

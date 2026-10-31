@@ -45,13 +45,13 @@ const SCANNER_LABEL: Record<ScannerHealth, string> = {
  *
  * One row per cluster rather than a four-column table: the question this
  * section answers is "which cluster needs me first", and a row that carries
- * the Radar Score, the worst-finding band, the severity mix and the scanner's
+ * the Risk Score, the worst-finding band, the severity mix and the scanner's
  * state answers it in one glance where a Critical/High pair did not. Rows are
  * ranked worst-first, and the numbers a reader compares — the score, the
  * severity counts — sit in fixed columns so the eye can run down them.
  *
  * Severity counts come from the caller's containers array (one source, one
- * refresh, no per-cluster fan-out); the Radar Score comes from the cluster
+ * refresh, no per-cluster fan-out); the Risk Score comes from the cluster
  * payload, where the server folded it over the same deployed images.
  */
 export function ClusterSummarySection({
@@ -170,7 +170,7 @@ function ClusterRowItem({ row: { cluster, containers, severity, scanned } }: { r
     const hasRisk = scanned || cluster.risk.findingCount > 0 || Boolean(cluster.scannedWorkloads);
     const riskTitle = hasRisk
         ? [
-              `Radar Score ${Math.round(cluster.risk.score).toLocaleString()} — summed over ${cluster.risk.findingCount} finding${cluster.risk.findingCount === 1 ? '' : 's'}`,
+              `Risk Score ${Math.round(cluster.risk.score).toLocaleString()} — summed over ${cluster.risk.findingCount} finding${cluster.risk.findingCount === 1 ? '' : 's'}`,
               cluster.risk.topFinding
                   ? `Worst finding: ${cluster.risk.topFinding.vulnId} (${Math.round(cluster.risk.topFinding.risk)}/100)`
                   : null,
@@ -254,7 +254,7 @@ function ClusterRowItem({ row: { cluster, containers, severity, scanned } }: { r
                         className="text-xl leading-none"
                     />
                 </div>
-                <p className="mt-1 text-[11px] text-ink-muted">Radar Score</p>
+                <p className="mt-1 text-[11px] text-ink-muted">Risk Score</p>
             </div>
 
             <ChevronRight
