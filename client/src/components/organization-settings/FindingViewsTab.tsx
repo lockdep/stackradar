@@ -158,8 +158,8 @@ export function FindingViewsTab({ orgId, canManage }: { orgId: string; canManage
                 <h2 className="text-base font-semibold text-ink">Rules</h2>
                 <p className="mt-1 text-sm text-ink-muted">
                     Tell StackRadar which packages are yours. A rule files matching packages under Application or Base
-                    image, after StackRadar&apos;s own rules. It never hides a finding or changes the Risk Score, and
-                    it takes effect after a background pass over your packages.
+                    image, after StackRadar&apos;s own rules. It never hides a finding or changes the Risk Score, and it
+                    takes effect after a background pass over your packages.
                 </p>
 
                 {!canManage ? (

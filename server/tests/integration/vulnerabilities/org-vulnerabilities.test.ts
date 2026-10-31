@@ -382,7 +382,9 @@ describe("org-wide vulnerabilities", () => {
                 workloadCount: 1,
             });
             // One finding either way — the container join must not re-weigh it.
-            expect(staging.body.vulnerabilities[0].totalRiskScore).toBe(clusterA.body.vulnerabilities[0].totalRiskScore);
+            expect(staging.body.vulnerabilities[0].totalRiskScore).toBe(
+                clusterA.body.vulnerabilities[0].totalRiskScore,
+            );
         });
 
         it("spans clusters by namespace name, and combines with ?cluster=", async () => {
