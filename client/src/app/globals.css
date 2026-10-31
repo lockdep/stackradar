@@ -4,8 +4,8 @@
 @import './theme.css';
 
 /* Theme switching is attribute-driven: the pre-hydration script in layout.tsx
-   sets data-theme="light|dark" on <html>, so a "light" choice always wins
-   over a dark OS preference. */
+   sets data-theme="light|dark" on <html>. Dark is the default; the OS
+   preference only applies when the visitor explicitly picks "System". */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* One step past Tailwind's `2xl`. The sidebar takes 288px from `lg` up, so a

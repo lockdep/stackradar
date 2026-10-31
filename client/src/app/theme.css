@@ -25,9 +25,10 @@
      · Text on a `*-emphasis` fill uses `text-on-emphasis`. Text on a `*-subtle`
        fill uses the matching `text-<family>`.
 
-   Dark mode is attribute-driven (`data-theme="dark"` on <html>, set before first
-   paint by the inline script in layout.tsx), not `prefers-color-scheme`, so an
-   explicit "light" choice wins over a dark OS preference.
+   Theme is attribute-driven (`data-theme="light|dark"` on <html>, set before
+   first paint by the inline script in layout.tsx), not `prefers-color-scheme`.
+   Dark is the default; the OS preference is consulted only when the visitor
+   explicitly picks "System".
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
