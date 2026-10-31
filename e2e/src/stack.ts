@@ -24,6 +24,14 @@ export const stack = {
     },
     /** The name DEFAULT_CLUSTER_NAME gives the install's one cluster. */
     clusterName: 'local',
+    /** The one organisation of a community install, as the sidebar names it. */
+    orgName: 'Default organization',
+    /** A second, non-admin local account the stateful suite creates through the admin's Users tab. */
+    member: {
+        email: process.env.E2E_MEMBER_EMAIL ?? 'member@stackradar.local',
+        initialPassword: 'member-initial-password-1',
+        password: process.env.E2E_MEMBER_PASSWORD ?? 'e2e-member-password-7q2m',
+    },
     /** True when E2E_BASE_URL was given: the stack is someone else's and global setup must not start or stop one. */
     external: Boolean(process.env.E2E_BASE_URL),
 } as const;

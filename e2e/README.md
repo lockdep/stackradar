@@ -34,18 +34,28 @@ tests. `pnpm stack:down` removes it, database included.
 1. **`src/global-setup.ts`** runs `scripts/stack.sh up` (unless `E2E_BASE_URL`
    points at a stack that is already running), waits for both readiness
    probes, then seeds the stack through the server's public API with the
-   fixture scanner key: a heartbeat, an inventory report with one namespace,
-   one Deployment and one container running `nginx:1.27-alpine`, and that
-   image's SBOM from `server/tests/fixtures/`. Every step is idempotent; a
-   second upload of the same digest answers `409` and the first one stands.
+   fixture scanner key: a heartbeat, an inventory report (`src/api.ts`) with
+   two namespaces — a Deployment running `nginx:1.27-alpine`, and one
+   running an image from a private registry the scanner could not pull,
+   reported with a `registry_auth` failure — and the nginx image's SBOM from
+   `server/tests/fixtures/`. The private image never gets an SBOM: it is
+   what "Not scanned", the coverage strip and the registry banner are
+   about. Every step is idempotent; a second upload of the same digest
+   answers `409` and the first one stands.
 2. **The `setup` project** (`src/auth.setup.ts`) signs the bootstrap admin
    in. On a fresh database that is the forced password change
    (`admin` → the suite's own password); on a database that has seen the
    suite it is a plain sign-in. The browser state lands in `.auth/admin.json`.
-3. **The `chromium` project** runs `tests/*.spec.ts`, each starting from that
-   signed-in state. Tests that need to be signed out say so with
-   `test.use({ storageState: { cookies: [], origins: [] } })`.
-4. **`src/global-teardown.ts`** removes the stack only when `E2E_TEARDOWN=1`
+3. **The `chromium` project** runs `tests/*.spec.ts` in parallel, each
+   starting from that signed-in state and reading only. Tests that need to
+   be signed out say so with `test.use({ storageState: { cookies: [], origins: [] } })`.
+4. **The `stateful` project** runs `tests/stateful/mutations.spec.ts` after
+   the `chromium` project has finished: a second inventory report that
+   drops a container and one that brings it back, a cluster and an
+   organisation rename, a second local account created from the admin's
+   Users tab and signed in as. Everything in one file, serially, and each
+   test puts back what it changed.
+5. **`src/global-teardown.ts`** removes the stack only when `E2E_TEARDOWN=1`
    (the CI workflow does its own teardown step instead).
 
 The stack is three Compose files: the quickstart, `dev/local-build.yml`
@@ -64,10 +74,15 @@ mirror and no restart policy.
   advisory list is not empty once the mirror is live. How many findings an
   Alpine image has changes weekly and is not what the test is for.
 - **Stay re-runnable.** The stack is kept between local runs, so a test that
-  changes state must leave it as it found it (the wrong-password test, the
-  sign-out test) or be idempotent (the seed). A test that needs a fresh
-  database belongs in `auth.setup.ts`'s fresh branch, which is the only
-  place one is guaranteed.
+  changes state goes in `tests/stateful/` and leaves the stack as it found
+  it, or is idempotent (the seed). A test that needs a fresh database
+  belongs in `auth.setup.ts`'s fresh branch, which is the only place one is
+  guaranteed.
+- **Record a defect, don't hide it.** A test that fails because the product
+  is wrong stays as written and is marked `test.fixme(true, '<why>')` with
+  the cause in a comment above it (`auth.spec.ts`, `inventory.spec.ts`,
+  `coverage.spec.ts` carry the current three), so the suite is green and
+  the defect is on record until it is fixed.
 - **One browser.** Chromium only; the suite checks the product, not browser
   compatibility.
 

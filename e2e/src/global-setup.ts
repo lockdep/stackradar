@@ -6,9 +6,11 @@ import { repoRoot, stack } from './stack';
 /**
  * Runs once before every project: brings the Compose stack up (unless
  * E2E_BASE_URL names one that is already running) and seeds it the way a
- * scanner would — a heartbeat, an inventory with one nginx container, and
- * the fixture SBOM for its digest. Every step is idempotent, so a stack
- * that stays up between local runs is seeded once and then just checked.
+ * scanner would — a heartbeat, an inventory with an nginx container and a
+ * private-registry container the scanner could not pull (src/api.ts), and
+ * the fixture SBOM for nginx's digest. Every step is idempotent, so a
+ * stack that stays up between local runs is seeded once and then just
+ * checked.
  *
  * Signing in is not done here: it is auth.setup.ts, a Playwright project
  * the others depend on, because it is itself a test of the first login.
@@ -30,7 +32,7 @@ export default async function globalSetup(): Promise<void> {
 
     const digest = await nginxDigest();
     await heartbeat();
-    await reportInventory(digest);
+    await reportInventory({ nginxDigest: digest });
     const upload = await uploadNginxSbom(digest);
     console.log(
         upload.created
