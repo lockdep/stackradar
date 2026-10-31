@@ -232,7 +232,7 @@ export interface BaseCandidate {
     removesHigh: number;
     /** Findings the candidate base carries that the image does not have at all. */
     introduces: number;
-    /** Radar Score contribution of what it removes, less what it introduces. */
+    /** Risk Score contribution of what it removes, less what it introduces. */
     riskRemoved: number;
 }
 

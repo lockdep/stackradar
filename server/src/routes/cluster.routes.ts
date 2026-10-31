@@ -48,11 +48,11 @@ router.get("/:id/vulnerabilities/occurrences", clusterController.vulnerabilityOc
 // The advisory metadata behind one listed row (the expand-row drill-down)
 router.get("/:id/vulnerabilities/detail", clusterController.vulnerabilityDetail);
 
-// Every scanned image's share of the cluster's Radar Score, largest first (paginated)
-router.get("/:id/radar-score", clusterController.radarScore);
+// Every scanned image's share of the cluster's Risk Score, largest first (paginated)
+router.get("/:id/risk-score", clusterController.riskScore);
 
 // The findings that add up to one image's share (the expand-row drill-down)
-router.get("/:id/radar-score/findings", clusterController.radarScoreFindings);
+router.get("/:id/risk-score/findings", clusterController.riskScoreFindings);
 
 // Cluster API key management. The GET returns masked metadata only (prefix +
 // timestamps, never key material), so it stays member-visible; rotate and

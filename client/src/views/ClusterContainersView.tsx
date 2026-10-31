@@ -283,7 +283,7 @@ export function ClusterContainersView({ justInstalled }: { justInstalled: boolea
                                         guessable from its name — "5,400" could
                                         be a count, a CVSS, a percentile. The
                                         hint says which, on hover, at the top. */}
-                                    <span title={TOTAL_RISK_HINT}>Radar Score</span>
+                                    <span title={TOTAL_RISK_HINT}>Risk Score</span>
                                 </SortableHeader>
                                 {/* "Show me the worst one" is the question
                                     this product exists to answer, and until

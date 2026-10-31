@@ -5,7 +5,7 @@
  *
  * Three feeds, because findings are three things stacked: the OSV mirror
  * says *which* advisories affect a package, EPSS says how likely each is to
- * be exploited and KEV which ones already are, and the Radar Score is a
+ * be exploited and KEV which ones already are, and the Risk Score is a
  * function of all three (ADR 0005). A banner that watched only the OSV
  * bootstrap went quiet the moment findings appeared, while every score on
  * the page was still about to change. Before this the only place to see

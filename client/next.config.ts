@@ -87,6 +87,11 @@ const nextConfig: NextConfig = {
                 destination: '/clusters/:id/containers/:containerId',
                 permanent: true,
             },
+            /* The Risk Score pages were `/radar-score` until 2026-10-31, when the
+         aggregate was renamed from "Radar Score" to "Risk Score". Weekly
+         digest emails sent before then link to the old org-wide path. */
+            { source: '/radar-score', destination: '/risk-score', permanent: true },
+            { source: '/clusters/:id/radar-score', destination: '/clusters/:id/risk-score', permanent: true },
         ];
     },
 };

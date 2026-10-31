@@ -6,7 +6,7 @@ import { CONTROL_FILTER_PARAM, isControlFilter, type ControlFilter } from '@/lib
 
 /**
  * "Yours / Third-party / All", held in the URL like the lists' other filters
- * (`useSeverityFilter`): a filtered list is a link people paste, and the Radar
+ * (`useSeverityFilter`): a filtered list is a link people paste, and the Risk
  * Score split links here with `?control=`. The default — All — is absent from
  * the query string, and a hand-edited value degrades to it.
  *

@@ -260,7 +260,7 @@ export function ImagesView() {
                         {/* `table-fixed`, as on the containers list: header
                             widths are law and the image name truncates.
                             Cluster and Checked collapse below `xl`, the
-                            container count below `md`; Radar Score and the
+                            container count below `md`; Risk Score and the
                             counts never collapse. */}
                         <Table
                             density="condensed"
@@ -332,7 +332,7 @@ export function ImagesView() {
                                     align="end"
                                     className="w-20 sm:w-24"
                                 >
-                                    <span title={TOTAL_RISK_HINT}>Radar Score</span>
+                                    <span title={TOTAL_RISK_HINT}>Risk Score</span>
                                 </SortableHeader>
                                 <SortableHeader
                                     column="severity"

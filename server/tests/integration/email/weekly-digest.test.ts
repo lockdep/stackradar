@@ -186,14 +186,14 @@ describeCloud("weekly digest", () => {
         expect(mails.map((m) => m.to[0]).sort()).toEqual([admin.email, owner.email].sort());
         const ownerMail = mails.find((m) => m.to[0] === owner.email)!;
         expect(ownerMail.idempotencyKey).toBe(`digest/${org.id}/${owner.id}/2026-W38`);
-        expect(ownerMail.subject).toContain("Acme: Radar Score");
+        expect(ownerMail.subject).toContain("Acme: Risk Score");
         expect(ownerMail.subject).toContain("over the week");
         expect(ownerMail.text).toContain("Hi Olivia,");
         expect(ownerMail.text).toContain("CVE-2024-0001");
         expect(ownerMail.text).toContain("lodash@4.17.21");
         expect(ownerMail.text).toContain("on CISA KEV");
         expect(ownerMail.text).toContain("New this week on CISA KEV, running in your clusters: CVE-2024-0001.");
-        expect(ownerMail.text).toContain("https://app.test/radar-score");
+        expect(ownerMail.text).toContain("https://app.test/risk-score");
         expect(ownerMail.text).toContain("https://app.test/feed");
         expect(ownerMail.text).toMatch(/https:\/\/api\.test\/v1\/digest\/unsubscribe\?token=/);
         expect(ownerMail.tags).toContainEqual({ name: "type", value: "weekly_digest" });
@@ -203,16 +203,16 @@ describeCloud("weekly digest", () => {
         expect(rows.every((r) => r.status === "sent" && r.week === "2026-W38" && r.resendMessageId)).toBe(true);
     });
 
-    it("assembles the Radar Score, its week-old comparison and the top findings", async () => {
+    it("assembles the Risk Score, its week-old comparison and the top findings", async () => {
         const { digestService } = await import("../../../src/cloud/alerting/digest.service.js");
         const { orgRiskRollup } = await import("../../../src/db/risk.js");
         const { org } = await seedScannedOrg();
         const rollup = await orgRiskRollup(org.id);
 
         const content = await digestService.assemble(org.id);
-        expect(content.radarScore).toBe(rollup.score);
-        expect(content.radarScore).toBeGreaterThan(0);
-        expect(content.radarScoreWeekAgo).toBeNull();
+        expect(content.riskScore).toBe(rollup.score);
+        expect(content.riskScore).toBeGreaterThan(0);
+        expect(content.riskScoreWeekAgo).toBeNull();
         expect(content.findingCount).toBe(1);
         expect(content.topFindings).toHaveLength(1);
         expect(content.topFindings[0]).toMatchObject({

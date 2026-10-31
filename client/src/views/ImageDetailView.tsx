@@ -230,7 +230,7 @@ export function ImageDetailView({ imageId: id }: { imageId: string }) {
                     </div>
 
                     <div className="shrink-0 sm:text-right">
-                        <p className="mb-1 text-xs text-ink-muted">Radar Score</p>
+                        <p className="mb-1 text-xs text-ink-muted">Risk Score</p>
                         <RiskCell risk={image.risk} />
                         <p className="mb-1 mt-3 text-xs text-ink-muted">Findings</p>
                         {vulns ? (

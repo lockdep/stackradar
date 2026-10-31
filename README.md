@@ -37,7 +37,7 @@ StackRadar is open source under AGPL-3.0. Self-host it with one
 `helm install`, or use the hosted version at
 [app.stackradar.io](https://app.stackradar.io).
 
-![The StackRadar dashboard: critical, high, medium and low counts with their seven-day trend, and the Radar Score, vulnerability, container and package trends across the organisation](docs/images/dashboard.png)
+![The StackRadar dashboard: critical, high, medium and low counts with their seven-day trend, and the Risk Score, vulnerability, container and package trends across the organisation](docs/images/dashboard.png)
 
 ## Features
 
@@ -49,7 +49,7 @@ StackRadar is open source under AGPL-3.0. Self-host it with one
   [OSV.dev](https://osv.dev), [EPSS](https://www.first.org/epss/) and the
   [CISA KEV catalogue](https://www.cisa.gov/known-exploited-vulnerabilities-catalog)
   locally and matches every stored SBOM again whenever the mirror changes.
-- **Ranks by exploitability.** The Radar Score folds CVSS, EPSS and KEV into
+- **Ranks by exploitability.** The Risk Score folds CVSS, EPSS and KEV into
   one number per finding and sums them per image, container, release and
   cluster. The top of every list is what to fix first.
 - **Tells base image from application layer**, so a finding in your own

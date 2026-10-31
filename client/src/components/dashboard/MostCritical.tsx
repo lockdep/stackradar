@@ -48,7 +48,7 @@ export const mostCriticalUrl = (filters: MostCriticalFilters) =>
  * most deserve attention, one row per advisory.
  *
  * The top of `GET /api/vulnerabilities`, in the server's order and with no
- * client-side sort: by the advisory's Radar Score, the sum of what its
+ * client-side sort: by the advisory's Risk Score, the sum of what its
  * findings add — so the block always shows exactly the rows the
  * Vulnerabilities page shows first under the same lens. "Most critical" is
  * that ranking, not the severity band: exploitation is inside each
@@ -140,7 +140,7 @@ export function MostCritical({
                         </span>
                     </h2>
                     <p className="mt-1 text-sm text-ink-muted">
-                        The vulnerabilities to look at first: the ones that add the most to your Radar Score.
+                        The vulnerabilities to look at first: the ones that add the most to your Risk Score.
                     </p>
                 </div>
                 <Link

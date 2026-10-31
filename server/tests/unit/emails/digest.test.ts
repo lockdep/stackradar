@@ -7,8 +7,8 @@ const base: DigestEmailInput = {
     orgName: "Acme",
     name: "Ada",
     week: "2026-W38",
-    radarScore: 1240,
-    radarScoreWeekAgo: 1300,
+    riskScore: 1240,
+    riskScoreWeekAgo: 1300,
     findingCount: 243,
     topFindings: [
         {

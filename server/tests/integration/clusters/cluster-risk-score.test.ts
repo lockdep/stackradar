@@ -16,14 +16,14 @@ import {
 } from "../../fixtures/seed-data.js";
 
 /**
- * GET /api/clusters/:id/radar-score — the Radar Score tab.
+ * GET /api/clusters/:id/risk-score — the Risk Score tab.
  *
  * The contract under test: one row per scanned image of ONE cluster, largest
  * share first, where the rows' scores are the decomposition of the number the
  * Overview chart shows (`clusterRiskScores`) and each row's expand list adds
  * up to that row. Nothing from another cluster or org is ever visible.
  */
-describe("cluster radar score tab", () => {
+describe("cluster risk score tab", () => {
     let app: Express;
     let testData: SeedTestScenarioResult;
 
@@ -141,12 +141,12 @@ describe("cluster radar score tab", () => {
         return { imageA: a.image, imageB: b.image };
     }
 
-    it("lists images largest share first, totalling the cluster's Radar Score", async () => {
+    it("lists images largest share first, totalling the cluster's Risk Score", async () => {
         const { imageA, imageB } = await seedTwoImages();
         const { clusterRiskScores } = await import("../../../src/db/risk.js");
         const rollup = (await clusterRiskScores([testData.cluster.id])).get(testData.cluster.id)!;
 
-        const response = await request(app).get(`/api/clusters/${testData.cluster.id}/radar-score`).set(authHeaders());
+        const response = await request(app).get(`/api/clusters/${testData.cluster.id}/risk-score`).set(authHeaders());
 
         expect(response.status).toBe(200);
         expect(response.body.imageCount).toBe(2);
@@ -182,11 +182,11 @@ describe("cluster radar score tab", () => {
     it("expands an image into the findings that add up to its share", async () => {
         const { imageA } = await seedTwoImages();
 
-        const list = await request(app).get(`/api/clusters/${testData.cluster.id}/radar-score`).set(authHeaders());
+        const list = await request(app).get(`/api/clusters/${testData.cluster.id}/risk-score`).set(authHeaders());
         const rowA = list.body.images.find((i: { imageId: string }) => i.imageId === imageA.id);
 
         const response = await request(app)
-            .get(`/api/clusters/${testData.cluster.id}/radar-score/findings`)
+            .get(`/api/clusters/${testData.cluster.id}/risk-score/findings`)
             .query({ imageId: imageA.id })
             .set(authHeaders());
 
@@ -215,13 +215,13 @@ describe("cluster radar score tab", () => {
         const vuln = await advisory({ vulnId: "CVE-2024-0003", severityLevel: "critical", cvssScore: 9.9 });
         await finding((await component(sbom.id, "left-pad", "1.0.0")).id, vuln.id);
 
-        const list = await request(app).get(`/api/clusters/${testData.cluster.id}/radar-score`).set(authHeaders());
+        const list = await request(app).get(`/api/clusters/${testData.cluster.id}/risk-score`).set(authHeaders());
         expect(list.body.images.map((i: { imageId: string }) => i.imageId)).not.toContain(foreign.image.id);
         expect(list.body.images.map((i: { imageId: string }) => i.imageId)).toContain(imageA.id);
 
         // The drill-down keeps the cluster scope on the query, not just on the route.
         const detail = await request(app)
-            .get(`/api/clusters/${testData.cluster.id}/radar-score/findings`)
+            .get(`/api/clusters/${testData.cluster.id}/risk-score/findings`)
             .query({ imageId: foreign.image.id })
             .set(authHeaders());
         expect(detail.status).toBe(200);

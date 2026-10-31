@@ -143,15 +143,15 @@ mirror banners). Route files are thin: each reads its params or search
 params and renders a view from `src/views/`; a route file never carries
 state of its own.
 
-| Route                                                         | Renders                                                                                                                                                                                                           |
-| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`                                                           | `DashboardView`                                                                                                                                                                                                   |
-| `/vulnerabilities`, `/packages`, `/containers`, `/images`     | `VulnerabilitiesView`, `PackagesView`, `ContainersView`, `ImagesView` — every cluster's tab folded into one org-wide list, filters in the URL                                                                     |
-| `/clusters`, `/clusters/[id]/(tabs)/*`                        | the cluster list, and one cluster's Overview, Containers (`ClusterContainersView`), Vulnerabilities, Packages, Charts (`ClusterChartsView`), Radar Score and Settings tabs, built from `src/components/clusters/` |
-| `/clusters/[id]/containers/[containerId]`                     | `ContainerDetailView` — one running container, with its image's SBOM, components and vulnerabilities                                                                                                              |
-| `/images/[id]`, `/releases/[id]`, `/vulnerabilities/[vulnId]` | `ImageDetailView`, `ReleaseDetailView`, one advisory                                                                                                                                                              |
-| `/feed`, `/radar-score`                                       | `FeedView`, the org-wide Radar Score page                                                                                                                                                                         |
-| `/admin`, `/org-settings`, `/profile`                         | the platform admin tabs (`src/views/admin/`, with the cloud-only tabs from `src/cloud/admin/`), `OrganizationSettingsView`, the profile page                                                                      |
+| Route                                                         | Renders                                                                                                                                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                                                           | `DashboardView`                                                                                                                                                                                                  |
+| `/vulnerabilities`, `/packages`, `/containers`, `/images`     | `VulnerabilitiesView`, `PackagesView`, `ContainersView`, `ImagesView` — every cluster's tab folded into one org-wide list, filters in the URL                                                                    |
+| `/clusters`, `/clusters/[id]/(tabs)/*`                        | the cluster list, and one cluster's Overview, Containers (`ClusterContainersView`), Vulnerabilities, Packages, Charts (`ClusterChartsView`), Risk Score and Settings tabs, built from `src/components/clusters/` |
+| `/clusters/[id]/containers/[containerId]`                     | `ContainerDetailView` — one running container, with its image's SBOM, components and vulnerabilities                                                                                                             |
+| `/images/[id]`, `/releases/[id]`, `/vulnerabilities/[vulnId]` | `ImageDetailView`, `ReleaseDetailView`, one advisory                                                                                                                                                             |
+| `/feed`, `/risk-score`                                        | `FeedView`, the org-wide Risk Score page                                                                                                                                                                         |
+| `/admin`, `/org-settings`, `/profile`                         | the platform admin tabs (`src/views/admin/`, with the cloud-only tabs from `src/cloud/admin/`), `OrganizationSettingsView`, the profile page                                                                     |
 
 `/login`, `/invite/[token]`, `/account/password` and `/demo/enter` live
 outside the shell.
@@ -163,7 +163,7 @@ answers to "what is wrong with it" and this shape gives both. See
 [ADR 0004](../docs/adr/0004-image-as-the-unit-of-identity.md).
 
 The org-wide `/containers` page is the same list without the fold: one flat
-table with Cluster and Namespace columns, sorted by Radar Score. The cluster
+table with Cluster and Namespace columns, sorted by Risk Score. The cluster
 tab and the org page **share** `ContainerRow`, `ContainersFilterBar`, the
 caption, the coverage strip and `useContainersView` from
 `src/components/containers/`, and must keep doing so — where one needs to

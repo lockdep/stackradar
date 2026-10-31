@@ -179,7 +179,7 @@ describe("deployed means deployed", () => {
         expect(rollup.score).toBe(deployedRisk);
     });
 
-    it("folds cluster risk over the same population — the Overview equals the Radar Score tab", async () => {
+    it("folds cluster risk over the same population — the Overview equals the Risk Score tab", async () => {
         const { clusterRiskScores, orgRiskRollup } = await risk();
 
         const rollup = (await clusterRiskScores([seeded.cluster.id])).get(seeded.cluster.id)!;

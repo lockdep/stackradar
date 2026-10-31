@@ -18,7 +18,7 @@ import metricsRoutes from "./metrics.routes.js";
 import remediationRoutes from "./remediation.routes.js";
 import feedRoutes from "./feed.routes.js";
 import chartRepositoryRoutes from "./chart-repository.routes.js";
-import radarScoreRoutes from "./radar-score.routes.js";
+import riskScoreRoutes from "./risk-score.routes.js";
 
 const router = Router();
 
@@ -51,11 +51,11 @@ router.use("/chart-repositories", chartRepositoryRoutes);
 
 router.use("/sboms", sbomRoutes);
 router.use("/vulnerabilities", vulnerabilityRoutes);
-/* The org-wide Radar Score breakdown and the finding-level top-N the weekly
-   digest's "Start here" draws from — every cluster's Radar Score tab folded
+/* The org-wide Risk Score breakdown and the finding-level top-N the weekly
+   digest's "Start here" draws from — every cluster's Risk Score tab folded
    into one, as `/vulnerabilities`
    is of the Vulnerabilities tabs. */
-router.use("/radar-score", radarScoreRoutes);
+router.use("/risk-score", riskScoreRoutes);
 /* The org-wide Packages page — every cluster's Packages tab folded into one,
    as `/vulnerabilities` is of the Vulnerabilities tabs. */
 router.use("/components", componentRoutes);

@@ -344,7 +344,7 @@ export function DashboardView() {
                 A 30-day line above it is built for the customer you have in
                 month two, not the one deciding in minute two.
 
-                Nothing else sits up here. The Radar Score, container and package
+                Nothing else sits up here. The Risk Score, container and package
                 totals are the Trends cards below, with history attached, and
                 discovered-vs-scanned progress is the coverage line of the Clusters
                 list at the bottom (per cluster, only while the two differ) or the
@@ -435,14 +435,14 @@ export function DashboardView() {
                         that actually matters on top of the volume that explains it. */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         {/* The org-wide breakdown is behind this number, as a
-                            cluster Overview's Radar Score tab is behind its. */}
+                            cluster Overview's Risk Score tab is behind its. */}
                         <MetricsChartCard
-                            title="Radar Score"
+                            title="Risk Score"
                             description="Sum of every finding's 0–100 contribution across all clusters"
                             dataKey="riskScore"
                             data={snapshots}
                             deltaDirection="up-bad"
-                            href="/radar-score"
+                            href="/risk-score"
                             hrefTitle="See what drives the score"
                         />
                         {/* Unfiltered, unlike the severity cards above: this
@@ -504,7 +504,7 @@ export function DashboardView() {
 
             {/* What to look at first: the five
                 advisories across every cluster the Vulnerabilities page
-                ranks highest — by Radar Score — each unfolding to the images it affects.
+                ranks highest — by Risk Score — each unfolding to the images it affects.
                 Gated on the same "at least one image scanned" the severity
                 cards wait for. */}
             <MostCritical

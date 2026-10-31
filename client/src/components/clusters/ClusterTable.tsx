@@ -93,8 +93,8 @@ export function ClusterTable({
                 <TableHead>
                     <TableHeader>Name</TableHeader>
                     <TableHeader>Containers</TableHeader>
-                    <TableHeader>Radar Score</TableHeader>
-                    {/* Name, Containers and Radar Score are the row on a
+                    <TableHeader>Risk Score</TableHeader>
+                    {/* Name, Containers and Risk Score are the row on a
                         phone; the scanner's state folds into the Name cell
                         there. Version and Created wait for the sidebar
                         layout. */}

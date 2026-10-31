@@ -44,7 +44,7 @@ type ClusterName = Pick<Cluster, 'id' | 'name'>;
  * cluster. Org-wide the question is "what is the worst thing running
  * anywhere", and a namespace tree hides that behind alphabetical group
  * labels — so this page has Cluster and Namespace *columns* and no group
- * rows, and opens sorted by Radar Score. Five containers on one image tie at
+ * rows, and opens sorted by Risk Score. Five containers on one image tie at
  * the top, and that is correct: the same problem in five places. The
  * Dashboard's "Fix these first" block is where it collapses into one move;
  * here it is not deduplicated.
@@ -364,7 +364,7 @@ export function ContainersView() {
                                                    16px off the container name. */
                                                 className="w-20 sm:w-24"
                                             >
-                                                <span title={TOTAL_RISK_HINT}>Radar Score</span>
+                                                <span title={TOTAL_RISK_HINT}>Risk Score</span>
                                             </SortableHeader>
                                             <SortableHeader
                                                 column="severity"

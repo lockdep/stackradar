@@ -15,15 +15,15 @@ import {
 } from "../../fixtures/seed-data.js";
 
 /**
- * GET /api/radar-score — the org-wide Radar Score breakdown.
+ * GET /api/risk-score — the org-wide Risk Score breakdown.
  *
- * The cluster tab's contract (`clusters/cluster-radar-score.test.ts`) with
+ * The cluster tab's contract (`clusters/cluster-risk-score.test.ts`) with
  * the scope widened to every cluster of the caller's org: one row per image
  * across all of them, each naming its cluster, the rows' scores summing to
- * the org's Radar Score (`orgRiskRollup`), the drill-down keeping the org
+ * the org's Risk Score (`orgRiskRollup`), the drill-down keeping the org
  * scope on the query, and nothing from another org ever visible.
  */
-describe("org-wide radar score", () => {
+describe("org-wide risk score", () => {
     let app: Express;
     let testData: SeedTestScenarioResult;
 
@@ -141,12 +141,12 @@ describe("org-wide radar score", () => {
         return { clusterA, clusterB, imageA: a.image, imageB: b.image };
     }
 
-    it("lists images across clusters largest share first, naming each cluster, totalling the org's Radar Score", async () => {
+    it("lists images across clusters largest share first, naming each cluster, totalling the org's Risk Score", async () => {
         const { clusterA, clusterB, imageA, imageB } = await seedTwoClusters();
         const { orgRiskRollup } = await import("../../../src/db/risk.js");
         const rollup = await orgRiskRollup(testData.org.id);
 
-        const response = await request(app).get("/api/radar-score").set(authHeaders());
+        const response = await request(app).get("/api/risk-score").set(authHeaders());
 
         expect(response.status).toBe(200);
         expect(response.body.imageCount).toBe(2);
@@ -180,7 +180,7 @@ describe("org-wide radar score", () => {
         const { imageB } = await seedTwoClusters();
 
         const response = await request(app)
-            .get("/api/radar-score/findings")
+            .get("/api/risk-score/findings")
             .query({ imageId: imageB.id })
             .set(authHeaders());
         expect(response.status).toBe(200);
@@ -197,11 +197,11 @@ describe("org-wide radar score", () => {
         const vuln = await advisory({ vulnId: "CVE-2024-0003", severityLevel: "critical", cvssScore: 9.9 });
         await finding((await component(sbom.id, "left-pad", "1.0.0")).id, vuln.id);
 
-        const list = await request(app).get("/api/radar-score").set(authHeaders());
+        const list = await request(app).get("/api/risk-score").set(authHeaders());
         expect(list.body.images.map((i: { imageId: string }) => i.imageId)).not.toContain(foreign.image.id);
 
         const detail = await request(app)
-            .get("/api/radar-score/findings")
+            .get("/api/risk-score/findings")
             .query({ imageId: foreign.image.id })
             .set(authHeaders());
         expect(detail.status).toBe(200);
@@ -209,7 +209,7 @@ describe("org-wide radar score", () => {
     });
 
     it("returns an empty page for an org with no scans", async () => {
-        const response = await request(app).get("/api/radar-score").set(authHeaders());
+        const response = await request(app).get("/api/risk-score").set(authHeaders());
         expect(response.status).toBe(200);
         expect(response.body).toMatchObject({ images: [], total: 0, imageCount: 0, findingCount: 0 });
     });

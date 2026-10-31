@@ -200,11 +200,11 @@ type ClusterVulnerability = {
     /** Worst finding's 0–100 score across the components carrying it. */
     riskScore: number | null;
     /**
-     * The advisory's Radar Score: the rounded sum of its findings'
+     * The advisory's Risk Score: the rounded sum of its findings'
      * contributions — what fixing it everywhere takes off the total. Null when
      * nothing behind the row is scored; absent from an older server.
      */
-    radarScore?: number | null;
+    totalRiskScore?: number | null;
     /** Worst CVSS base score behind the row; null when no record publishes one, absent from an older server. */
     cvssScore?: number | null;
     epssScore: number | null;
@@ -458,13 +458,13 @@ export type VulnerabilityExposure = {
 };
 
 /**
- * One image's share of a cluster's Radar Score — a row of the Radar Score
+ * One image's share of a cluster's Risk Score — a row of the Risk Score
  * tab. Images partition the total (a finding belongs to one image, an image
  * to one cluster), so the rows' `score`s add up to the Overview chart's
  * number; workloads would double-count shared images, so they ride along as
  * context instead of being the unit.
  */
-export type ClusterRadarScoreImage = {
+export type ClusterRiskScoreImage = {
     imageId: string;
     /** The cluster the image belongs to (ADR 0006) — the org page's Cluster column. */
     clusterId: string;
@@ -490,10 +490,10 @@ export type ClusterRadarScoreImage = {
     }[];
 };
 
-/** Response of `GET /api/clusters/:id/radar-score`. */
-export type ClusterRadarScoreResponse = {
-    images: ClusterRadarScoreImage[];
-    /** The scope's Radar Score — every image's `score`, folded once. Never narrowed by `?control=`. */
+/** Response of `GET /api/clusters/:id/risk-score`. */
+export type ClusterRiskScoreResponse = {
+    images: ClusterRiskScoreImage[];
+    /** The scope's Risk Score — every image's `score`, folded once. Never narrowed by `?control=`. */
     total: number;
     /**
      * The same sum, partitioned by who controls the image; `yours + upstream`
@@ -509,11 +509,11 @@ export type ClusterRadarScoreResponse = {
 };
 
 /**
- * One finding's contribution to an image's share — a row of the Radar Score
- * tab's expanded image. Response of `GET /api/clusters/:id/radar-score/findings`
- * is `{ findings: ClusterRadarScoreFinding[] }`, largest contribution first.
+ * One finding's contribution to an image's share — a row of the Risk Score
+ * tab's expanded image. Response of `GET /api/clusters/:id/risk-score/findings`
+ * is `{ findings: ClusterRiskScoreFinding[] }`, largest contribution first.
  */
-export type ClusterRadarScoreFinding = {
+export type ClusterRiskScoreFinding = {
     vulnId: string;
     summary: string | null;
     packageName: string;

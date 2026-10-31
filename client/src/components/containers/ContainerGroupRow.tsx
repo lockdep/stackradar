@@ -81,7 +81,7 @@ export function ContainerGroupRow({
                     title={
                         group.risk == null
                             ? 'Nothing in this group has been scanned'
-                            : `Radar Score ${Math.round(group.risk).toLocaleString()} across this group's scanned images`
+                            : `Risk Score ${Math.round(group.risk).toLocaleString()} across this group's scanned images`
                     }
                 />
             </TableCell>

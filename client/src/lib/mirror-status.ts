@@ -8,7 +8,7 @@
  * after the server is already answering, then scores it with EPSS and KEV:
  * the dashboard is reachable, uploads are accepted, and every image shows
  * zero findings until the bootstrap publishes its first generation — and
- * every Radar Score is still about to move until the two feeds have run.
+ * every Risk Score is still about to move until the two feeds have run.
  * Saying so on every page, feed by feed, is what keeps "no findings yet"
  * from reading as "no vulnerabilities", and what spares a person the server
  * log when they want to know whether the import is moving. Pure, so the
@@ -307,14 +307,14 @@ export function mirrorBannerState(status: MirrorStatus | null, now: number = Dat
               kind: 'building',
               tone: 'danger',
               headline: 'Exploitation data has not loaded.',
-              summary: 'Radar Scores rank on CVSS alone until EPSS and KEV load. The server retries daily.',
+              summary: 'Risk Scores rank on CVSS alone until EPSS and KEV load. The server retries daily.',
               feeds,
           }
         : {
               kind: 'building',
               tone: 'info',
               headline: 'Vulnerability database is almost ready.',
-              summary: 'Radar Scores settle once EPSS and KEV have loaded.',
+              summary: 'Risk Scores settle once EPSS and KEV have loaded.',
               feeds,
           };
 }

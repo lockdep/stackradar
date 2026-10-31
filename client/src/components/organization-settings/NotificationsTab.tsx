@@ -437,7 +437,7 @@ export function NotificationsTab({ orgId, canManage }: { orgId: string; canManag
                 <div className="rounded-md bg-surface-raised border border-edge p-6">
                     <h3 className="text-lg font-medium text-ink mb-2">Weekly digest</h3>
                     <p className="text-sm text-ink-muted mb-4">
-                        Every Monday, owners and admins get one email with the Radar Score and where it moved, the
+                        Every Monday, owners and admins get one email with the Risk Score and where it moved, the
                         findings to fix first, new CISA KEV matches and any registry the scanner cannot pull from. Off
                         for the whole organization, not per person; the link at the bottom of the email does the same.
                     </p>

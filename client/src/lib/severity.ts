@@ -23,7 +23,7 @@ export type SeverityBucket = SeverityBand | 'unscored';
 
 export const UNSCORED_LABEL = 'Unscored';
 export const UNSCORED_HINT =
-    'The advisory source published no CVSS score or severity for this finding. It still contributes to the Radar Score at a neutral CVSS of 4.0, and is shown here because it is exploited (CISA KEV) or likely to be (EPSS).';
+    'The advisory source published no CVSS score or severity for this finding. It still contributes to the Risk Score at a neutral CVSS of 4.0, and is shown here because it is exploited (CISA KEV) or likely to be (EPSS).';
 export const UNSCORED_HIDDEN_HINT =
     'Advisories whose source published no CVSS score or severity. Hidden by default; exploited ones (CISA KEV, or EPSS ≥ 10%) are always shown.';
 

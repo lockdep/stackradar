@@ -11,7 +11,7 @@ import { renderDigestEmail, type DigestFinding, type DigestUpstream } from "./di
 import { fixesForOrg, type FixesPage } from "../../services/remediation.service.js";
 import { emailService } from "../email/email.service.js";
 import { digestRepository } from "./digest.repository.js";
-import { radarScoreRepository, type TopFinding } from "../../repositories/radar-score.repository.js";
+import { riskScoreRepository, type TopFinding } from "../../repositories/risk-score.repository.js";
 import { metricsRepository } from "../../repositories/metrics.repository.js";
 import { workloadRepository } from "../../repositories/workload.repository.js";
 import { activityFeedRepository } from "../../repositories/activity-feed.repository.js";
@@ -94,7 +94,7 @@ export const digestService = {
             // own rule). Base-image findings get one line below, not rows —
             // until item 7 can say what removes them, a row would be a
             // problem with no move attached.
-            radarScoreRepository.findTopFindings({ orgId }, TOP_FINDINGS, lens, "yours"),
+            riskScoreRepository.findTopFindings({ orgId }, TOP_FINDINGS, lens, "yours"),
             activityFeedRepository.listSince(orgId, weekAgo),
             workloadRepository.coverageByOrg(orgId),
             db
@@ -127,8 +127,8 @@ export const digestService = {
 
         return {
             week: isoWeek(now),
-            radarScore: risk.score,
-            radarScoreWeekAgo: snapshot?.riskScore ?? null,
+            riskScore: risk.score,
+            riskScoreWeekAgo: snapshot?.riskScore ?? null,
             findingCount: risk.findingCount,
             topFindings,
             newKevVulnIds: since.newKev.vulnIds,

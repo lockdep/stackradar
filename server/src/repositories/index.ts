@@ -36,13 +36,13 @@ export { adminRepository } from "./admin.repository.js";
 export { adminStatusRepository } from "./admin-status.repository.js";
 export { adminMatcherRepository } from "./admin-matcher.repository.js";
 export { adminExplorerRepository } from "./admin-explorer.repository.js";
-export { radarScoreRepository } from "./radar-score.repository.js";
+export { riskScoreRepository } from "./risk-score.repository.js";
 export type {
-    ClusterRadarScoreImage,
-    ClusterRadarScorePage,
-    ClusterRadarScoreFinding,
+    ClusterRiskScoreImage,
+    ClusterRiskScorePage,
+    ClusterRiskScoreFinding,
     TopFinding,
-} from "./radar-score.repository.js";
+} from "./risk-score.repository.js";
 export { alertRepository, type AlertOrg } from "./alert.repository.js";
 // The global search palette (⌘K).
 export { searchRepository, classifySearchTerm } from "./search.repository.js";

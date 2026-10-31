@@ -16,7 +16,7 @@ export { PackageList } from './PackageList';
 export { ReleaseOccurrencesPopover } from './ReleaseOccurrencesPopover';
 export { ExploitationCell, FixCell } from './VulnerabilitySignalCells';
 export { AffectedImagesTable } from './AffectedImagesTable';
-export { RadarScoreBreakdown } from './RadarScoreBreakdown';
+export { RiskScoreBreakdown } from './RiskScoreBreakdown';
 export { RegistryAuthBanner } from './RegistryAuthBanner';
 export { ScannerUpdateBanner } from './ScannerUpdateBanner';
 export {

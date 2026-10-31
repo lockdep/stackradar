@@ -62,7 +62,7 @@ export interface FixListItem {
         introduced: number;
         byScope?: { application: number; base: number };
     } | null;
-    /** Radar Score contribution the move removes — the rank key; null when unmeasured. */
+    /** Risk Score contribution the move removes — the rank key; null when unmeasured. */
     riskRemoved: number | null;
     /** An unmeasured chart bump's "could address up to" bound. */
     upperBound: { risk: number; findings: number } | null;
