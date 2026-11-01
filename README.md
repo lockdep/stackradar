@@ -170,7 +170,7 @@ mechanical.
 | Postgres and the advisory mirror | Yours | Ours |
 | Sign-in | Local, OIDC, GitHub, Google | GitHub, Google, OIDC; enterprise SSO planned |
 | Alerts | One Slack webhook per organisation | Email and Slack, with a weekly digest |
-| Price | Free, AGPL-3.0 | Free for one cluster; see [pricing](https://stackradar.io/pricing) |
+| Price | Free, AGPL-3.0 | 14-day trial, then from $59/month; see [pricing](https://stackradar.io/pricing) |
 
 ## Documentation
 
