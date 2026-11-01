@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from 'rea
 import { useSession } from 'next-auth/react';
 import { usePathname } from 'next/navigation';
 import { ApiError, apiFetch, errorMessage } from '@/lib/api-client';
+import { aliasOrganization } from '@/lib/analytics';
 import { ACTIVE_ORG_COOKIE } from '@/lib/constants';
 import { viewerRole } from '@/lib/demo';
 import { useRuntimeConfig } from './RuntimeConfigProvider';
@@ -189,6 +190,9 @@ export function OrganizationProvider({ children }: Props) {
                         setOrganizations([newOrg]);
                         setOrganizationState(newOrg);
                         setActiveOrgCookie(newOrg.id);
+                        // The browser's PostHog person now owns the org the
+                        // server reports funnel events for (lib/analytics.ts).
+                        aliasOrganization(newOrg.id);
                     });
                 }),
         [demoMode],

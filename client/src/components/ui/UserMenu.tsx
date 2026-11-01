@@ -6,6 +6,7 @@ import { signOut } from 'next-auth/react';
 import { Menu, MenuButton, MenuHeading, MenuItem, MenuItems, MenuSection, MenuSeparator } from '@headlessui/react';
 import { Check, ChevronsUpDown, CircleUser, LogOut } from 'lucide-react';
 import { useTheme } from '@/components/providers';
+import { resetAnalytics } from '@/lib/analytics';
 import { THEME_OPTIONS } from './ThemeToggle';
 import {
     MENU_HEADING_CLASS,
@@ -139,7 +140,10 @@ export function UserMenu({ user, placement, onNavigate }: UserMenuProps) {
                     <MenuItem>
                         <button
                             type="button"
-                            onClick={() => signOut({ callbackUrl: '/login' })}
+                            onClick={() => {
+                                resetAnalytics();
+                                void signOut({ callbackUrl: '/login' });
+                            }}
                             className={MENU_ITEM_CLASS}
                         >
                             <LogOut aria-hidden className="size-4 shrink-0 text-ink-muted" />
