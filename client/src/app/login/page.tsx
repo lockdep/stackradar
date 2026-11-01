@@ -35,9 +35,10 @@ const ASSURANCES = ['One Helm command', 'First findings within minutes', 'Only p
 
 /**
  * The figure on the proof panel; see the panel's comment for where it comes
- * from and how to refresh it. 16,539 on `measuredOn`.
+ * from and how to refresh it. The OSV.dev mirror held 917,000 advisories on
+ * `measuredOn`; rounded down so it stays true for months.
  */
-const CHART_INDEX_COUNT = { value: '16,500+', measuredOn: '2026-09-10' };
+const ADVISORY_COUNT = { value: '900,000+', measuredOn: '2026-11-01' };
 
 /** The one look both provider buttons share; see the comment above them. */
 const PROVIDER_BUTTON =
@@ -165,7 +166,15 @@ export default async function LoginPage({
                         <h1 className="text-balance text-[1.75rem] font-semibold leading-tight tracking-tight text-ink">
                             Know which pods run a new CVE.
                         </h1>
-                        <p className="mt-3 text-base text-ink-muted">Connect one cluster free. No credit card.</p>
+                        {/* The same offer the marketing site makes, in the same words: a
+                14-day trial with a card at checkout (lib/pricing there, and
+                /pricing). Until 2026-11-01 this line said "Connect one cluster
+                free. No credit card." — the pre-trial offer, retired on
+                2026-10-27 — so the last screen before the OAuth click
+                contradicted the page that sent the visitor here. */}
+                        <p className="mt-3 text-base text-ink-muted">
+                            14-day free trial. Card at checkout, nothing charged until it ends. Or self-host, free.
+                        </p>
 
                         {/* Two equal buttons, neither filled. The provider choice is an
                 identity question, not a persuasion one: the visitor has
@@ -344,30 +353,31 @@ export default async function LoginPage({
           something move.
 
           What the card says has to be true and checkable, which rules out
-          a testimonial or a made-up percentage. It is the count of public
-          Helm charts the public chart index (charts.stackradar.io) renders
-          and scans nightly with the same pipeline the visitor is about to
-          point at their own cluster. The figure is HAND-COPIED, not live,
-          rounded down so it stays true for months; the marketing site shows
-          the same number, so refresh both together:
+          a testimonial or a made-up percentage. Until 2026-11-01 it was the
+          count of public Helm charts the public chart index scanned nightly;
+          that index was retired on 2026-10-24, so the card now carries the
+          size of the advisory mirror the visitor's SBOMs will be matched
+          against — the same figure the marketing site's WebSite schema and
+          hero use. HAND-COPIED, not live, rounded down so it stays true for
+          months; refresh it with the site's:
 
-            curl -sL https://charts.stackradar.io/charts | grep -oE '[0-9,]+ charts'
+            psql "$DATABASE_URL" -tAc 'select count(*) from vulnerabilities'
       */}
             <div className="hidden lg:block lg:p-4">
                 <div className="flex h-full min-h-[calc(100vh-2rem)] items-center justify-center rounded-3xl bg-surface-raised border border-edge p-10 bg-[linear-gradient(to_bottom,color-mix(in_srgb,var(--accent-emphasis)_14%,transparent),transparent_70%)]">
                     <div
                         className="w-full max-w-sm rounded-xl border border-edge bg-surface-raised p-8 shadow-floating"
-                        data-measured-on={CHART_INDEX_COUNT.measuredOn}
+                        data-measured-on={ADVISORY_COUNT.measuredOn}
                     >
                         <p className="text-5xl font-light tabular-nums tracking-[-0.02em] text-ink">
-                            {CHART_INDEX_COUNT.value}
+                            {ADVISORY_COUNT.value}
                         </p>
                         <p className="mt-3 text-xl font-semibold leading-snug tracking-tight text-ink text-balance">
-                            Public Helm charts scanned every night
+                            Security advisories, synced hourly from OSV.dev
                         </p>
                         <p className="mt-3 text-base leading-6 text-ink-muted">
-                            The same pipeline that will watch your cluster runs across the whole public Helm ecosystem.
-                            Not a demo dataset.
+                            Every image your pods run is re-checked against each new one as it lands, with EPSS and the
+                            CISA KEV catalogue deciding what to fix first. No rescan.
                         </p>
                     </div>
                 </div>

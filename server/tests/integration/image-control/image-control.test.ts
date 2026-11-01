@@ -12,6 +12,7 @@ import {
     createImage,
     createHelmRelease,
     createUser,
+    createOrganization,
     addOrgMember,
     type SeedTestScenarioResult,
 } from "../../fixtures/seed-data.js";
@@ -184,6 +185,39 @@ describe("image control", () => {
         const member = await createUser(getTestDb(), { email: "member@example.com" });
         await addOrgMember(getTestDb(), member.id, testData.org.id, "member");
         expect((await request(app).get(url).set(headers(member))).status).toBe(403);
+    });
+
+    it("lets a member of the demo org read the list, and nobody else without a membership", async () => {
+        const db = getTestDb();
+        const demoOrg = await createOrganization(db, { demo: true });
+        const visitor = await createUser(db, { email: "visitor@example.com", demo: true });
+        await addOrgMember(db, visitor.id, demoOrg.id, "member");
+        const url = `/api/organizations/${demoOrg.id}/image-control`;
+        const as = (user: { id: string; email: string }) =>
+            createInternalHeaders({
+                id: user.id,
+                email: user.email,
+                orgId: demoOrg.id,
+                orgName: demoOrg.name,
+                orgSlug: demoOrg.slug,
+            });
+
+        // The demo visitor is a plain member; the Dashboard banner renders for them.
+        const res = await request(app).get(url).set(as(visitor));
+        expect(res.status).toBe(200);
+        expect(res.body.repositories).toEqual([]);
+
+        // The demo flag opens the read to members, not to the public: a user
+        // of another org is still refused, as is any write.
+        expect((await request(app).get(url).set(as(testData.user))).status).toBe(403);
+        expect(
+            (
+                await request(app)
+                    .put(`/api/organizations/${demoOrg.id}/image-control-rules`)
+                    .set(as(visitor))
+                    .send({ rules: [] })
+            ).status,
+        ).toBe(403);
     });
 
     it("applies the org's answers, audits them, and resets on null", async () => {
