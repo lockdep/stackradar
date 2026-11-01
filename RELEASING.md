@@ -24,10 +24,16 @@ the Helm chart has its own in
   bugfix.** It is created from the release tag, and the release workflow
   run on it refuses any version outside that minor.
 - **The chart has its own version.** Its `appVersion` names the app release
-  it was tested with and is what `helm install` runs by default; a chart
-  release follows an app release when the app release carries a migration
-  or a breaking change (post-release checklist below). The chart refuses
-  to render an image tag from an app major it does not support.
+  it was tested with and is what `helm install` runs by default (and what
+  Artifact Hub shows as the app version). `publish.yaml` opens the pull
+  request in `lockdep/helm-charts` that moves it after every stable release
+  that is the highest version; merging it and running that repository's
+  Helm Release workflow is the post-release step (checklist below), and it
+  is mandatory when the app release carries a migration or a breaking
+  change. The bump takes `<major>.<minor>.0` of the app release as the
+  chart version when that is higher than the chart's, and the next chart
+  patch otherwise. The chart refuses to render an image tag from an app
+  major it does not support.
 
 What a release of `1.2.3` produces:
 
@@ -37,6 +43,7 @@ What a release of `1.2.3` produces:
 | `:1.2` | Moves to the newest `1.2.z` |
 | `:latest` | Moves to the newest stable version overall; never to a prerelease or to a bugfix of an older minor |
 | GitHub Release `v1.2.3` | Notes from the merged pull requests' labels ([`.github/release.yml`](.github/release.yml)) under a header with the image digests, the `cosign verify` command, and whether the release carries schema migrations; `checksums.txt` and a CycloneDX SBOM of each image attached |
+| Pull request `chore/stackradar-<chart version>` in [`lockdep/helm-charts`](https://github.com/lockdep/helm-charts) | Bumps the chart's `appVersion` to 1.2.3, with the chart `version`, the `artifacthub.io/images` annotation, an `UPGRADING.md` entry and the README. Stable releases that are the highest version only, and only when `HELM_CHARTS_TOKEN` is set |
 
 The version dropdown in the
 [defect template](.github/ISSUE_TEMPLATE/defect-report.yml) gains the new
@@ -58,10 +65,12 @@ version in the same commit that sets it.
       the best proxy for a self-hoster who installed at the first version.
       A migration that only works on an empty database is a defect, not a
       release. Recipe below.
-- [ ] If the release carries a migration or a breaking change: the chart
-      bump is prepared in `lockdep/helm-charts` (`appVersion`, chart
-      `version`, the `artifacthub.io/images` annotation, a line in
-      `UPGRADING.md` if values changed) so it can be released right after.
+- [ ] If the release needs a chart change (a new value, a renamed or removed
+      environment variable, a new app major): it is prepared in
+      `lockdep/helm-charts` so it can land in the bump pull request
+      `publish.yaml` opens. The bump itself (`appVersion`, chart `version`,
+      the `artifacthub.io/images` annotation, an `UPGRADING.md` entry) needs
+      no preparation.
 - [ ] [`docs/self-hosting/`](docs/self-hosting/) reflects any behaviour
       the release changes; every page says which edition it applies to.
 
@@ -180,7 +189,14 @@ template's dropdown.
    whether the release carries schema migrations (computed from the
    migration files added since the previous tag, not remembered), the
    upgrade commands, then the generated notes; attaches `checksums.txt`
-   and the SBOMs; publishes the release.
+   and the SBOMs; publishes the release;
+6. opens the chart bump pull request in `lockdep/helm-charts` with
+   [`scripts/release-bump-chart.mjs`](scripts/release-bump-chart.mjs):
+   `appVersion`, chart `version`, the `artifacthub.io/images` annotation,
+   an `UPGRADING.md` entry (saying which migrations the release carries)
+   and the helm-docs README. Stable releases that are the highest version
+   only, and only when `HELM_CHARTS_TOKEN` is set; without it the job says
+   so and exits 0. A chart that already carries the version is left alone.
 
 Watch it:
 
@@ -216,13 +232,18 @@ it, and drafts the GitHub Release itself when none exists.
       lists `linux/amd64` and `linux/arm64`.
 - [ ] The defect template's dropdown lists the new version (the release
       commit added it; check the diff rather than the form).
-- [ ] **Chart**, if the release carries a migration or a breaking change
-      (otherwise optional): in `lockdep/helm-charts`, bump `appVersion` to
-      the new version, bump the chart `version`, update the
-      `artifacthub.io/images` annotation, add a line to `UPGRADING.md` if
-      values changed, merge, and run its Helm Release workflow. Until then
-      `helm install` runs the previous `appVersion` and the release notes
-      tell self-hosters to set `server.image.tag` and `client.image.tag`.
+- [ ] **Chart**: review the bump pull request `publish.yaml` opened in
+      `lockdep/helm-charts` (`chore/stackradar-<chart version>`), extend its
+      `UPGRADING.md` entry if a value changed, merge it, and run that
+      repository's Helm Release workflow. Mandatory when the release
+      carries a migration or a breaking change, otherwise optional. Until
+      then `helm install` runs the previous `appVersion`, Artifact Hub
+      shows it, and the release notes tell self-hosters to set
+      `server.image.tag` and `client.image.tag`. When nothing was opened
+      (no `HELM_CHARTS_TOKEN`, or a release that is not the highest
+      version), the same bump by hand is
+      `node scripts/release-bump-chart.mjs ../helm-charts/charts/stackradar <version>`
+      followed by `make docs` in that repository.
 - [ ] **Promote to production** (maintainers): run the `Promote`
       workflow in the hosted deployment's own repository with
       `version=<version>`. It resolves the two digests from GHCR, verifies
@@ -374,9 +395,17 @@ GITHUB_TOKEN=$(gh auth token) node scripts/ghcr-prune.mjs --keep-days 0 stackrad
   version commits carry `[skip ci]`.
 - `snapshot.yaml` uses `GITOPS_DEVELOPMENT_TOKEN` only to notify the
   maintainers' development deployment of a new snapshot; without it the job
-  logs that and exits 0. Nothing else needs a secret: the images are pushed
-  and the release is written with `GITHUB_TOKEN`, and signing is keyless.
-  Production promotion lives in the deployment repository, not here.
+  logs that and exits 0. Production promotion lives in the deployment
+  repository, not here.
+- `HELM_CHARTS_TOKEN`: a fine-grained personal access token for
+  `lockdep/helm-charts` alone, with *Contents* and *Pull requests* set to
+  read and write, as a repository secret. `publish.yaml` checks that
+  repository out with it, pushes the `chore/stackradar-<chart version>`
+  branch and opens the bump pull request; the commits are made as
+  `github-actions[bot]` and signed off, the pull request is opened by the
+  token's owner. Without it the chart job logs that and exits 0. Nothing
+  else needs a secret: the images are pushed and the release is written
+  with `GITHUB_TOKEN`, and signing is keyless.
 - The GHCR packages `stackradar-server` and `stackradar-client` are
   public; a first push would have created them private. They list this
   repository with the admin role (Package settings → *Manage Actions
