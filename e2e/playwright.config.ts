@@ -43,7 +43,20 @@ export default defineConfig({
                 viewport: { width: 1440, height: 900 },
                 storageState: adminStorageState,
             },
+            // The mutation specs change what every other test reads, so they run
+            // after this project, in their own (README § How a run is put together).
+            testIgnore: /stateful\//,
             dependencies: ['setup'],
+        },
+        {
+            name: 'stateful',
+            testMatch: /stateful\/.*\.spec\.ts/,
+            use: {
+                ...devices['Desktop Chrome'],
+                viewport: { width: 1440, height: 900 },
+                storageState: adminStorageState,
+            },
+            dependencies: ['chromium'],
         },
     ],
 });

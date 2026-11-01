@@ -39,8 +39,30 @@ export function scannerApiUrl(publicApiUrl: string | null, isCloud: boolean): { 
 }
 export const SCANNER_DOCS_URL = 'https://github.com/lockdep/stackradar-scanner';
 export const SCANNER_RELEASES_URL = 'https://github.com/lockdep/stackradar-scanner/releases/latest';
+/**
+ * The scanner's documentation on the marketing site. One origin for every
+ * edition: the docs describe the agent, which is the same chart whether it
+ * reports to the cloud or to a self-hosted server.
+ */
+export const DOCS_BASE_URL = 'https://stackradar.io/docs';
 /** The marketing site's quick-start doc. */
-export const SCANNER_INSTALL_DOCS_URL = 'https://stackradar.io/docs/quick-start';
+export const SCANNER_INSTALL_DOCS_URL = `${DOCS_BASE_URL}/quick-start`;
+/** Scanning images the registry will not hand out anonymously. */
+export const PRIVATE_REGISTRY_DOCS_URL = `${DOCS_BASE_URL}/install/private-registries`;
+
+/**
+ * The three questions someone evaluating the agent asks before letting it
+ * into a cluster — what leaves, what it may read, what it costs to run — each
+ * answered by one page. Rendered wherever the install command is, and on the
+ * cluster page, so the answers are a click away from the thing they are
+ * about rather than a search away. The anchors are headings the docs own
+ * (`architecture/page.tsx`); a rename there is a broken link here.
+ */
+export const SCANNER_TRUST_LINKS = [
+    { label: 'What the scanner sends', href: `${DOCS_BASE_URL}/architecture#data-leaving` },
+    { label: 'Permissions it needs', href: `${DOCS_BASE_URL}/architecture#permissions` },
+    { label: 'Helm values', href: `${DOCS_BASE_URL}/helm-values` },
+] as const;
 
 export function helmInstallCommand({
     chartVersion,

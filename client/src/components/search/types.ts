@@ -23,6 +23,8 @@ export type SearchPackageItem = {
     type: 'library';
     purlType: string | null;
     versionCount: number;
+    /** The one version in scope when `versionCount` is 1, null when several. Absent from an older server. */
+    version?: string | null;
     /** Every occurrence is a distro package or runtime tooling — the row's small "base" tag. */
     base?: boolean;
     imageCount: number;

@@ -80,6 +80,13 @@ describe('feedWorthy', () => {
         expect(feedWorthy([first, mirror])).toEqual([mirror]);
     });
 
+    it("keeps first scans when asked — one image's own history", () => {
+        const first = scan({ cause: 'first-scan' });
+        const mirror = scan({});
+        expect(feedWorthy([first, mirror], { firstScans: true })).toEqual([first, mirror]);
+        expect(groupByDay([first, mirror], { firstScans: true })[0]?.lines).toHaveLength(2);
+    });
+
     it('folds a rollout into the move that completed it, across days', () => {
         const started = event('container.rollout-started', { ...slot, from: A, to: B }, '2026-09-06T23:58:00Z');
         const moved = event(

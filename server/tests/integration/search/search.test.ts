@@ -250,10 +250,14 @@ describe("GET /api/search", () => {
         expect(response.body.intent).toBe("name");
         expect(response.body.groups[0].kind).toBe("package");
         expect(groupOf(response.body, "package")).toEqual([
+            // One version in scope: the hit carries it, so the palette can
+            // land on that exact Packages row. Several: null, the name is
+            // the row's answer.
             expect.objectContaining({
                 name: "log4j-api",
                 purlType: "maven",
                 versionCount: 1,
+                version: "2.14.1",
                 imageCount: 1,
                 workloadCount: 1,
             }),
@@ -261,6 +265,7 @@ describe("GET /api/search", () => {
                 name: "log4j-core",
                 purlType: "maven",
                 versionCount: 2,
+                version: null,
                 imageCount: 1,
                 workloadCount: 1,
             }),

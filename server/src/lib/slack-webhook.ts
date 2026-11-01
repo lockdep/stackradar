@@ -54,6 +54,20 @@ export function maskWebhookUrl(url: string): string {
 }
 
 /**
+ * The webhook's host alone — what a member may be told about where alerts
+ * go (`GET …/notifications/summary`). Carries none of the credential: the
+ * path is the secret, and the host is already what `alert_sends.recipient`
+ * records for every Slack delivery.
+ */
+export function webhookHost(url: string): string | null {
+    try {
+        return new URL(url).host || null;
+    } catch {
+        return null;
+    }
+}
+
+/**
  * Whether a tenant-supplied webhook URL may be stored: `https:` only and a
  * host that resolves publicly is checked again at send time by `safeFetch`;
  * here the shape is checked so a paste of the wrong thing fails at save.

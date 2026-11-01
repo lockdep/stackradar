@@ -224,7 +224,8 @@ const workloadSchema = z.object({
  * the whole failure surface: **never raw syft stderr**, which carries full
  * registry URLs and API response bodies. `code` is deliberately a charset
  * check rather than an enum: the set is open (`registry_auth` |
- * `registry_rate_limited` | `scan_error` today), a newer scanner may add one,
+ * `registry_rate_limited` | `image_too_large` | `scan_error` today), a newer
+ * scanner may add one,
  * and the UI renders anything it does not recognise as a generic scan
  * failure — rejecting the whole report over a new code would orphan the
  * inventory of every upgraded cluster.

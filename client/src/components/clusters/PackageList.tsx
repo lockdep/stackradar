@@ -1,8 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Boxes, RefreshCw, ShieldAlert, TriangleAlert } from 'lucide-react';
+import { Boxes, RefreshCw, TriangleAlert } from 'lucide-react';
 import {
     Badge,
     Button,
@@ -13,22 +13,24 @@ import {
     FilterMenu,
     ImagesFilterMenu,
     LoadingBlock,
-    PackageTypeBadge,
     PaginationFooter,
     SearchInput,
     Spinner,
     Table,
-    TableBody,
-    TableCell,
     TableContainer,
     TableEmpty,
     TableHead,
     TableHeader,
-    TableRow,
-    VulnerabilityCounts,
 } from '@/components/ui';
 import { KEV_PARAM, KevFilterButton, useKevFilter } from './KevFilter';
-import { PackageOccurrencesPopover } from './PackageOccurrencesPopover';
+import { PackageRows } from './PackageRows';
+import {
+    PACKAGE_NAME_PARAM,
+    PACKAGE_VERSION_PARAM,
+    focusedPackageKeys,
+    readPackageFocus,
+    type PackageFocus,
+} from './package-focus';
 import { SEVERITIES, SeverityFilterMenu, useSeverityFilter } from './SeverityFilter';
 import { isAdminOrOwner, useOrganization } from '@/components/providers/OrganizationProvider';
 import { useRuntimeConfig } from '@/components/providers';
@@ -75,6 +77,14 @@ type Props = {
  * thousands of rows. Typing here changes the query, not a filter over rows we
  * happen to hold. `usePagedResource` owns that machinery — the debounce, the
  * scope-carrying offset and the keep-stale-rows-dimmed behaviour.
+ *
+ * The server lists worst first — most findings, then most images, then most
+ * containers, then the name — so the row to look at is at the top, not under
+ * `acl`. A click on a row unfolds it (`PackageRows`) to the images and
+ * containers behind its counts, with links; the count cells keep their
+ * popovers. `?name=` and `?version=` are the deep link into one row — the
+ * search palette's package hit — which seeds the search box with the name,
+ * opens the row once the page carrying it lands and scrolls it into view.
  *
  * The filters are the Dashboard's bar (`ui/FilterBar`) under the heading:
  * refresh, search, the ecosystem and the severity menu on the left — *which
@@ -124,6 +134,10 @@ export function PackageList({
         router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     };
     const { kevOnly, toggleKev } = useKevFilter();
+    /* The deep link, read once per URL: a search hit or a pasted incident
+       link naming one row. The name also seeds the search box, so the page
+       is narrowed to the package as well as opened on it. */
+    const focus = useMemo<PackageFocus | null>(() => readPackageFocus(searchParams), [searchParams]);
     const ecosystems = useResource<{ ecosystems: string[] }>(`${apiBase}/ecosystems`);
     const {
         searchInput,
@@ -138,7 +152,7 @@ export function PackageList({
         handleRefresh,
     } = usePagedResource<ClusterPackagesResponse>({
         contextKey,
-        initialSearch,
+        initialSearch: initialSearch || focus?.name,
         scope: `${control}|${ecosystem}|${severityValue}|${kevOnly}`,
         makeUrl: ({ limit, offset, search }) => {
             const params = new URLSearchParams({
@@ -154,6 +168,37 @@ export function PackageList({
         },
         errorFallback: 'Failed to load packages',
     });
+
+    /* Expansion is keyed by `contextKey|rowKey` rather than reset on
+       navigation — the instance survives a cluster switch (same route, new
+       param), and entries for the other context are simply never looked up. */
+    const [expanded, setExpanded] = useState<Set<string>>(new Set());
+    const toggleExpanded = (rowKey: string) => {
+        const key = `${contextKey}|${rowKey}`;
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
+
+    /* The deep link's row opens once, when a page carrying it lands, and is
+       scrolled into view; after that the reader owns the fold. State adjusted
+       during render — React's pattern for reacting to a changed input, not an
+       effect — keyed by the focus itself so a new link into the same mounted
+       list opens again. */
+    const [scrollToKey, setScrollToKey] = useState<string | null>(null);
+    const [appliedFocus, setAppliedFocus] = useState<string | null>(null);
+    const focusSignature = focus ? `${contextKey}|${focus.name}|${focus.version ?? ''}` : null;
+    if (focus && data && focusSignature !== appliedFocus) {
+        const keys = focusedPackageKeys(focus, data.packages);
+        if (keys.length > 0) {
+            setAppliedFocus(focusSignature);
+            setExpanded((prev) => new Set([...prev, ...keys.map((k) => `${contextKey}|${k}`)]));
+            setScrollToKey(keys[0] ?? null);
+        }
+    }
 
     if (!isLoaded) {
         return <LoadingBlock label="Loading packages..." />;
@@ -179,7 +224,8 @@ export function PackageList({
     const shownOffset = data?.offset ?? 0;
     const showClusters = !clusterId;
     const Heading = headingLevel;
-    const columnCount = showClusters ? 7 : 6;
+    /* The chevron column included. */
+    const columnCount = showClusters ? 8 : 7;
     const isNarrowed = control !== 'all' || ecosystem !== ALL_ECOSYSTEMS || filters.size > 0 || kevOnly;
     const canReset = searchInput !== '' || isNarrowed;
     const listed = ecosystems.data?.ecosystems ?? [];
@@ -201,6 +247,8 @@ export function PackageList({
         params.delete('severity');
         params.delete(KEV_PARAM);
         params.delete('search');
+        params.delete(PACKAGE_NAME_PARAM);
+        params.delete(PACKAGE_VERSION_PARAM);
         const query = params.toString();
         router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
         setSearchInput('');
@@ -221,9 +269,9 @@ export function PackageList({
                     {isStale && <Spinner size="sm" className="text-ink-faint" />}
                 </Heading>
                 <p className="mt-1 text-sm text-ink-muted">
-                    Every package in {scopeLabel}, one row per version.
+                    Every package in {scopeLabel}, one row per version, worst first.
                     {showClusters ? ' Image, container and cluster' : ' Image and container'} counts say how widespread
-                    it is.
+                    it is; open a row to see where.
                 </p>
             </div>
 
@@ -270,6 +318,9 @@ export function PackageList({
                 <TableContainer variant="section">
                     <Table aria-label={ariaLabel} density="condensed">
                         <TableHead>
+                            <TableHeader srOnly className="w-7 pl-3 pr-0">
+                                Expand
+                            </TableHeader>
                             {/* A phone gets the package and its counts, with
                                 the version folded under the name; the spread
                                 columns return at `md`, license and clusters
@@ -295,101 +346,17 @@ export function PackageList({
                                 {search || isNarrowed ? emptyText.filtered(search) : emptyText.none}
                             </TableEmpty>
                         ) : (
-                            <TableBody>
-                                {packages.map((pkg) => (
-                                    <TableRow key={`${pkg.name}@${pkg.version ?? ''}`}>
-                                        <TableCell>
-                                            <span className="inline-flex flex-wrap items-center gap-1.5">
-                                                <span
-                                                    className="font-medium text-ink break-all"
-                                                    title={pkg.purl ?? undefined}
-                                                >
-                                                    {pkg.name}
-                                                </span>
-                                                {pkg.packageType && <PackageTypeBadge packageType={pkg.packageType} />}
-                                            </span>
-                                            {/* The Version column, folded in while it
-                                                is collapsed — the row is one
-                                                name + version, so it cannot go. */}
-                                            {pkg.version && (
-                                                <span className="mt-0.5 block font-mono text-xs text-ink-muted break-all sm:hidden">
-                                                    {pkg.version}
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell hideBelow="sm" className="font-mono text-xs text-ink-secondary">
-                                            {pkg.version ?? <span className="text-ink-muted">—</span>}
-                                        </TableCell>
-                                        <TableCell hideBelow="lg" className="text-xs text-ink-secondary">
-                                            {pkg.license ?? <span className="text-ink-muted">—</span>}
-                                        </TableCell>
-                                        <TableCell
-                                            hideBelow="md"
-                                            align="end"
-                                            className="tabular-nums text-ink-secondary"
-                                        >
-                                            <PackageOccurrencesPopover
-                                                clusterId={clusterId}
-                                                packageName={pkg.name}
-                                                version={pkg.version}
-                                                kind="images"
-                                                control={control}
-                                                count={pkg.imageCount}
-                                            />
-                                        </TableCell>
-                                        <TableCell
-                                            hideBelow="md"
-                                            align="end"
-                                            className="tabular-nums text-ink-secondary"
-                                        >
-                                            {/* 0 is "scanned but not in any inventory yet",
-                                                and a dash says "not running" less loudly
-                                                than a zero says "you have a problem". */}
-                                            {pkg.containerCount > 0 ? (
-                                                <PackageOccurrencesPopover
-                                                    clusterId={clusterId}
-                                                    packageName={pkg.name}
-                                                    version={pkg.version}
-                                                    kind="containers"
-                                                    control={control}
-                                                    count={pkg.containerCount}
-                                                />
-                                            ) : (
-                                                <span className="text-ink-muted">—</span>
-                                            )}
-                                        </TableCell>
-                                        {showClusters && (
-                                            <TableCell
-                                                hideBelow="lg"
-                                                align="end"
-                                                className="tabular-nums text-ink-secondary"
-                                            >
-                                                {/* No popover of its own: the image and
-                                                    container popovers already name each
-                                                    hit's cluster. */}
-                                                <span title="Clusters with at least one image carrying this version">
-                                                    {pkg.clusterCount}
-                                                </span>
-                                            </TableCell>
-                                        )}
-                                        <TableCell align="end">
-                                            <span className="inline-flex items-center justify-end gap-1.5">
-                                                {/* The aggregate risk chip's marker, with its meaning. */}
-                                                {pkg.kevCount > 0 && (
-                                                    <span
-                                                        title={`${pkg.kevCount} confirmed exploited in the wild (CISA KEV)`}
-                                                        className="inline-flex shrink-0 text-danger"
-                                                    >
-                                                        <ShieldAlert aria-hidden="true" className="size-3.5" />
-                                                        <span className="sr-only">{pkg.kevCount} on CISA KEV</span>
-                                                    </span>
-                                                )}
-                                                <VulnerabilityCounts {...pkg.vulnCounts} />
-                                            </span>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
+                            <PackageRows
+                                packages={packages}
+                                apiBase={apiBase}
+                                contextKey={contextKey}
+                                clusterId={clusterId}
+                                control={control}
+                                showClusters={showClusters}
+                                expanded={expanded}
+                                onToggle={toggleExpanded}
+                                scrollToKey={scrollToKey}
+                            />
                         )}
                     </Table>
                 </TableContainer>

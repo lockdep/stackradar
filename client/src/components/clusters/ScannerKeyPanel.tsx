@@ -32,8 +32,12 @@ type ApiKeyInfo = {
  * control are not drawn, and the key section says where the key is set.
  * The masked key and its reveal stay — that is how an admin checks the
  * two sides agree.
+ *
+ * `readOnly` is the live demo: the masked key and the connection
+ * instructions are shown (the dialog already draws no key action for a
+ * member), rotation is not offered. Reveal is already off in the demo.
  */
-export function ScannerKeyPanel() {
+export function ScannerKeyPanel({ readOnly = false }: { readOnly?: boolean }) {
     const { cluster } = useCluster();
     const { organization } = useOrganization();
     const { demoMode, edition } = useRuntimeConfig();
@@ -109,11 +113,13 @@ export function ScannerKeyPanel() {
                             <div>
                                 <p className="text-sm font-medium text-ink">Connect a scanner</p>
                                 <p className="text-sm text-ink-muted">
-                                    View connection instructions and manage the scanner API key.
+                                    {readOnly
+                                        ? 'View the install command and what the scanner needs.'
+                                        : 'View connection instructions and manage the scanner API key.'}
                                 </p>
                             </div>
                             <Button variant="secondary" onClick={() => setConnectDialogOpen(true)} className="ml-4">
-                                Manage connection
+                                {readOnly ? 'View instructions' : 'Manage connection'}
                             </Button>
                         </div>
                     </div>
@@ -294,7 +300,12 @@ export function ScannerKeyPanel() {
                                         )}
                                     </div>
                                 ) : null}
-                                {edition.multiCluster ? (
+                                {readOnly ? (
+                                    <p className="text-sm text-ink-muted">
+                                        An admin can reveal this key and rotate it from here; the demo shows the masked
+                                        key only.
+                                    </p>
+                                ) : edition.multiCluster ? (
                                     <div className="flex items-center justify-between">
                                         <div>
                                             <p className="text-sm font-medium text-ink">Rotate API key</p>

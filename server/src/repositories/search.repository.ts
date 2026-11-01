@@ -38,6 +38,12 @@ export type SearchPackageItem = {
     type: "library";
     purlType: string | null;
     versionCount: number;
+    /**
+     * The one version in scope when `versionCount` is 1, so the palette can
+     * land on that exact Packages row; null when the name runs as several
+     * versions (the list, narrowed to the name, is the answer then).
+     */
+    version: string | null;
     imageCount: number;
     workloadCount: number;
     containerCount: number;
@@ -176,6 +182,9 @@ async function searchPackages(orgId: string, q: string, limit: number, tiers?: T
             name: schema.components.name,
             purl: sql<string | null>`min(${schema.components.purl})`,
             versionCount: countDistinct(sql`coalesce(${schema.components.version}, '')`),
+            version: sql<
+                string | null
+            >`CASE WHEN count(DISTINCT coalesce(${schema.components.version}, '')) = 1 THEN min(${schema.components.version}) END`,
             imageCount: countDistinct(schema.images.id),
             // LEFT JOIN, as the Packages page: an image uploaded before any
             // inventory references it still has real packages.
@@ -199,6 +208,7 @@ async function searchPackages(orgId: string, q: string, limit: number, tiers?: T
         type: "library" as const,
         purlType: purlType(r.purl),
         versionCount: Number(r.versionCount),
+        version: r.version,
         imageCount: Number(r.imageCount),
         workloadCount: Number(r.workloadCount),
         containerCount: Number(r.containerCount),

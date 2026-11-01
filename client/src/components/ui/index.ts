@@ -46,6 +46,7 @@ export {
     type ScopeFilter,
 } from './FilterBar';
 export { Kbd } from './Kbd';
+export { Tooltip } from './Tooltip';
 export { OriginPath } from './OriginPath';
 export { TabBar, TabPanel } from './TabBar';
 export type { TabBarItem } from './TabBar';

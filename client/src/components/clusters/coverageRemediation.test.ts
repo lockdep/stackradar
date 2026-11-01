@@ -9,10 +9,17 @@ import {
     pullSecretHelmCommand,
     pullSecretKnowledge,
     pullSecretValuesYaml,
+    HELM_VALUES_DOCS_URL,
     scannerInstallFor,
+    scannerValuePath,
+    scratchSizeHelmCommand,
+    scratchSizeValuesYaml,
+    STATUS_ORDER,
     STUCK_AFTER_MS,
+    TOO_LARGE_LABEL,
     type UnscannedContainer,
 } from './coverageRemediation';
+import { SCANNER_TRUST_LINKS } from './scannerInstall';
 
 const NOW = Date.parse('2026-10-18T20:00:00Z');
 const DIGEST_A = `sha256:${'a'.repeat(64)}`;
@@ -46,6 +53,22 @@ describe('classifyRow', () => {
         expect(classifyRow(row({ scanErrorCode: 'scan_error' }), NOW)).toBe('scan_failed');
         // An unknown code from a newer scanner is a generic failure, never a specific state.
         expect(classifyRow(row({ scanErrorCode: 'registry_teapot' }), NOW)).toBe('scan_failed');
+    });
+
+    it('gives a too-large image its own state, never the credentials one', () => {
+        const tooLarge = row({ scanErrorCode: 'image_too_large', scanErrorHost: 'ghcr.io' });
+        expect(classifyRow(tooLarge, NOW)).toBe('too_large');
+        // Age changes nothing: the limit is known, there is nothing to wait out.
+        const old = row({
+            scanErrorCode: 'image_too_large',
+            firstSeenAt: new Date(NOW - STUCK_AFTER_MS).toISOString(),
+        });
+        expect(classifyRow(old, NOW)).toBe('too_large');
+        // Sorted with the failures that need an operator, behind auth, ahead of the generic one.
+        expect(STATUS_ORDER.too_large).toBeGreaterThan(STATUS_ORDER.auth_failed);
+        expect(STATUS_ORDER.too_large).toBeLessThan(STATUS_ORDER.scan_failed);
+        // And the tail of the switch is still the generic failure.
+        expect(classifyRow(row({ scanErrorCode: 'image_too_larger' }), NOW)).toBe('scan_failed');
     });
 
     it('calls an unexplained wait stuck only past the threshold', () => {
@@ -165,6 +188,56 @@ describe('the pull-Secret fix', () => {
         expect(pullSecretHelmCommand({ kind: 'standalone', chartVersion: null }, [])).toContain(
             '--version <chart-version>',
         );
+    });
+});
+
+describe('the too-large fix', () => {
+    it('labels the row and links the Helm values reference the trust links point at', () => {
+        expect(TOO_LARGE_LABEL).toBe('Too large to scan');
+        expect(HELM_VALUES_DOCS_URL).toBe('https://stackradar.io/docs/helm-values');
+        expect(SCANNER_TRUST_LINKS.find((l) => l.label === 'Helm values')?.href).toBe(HELM_VALUES_DOCS_URL);
+    });
+
+    it("names the scanner chart's scratch and ephemeral-storage values, nested for the bundled subchart", () => {
+        expect(scannerValuePath({ kind: 'standalone', chartVersion: null }, 'watcher.scratchSizeLimit')).toBe(
+            'watcher.scratchSizeLimit',
+        );
+        expect(scannerValuePath({ kind: 'bundled' }, 'watcher.scratchSizeLimit')).toBe(
+            'scanner.watcher.scratchSizeLimit',
+        );
+
+        expect(scratchSizeValuesYaml({ kind: 'standalone', chartVersion: '0.6.0' })).toBe(
+            [
+                'watcher:',
+                '  scratchSizeLimit: <scratch-size>',
+                '  resources:',
+                '    limits:',
+                '      ephemeral-storage: <storage-limit>',
+            ].join('\n'),
+        );
+        expect(scratchSizeValuesYaml({ kind: 'bundled' })).toBe(
+            [
+                'scanner:',
+                '  watcher:',
+                '    scratchSizeLimit: <scratch-size>',
+                '    resources:',
+                '      limits:',
+                '        ephemeral-storage: <storage-limit>',
+            ].join('\n'),
+        );
+
+        const standalone = scratchSizeHelmCommand({ kind: 'standalone', chartVersion: '0.6.0' });
+        expect(standalone).toContain('helm upgrade stackradar-scanner oci://ghcr.io/lockdep/charts/stackradar-scanner');
+        expect(standalone).toContain('--version 0.6.0');
+        expect(standalone).toContain('--set watcher.scratchSizeLimit=<scratch-size>');
+        expect(standalone).toContain('--set watcher.resources.limits.ephemeral-storage=<storage-limit>');
+
+        const bundled = scratchSizeHelmCommand({ kind: 'bundled' });
+        expect(bundled).toContain('--set scanner.watcher.scratchSizeLimit=<scratch-size>');
+        expect(bundled).toContain('--set scanner.watcher.resources.limits.ephemeral-storage=<storage-limit>');
+        // Never the credentials fix.
+        expect(bundled).not.toContain('imagePullSecret');
+        expect(bundled).not.toContain('dockerConfigSecret');
     });
 });
 

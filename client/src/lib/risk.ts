@@ -16,6 +16,8 @@
  *     rather than a wrong number, but it is still drift.
  */
 
+import { DOCS_BASE_URL } from '@/components/clusters/scannerInstall';
+
 /**
  * Where the colour changes — for a **single finding's** 0–100 score.
  *
@@ -63,7 +65,31 @@ export const RISK_SCALE_HINT =
  * exploitation-aware contribution rather than a severity constant.
  */
 export const TOTAL_RISK_HINT =
-    'Risk Score: the sum of every finding’s 0–100 contribution (CVSS weighted by EPSS exploitation likelihood, raised for CISA KEV findings). Unbounded — it falls as findings are fixed. Colour reflects the worst single finding.';
+    'Risk Score: the sum of every finding’s 0–100 contribution (CVSS weighted by EPSS exploitation likelihood, raised to the maximum for CISA KEV findings) on running images. Unbounded, not out of 100 — it falls as findings are fixed. Colour reflects the worst single finding.';
+
+/**
+ * The subtitle under the Risk Score trend card, on the Dashboard and on a
+ * cluster's Overview. One string, because the two cards are the same card
+ * on two scopes and the definition must not drift between them. One line,
+ * as the sibling count cards' are: the unit, and the one fact a reader
+ * seeing an unbounded total next to a 0–100 scale needs most. The formula
+ * (`advisoryRisk`: `100 × impact × exploitability`, impact = CVSS / 10,
+ * exploitability = ∛EPSS, or 1.0 outright once the advisory is on CISA KEV)
+ * is the ⓘ tooltip's job — `TOTAL_RISK_HINT` — and the docs page's.
+ */
+export const RISK_SCORE_SUBTITLE = 'Sum of every finding’s 0–100 contribution — not out of 100';
+
+/**
+ * What the KEV mark means, for the tooltip on every `KevBadge`. One sentence
+ * on the catalog, one on what StackRadar does with membership — the two
+ * facts a reader who has not met the acronym needs.
+ */
+export const KEV_HINT =
+    'KEV — CISA’s Known Exploited Vulnerabilities catalog: advisories with confirmed exploitation in the wild. StackRadar treats them as certain to be exploited in the Risk Score and lists them under every findings lens.';
+
+/** The public write-up of the formula, linked from the Risk Score breakdown page the card opens: the only place the whole model is laid out. */
+export const RISK_SCORE_DOCS_URL = `${DOCS_BASE_URL}/risk-score`;
+export const RISK_SCORE_DOCS_LABEL = 'How the Risk Score is computed';
 
 export function riskBand(score: number | null | undefined): RiskBand {
     if (score == null) return 'none';

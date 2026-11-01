@@ -42,7 +42,12 @@ const MOVEMENT_MAX_FINDINGS = 100;
  */
 export const feedController = {
     /**
-     * @route GET /api/feed?days=&limit=&cursor=&cluster=
+     * `image=` is one image's history: every feed event about it — the
+     * ones it is the subject of, and the moves that left it, which the
+     * event files under the digest moved onto. Another org's image has no
+     * events here and reads as an empty page, like the movement endpoint.
+     *
+     * @route GET /api/feed?days=&limit=&cursor=&cluster=&image=
      */
     async getFeed(req: Request, res: Response, next: NextFunction) {
         try {
@@ -63,6 +68,7 @@ export const feedController = {
                 limit: query.limit,
                 cursor,
                 clusterId: query.cluster ?? null,
+                imageId: query.image ?? null,
             });
             res.json({ ...page, days, historyDays });
         } catch (error) {

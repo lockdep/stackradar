@@ -3,6 +3,7 @@
 import { CodeBlock } from '@/components/ui';
 import { useRuntimeConfig } from '@/components/providers';
 import { helmInstallCommand, scannerApiUrl, SCANNER_DOCS_URL, SCANNER_RELEASES_URL } from './scannerInstall';
+import { ScannerTrustLinks } from './ScannerTrustLinks';
 
 interface ConnectClusterInstructionsProps {
     clusterId: string;
@@ -150,6 +151,11 @@ export function ConnectClusterInstructions({
                 </a>
                 .
             </p>
+
+            {/* What an evaluator checks before pasting the command above:
+                what leaves the cluster, which ClusterRole the agent gets,
+                and its resource defaults. */}
+            <ScannerTrustLinks variant={variant} />
         </div>
     );
 }

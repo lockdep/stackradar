@@ -4,3 +4,5 @@ export { DashboardFilterBar } from './DashboardFilterBar';
 export type { DashboardFilters } from './DashboardFilterBar';
 export { indexFixes } from './fix-hints';
 export { ImageOwnershipBanner } from './ImageOwnershipBanner';
+export { ScopeChip } from './ScopeChip';
+export { LensHiddenNote } from './LensHiddenNote';

@@ -157,7 +157,7 @@ being `null` rather than `{}`.
 | `containers[].imagePullSecrets` | string[] \| null, optional | **Names** of the pods' `imagePullSecrets`, never contents. `null`/absent = not reported; `[]` = the pods carry none. See [Pull Secret names](#pull-secret-names-ride-the-container) |
 | `scanFailures[]` | array, optional | Why a digest in this report has no SBOM. Display-only; omitted when every scan succeeded. See [Scan failures](#scan-failures-are-display-only-classification) |
 | `scanFailures[].imageDigest` | string | References a digest present in this report's containers — the producer filters out failures for digests no longer running |
-| `scanFailures[].code` | string | `registry_auth` \| `registry_rate_limited` \| `scan_error`. **Open set**: the server stores an unknown code and the UI renders it as `scan_error`, so a newer scanner can add one without a server release |
+| `scanFailures[].code` | string | `registry_auth` \| `registry_rate_limited` \| `image_too_large` \| `scan_error`. **Open set**: the server stores an unknown code and the UI renders it as `scan_error`, so a newer scanner can add one without a server release |
 | `scanFailures[].registryHost` | string \| null | Host only, e.g. `registry.example.com`. **Never raw syft stderr** — stderr carries full registry URLs and API responses, and this lands in a shared UI |
 
 ### Where release identity comes from
@@ -265,7 +265,13 @@ contract), so there is no version bump: the shape is a strict superset.
 After a failed scan the agent classifies syft's stderr — `401` / `403` /
 `UNAUTHORIZED` / `DENIED` → `registry_auth`, `TOOMANYREQUESTS` / `429` →
 `registry_rate_limited`, anything else → `scan_error` — and reports the code
-with the registry host on the next inventory cycle. Riding the inventory rather
+with the registry host on the next inventory cycle. One code is decided
+*before* syft runs: `image_too_large` means the image's compressed size
+exceeds what the scanner may unpack — its scratch volume
+(`watcher.scratchSizeLimit`) or the pod's ephemeral-storage limit
+(`watcher.resources.limits.ephemeral-storage`) — so the fix is to raise those
+limits or exclude the image; waiting or retrying changes nothing, and the UI
+says so instead of pointing at registry credentials. Riding the inventory rather
 than a dedicated endpoint is deliberate: a failure that persists across one
 cycle is exactly the kind worth surfacing, and the transient ones filter
 themselves out. Two constraints, both load-bearing:

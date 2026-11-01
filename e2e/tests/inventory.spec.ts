@@ -22,6 +22,28 @@ test('the reported container is listed under its namespace', async ({ page }) =>
     await expect(row.first()).toBeVisible();
 });
 
+/**
+ * "Age" on the containers list is time on this digest, which a rollout
+ * resets — not how long the workload has existed. The header says so on
+ * hover, in a tooltip that is drawn (a native `title` is not, reliably),
+ * and the definition is also the header's accessible description.
+ */
+test('the Age column header defines itself on hover', async ({ page }) => {
+    await page.goto('/containers');
+    await expect(page.getByRole('heading', { name: 'Containers', level: 1 })).toBeVisible();
+
+    const definition = page.getByRole('tooltip', { name: /How long the container has run this exact image/ });
+    await expect(definition).toBeHidden();
+
+    const header = page.getByRole('columnheader', { name: 'Age' });
+    await header.getByText('Age', { exact: true }).hover();
+    await expect(definition).toBeVisible();
+    await expect(definition).toContainText('Exposure across earlier images is on the container’s page.');
+
+    await page.keyboard.press('Escape');
+    await expect(definition).toBeHidden();
+});
+
 test('the uploaded image is listed and opens its own page', async ({ page }) => {
     await page.goto('/images');
     await expect(page.getByRole('heading', { name: 'Images', level: 1 })).toBeVisible();

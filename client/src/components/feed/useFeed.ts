@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 import type { FeedEvent, FeedPage } from '@/types/feed';
 
-/** What the feed has loaded for one scope (a `days` window and a cluster, or all of them). */
+/** What the feed has loaded for one scope (a `days` window and a cluster or an image, or all of them). */
 type Loaded = {
     scope: string;
     events: FeedEvent[];
@@ -21,9 +21,12 @@ type Loaded = {
  * What is loaded is keyed by scope, so a scope change reads as "loading" the
  * moment it happens rather than as the previous scope's events under the new
  * filter; nothing has to be reset when the inputs move.
+ *
+ * `imageId` narrows the page to one image's history — the image page's
+ * History tab reads the same endpoint with `?image=`.
  */
-export function useFeed(days: number, clusterId: string | null) {
-    const scope = `${days}:${clusterId ?? ''}`;
+export function useFeed(days: number, clusterId: string | null, imageId: string | null = null) {
+    const scope = `${days}:${clusterId ?? ''}:${imageId ?? ''}`;
     const [loaded, setLoaded] = useState<Loaded | null>(null);
     const [failure, setFailure] = useState<{ scope: string; message: string } | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -40,10 +43,11 @@ export function useFeed(days: number, clusterId: string | null) {
         (cursor: string | null) => {
             const params = new URLSearchParams({ days: String(days), limit: '200' });
             if (clusterId) params.set('cluster', clusterId);
+            if (imageId) params.set('image', imageId);
             if (cursor) params.set('cursor', cursor);
             return `/api/feed?${params.toString()}`;
         },
-        [days, clusterId],
+        [days, clusterId, imageId],
     );
 
     const fetchPage = useCallback((cursor: string | null): Promise<FeedPage> => apiFetch<FeedPage>(url(cursor)), [url]);

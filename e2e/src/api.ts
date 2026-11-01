@@ -39,6 +39,25 @@ export const privateApi = {
     digest: `sha256:${createHash('sha256').update('stackradar-e2e-private-api-2.4.1').digest('hex')}`,
 } as const;
 
+/**
+ * A container whose image the scanner refused to unpack: a public image
+ * whose compressed size is over the scanner's scratch volume. No SBOM is
+ * ever uploaded for it, and the report carries the `image_too_large`
+ * failure, so it is what the "Too large to scan" row and its storage-limit
+ * fix are about — and what must never get the pull-Secret remediation.
+ */
+export const hugeModel = {
+    repository: 'acme/model-server',
+    registry: 'ghcr.io',
+    tag: '1.0.0',
+    imageRef: 'ghcr.io/acme/model-server:1.0.0',
+    namespace: 'e2e-ml',
+    workload: 'model-server',
+    container: 'server',
+    /** Fixed for the same reason as `privateApi.digest`. */
+    digest: `sha256:${createHash('sha256').update('stackradar-e2e-model-server-1.0.0').digest('hex')}`,
+} as const;
+
 /** The scanner version the seed reports; what the cluster list shows in its Version column. */
 export const scannerVersion = '0.7.0';
 
@@ -76,6 +95,8 @@ export interface InventoryOptions {
     nginxDigest?: string;
     /** Include the private-registry container with its `registry_auth` failure. Default true. */
     privateApi?: boolean;
+    /** Include the too-large container with its `image_too_large` failure. Default true. */
+    hugeModel?: boolean;
 }
 
 /**
@@ -83,7 +104,11 @@ export interface InventoryOptions {
  * namespace, every container running one pod. A full-set replacement, so
  * sending it twice is sending it once; leaving a container out removes it.
  */
-export function inventoryReport({ nginxDigest, privateApi: withPrivate = true }: InventoryOptions): object {
+export function inventoryReport({
+    nginxDigest,
+    privateApi: withPrivate = true,
+    hugeModel: withHuge = true,
+}: InventoryOptions): object {
     const namespaces: object[] = [];
     if (nginxDigest) {
         namespaces.push({
@@ -144,6 +169,43 @@ export function inventoryReport({ nginxDigest, privateApi: withPrivate = true }:
             ],
         });
     }
+    if (withHuge) {
+        namespaces.push({
+            name: hugeModel.namespace,
+            labels: { 'e2e.stackradar.io/suite': 'playwright' },
+            workloads: [
+                {
+                    kind: 'Deployment',
+                    name: hugeModel.workload,
+                    release: null,
+                    application: null,
+                    runningPods: 1,
+                    firstStartedAt: '2026-01-01T00:00:00.000Z',
+                    labels: { app: hugeModel.workload },
+                    containers: [
+                        {
+                            name: hugeModel.container,
+                            init: false,
+                            imageRef: hugeModel.imageRef,
+                            imageDigest: hugeModel.digest,
+                            imageTag: hugeModel.tag,
+                            registry: hugeModel.registry,
+                            repository: hugeModel.repository,
+                            runningPods: 1,
+                            imagePullSecrets: [],
+                        },
+                    ],
+                },
+            ],
+        });
+    }
+    const scanFailures: object[] = [];
+    if (withPrivate) {
+        scanFailures.push({ imageDigest: privateApi.digest, code: 'registry_auth', registryHost: privateApi.registry });
+    }
+    if (withHuge) {
+        scanFailures.push({ imageDigest: hugeModel.digest, code: 'image_too_large', registryHost: hugeModel.registry });
+    }
     return {
         version: 3,
         reportedAt: new Date().toISOString(),
@@ -151,9 +213,7 @@ export function inventoryReport({ nginxDigest, privateApi: withPrivate = true }:
         ownerMetadataCollected: true,
         releases: [],
         applications: [],
-        scanFailures: withPrivate
-            ? [{ imageDigest: privateApi.digest, code: 'registry_auth', registryHost: privateApi.registry }]
-            : [],
+        scanFailures,
         namespaces,
     };
 }

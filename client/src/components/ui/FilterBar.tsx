@@ -5,8 +5,16 @@ import { ListFilter, RefreshCw, Settings } from 'lucide-react';
 import { Button } from './Button';
 import { EntityIcon } from './EntityIcon';
 import { FilterMenu, type FilterMenuOption } from './FilterMenu';
-import { CONTROL_FILTER_HINT, type ControlFilter } from '@/lib/image-control';
-import { TIER_LENS_HINT, type TierCounts, type TierLens } from '@/lib/tier-lens';
+import { CONTROL_FILTER_HINT, CONTROL_FILTER_IMAGES_LABEL, type ControlFilter } from '@/lib/image-control';
+import {
+    TIER_LENS_FINDINGS_LABEL,
+    TIER_LENS_HINT,
+    TIER_LENS_UNCLASSIFIED_HINT,
+    TIER_LENS_UNCLASSIFIED_LABEL,
+    unclassifiedFindings,
+    type TierCounts,
+    type TierLens,
+} from '@/lib/tier-lens';
 
 /**
  * A page's one row of filters, over everything it scopes: a full-width
@@ -71,15 +79,19 @@ export function FilterBarReset({ onReset }: { onReset: () => void }) {
    widest option, and the two narrowings read as narrowings under it. The
    options name their noun — a closed button shows one of them on its own. */
 const IMAGE_OPTIONS: readonly FilterMenuOption<ControlFilter>[] = [
-    { value: 'all', label: 'All images', description: CONTROL_FILTER_HINT.all },
-    { value: 'yours', label: 'Organization images', description: CONTROL_FILTER_HINT.yours },
-    { value: 'third-party', label: 'Third-party images', description: CONTROL_FILTER_HINT['third-party'] },
+    { value: 'all', label: CONTROL_FILTER_IMAGES_LABEL.all, description: CONTROL_FILTER_HINT.all },
+    { value: 'yours', label: CONTROL_FILTER_IMAGES_LABEL.yours, description: CONTROL_FILTER_HINT.yours },
+    {
+        value: 'third-party',
+        label: CONTROL_FILTER_IMAGES_LABEL['third-party'],
+        description: CONTROL_FILTER_HINT['third-party'],
+    },
 ];
 
 const FINDING_OPTIONS: readonly FilterMenuOption<TierLens>[] = [
-    { value: 'all', label: 'All findings', description: TIER_LENS_HINT.all },
-    { value: 'application', label: 'Application findings', description: TIER_LENS_HINT.application },
-    { value: 'base', label: 'Base image findings', description: TIER_LENS_HINT.base },
+    { value: 'all', label: TIER_LENS_FINDINGS_LABEL.all, description: TIER_LENS_HINT.all },
+    { value: 'application', label: TIER_LENS_FINDINGS_LABEL.application, description: TIER_LENS_HINT.application },
+    { value: 'base', label: TIER_LENS_FINDINGS_LABEL.base, description: TIER_LENS_HINT.base },
 ];
 
 export type ScopeFilter = {
@@ -159,6 +171,22 @@ export function ImagesFilterMenu({
     );
 }
 
+/**
+ * The third bucket the two lenses leave out, as the menu's inert last row —
+ * so Application + Base image + Unclassified = All on the control itself.
+ * Not a lens: unclassified packages are only ever listed under "All", and a
+ * fourth selectable view would promote a gap in classification to a filter.
+ * Null when every finding is in one of the two buckets.
+ */
+export function unclassifiedMenuNote(
+    counts: TierCounts | undefined,
+): { label: string; count: number; description: string } | null {
+    if (!counts) return null;
+    const count = unclassifiedFindings(counts);
+    if (count === 0) return null;
+    return { label: TIER_LENS_UNCLASSIFIED_LABEL, count, description: TIER_LENS_UNCLASSIFIED_HINT };
+}
+
 /** Which findings — the bar's "Findings" menu, the lens as a menu. */
 export function FindingsFilterMenu({
     value,
@@ -182,6 +210,7 @@ export function FindingsFilterMenu({
             onChange={onChange}
             narrowed={value !== 'all'}
             align="end"
+            note={unclassifiedMenuNote(counts) ?? undefined}
         />
     );
 }

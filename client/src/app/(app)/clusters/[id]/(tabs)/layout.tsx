@@ -10,9 +10,10 @@ import {
     ClusterContainersProvider,
     ScannerDot,
     ScannerUpdateBanner,
+    clusterSettingsAccess,
     getScannerHealth,
 } from '@/components/clusters';
-import { isAdminOrOwner, useOrganization } from '@/components/providers';
+import { useOrganization, useRuntimeConfig } from '@/components/providers';
 import { useNow, usePollWhile, useResource } from '@/hooks';
 import type { Cluster } from '@/types/cluster';
 import { formatRelativeTime } from '@/utils/formatters';
@@ -91,6 +92,7 @@ function ClusterTabs({ id, children }: { id: string; children: ReactNode }) {
     );
 
     const { organization } = useOrganization();
+    const { demoMode } = useRuntimeConfig();
 
     const tabs = [
         { href: `/clusters/${id}`, name: 'Overview', icon: LayoutDashboard },
@@ -101,8 +103,11 @@ function ClusterTabs({ id, children }: { id: string; children: ReactNode }) {
         { href: `/clusters/${id}/packages`, name: 'Packages', icon: Boxes },
         // Everything under Settings (rename, scanner key, delete) is
         // admin/owner-only on the server, so members don't get the tab —
-        // same pattern as the Invites tab in Organization Settings.
-        ...(isAdminOrOwner(organization)
+        // same pattern as the Invites tab in Organization Settings. The live
+        // demo is the one exception: its visitor is drawn as a member but
+        // gets the tab read-only, so the scanner configuration surface can be
+        // evaluated (`clusterSettingsAccess`).
+        ...(clusterSettingsAccess(organization, demoMode) !== 'none'
             ? [{ href: `/clusters/${id}/settings`, name: 'Settings', icon: Settings }]
             : []),
     ];

@@ -20,7 +20,7 @@ describe('resultHref', () => {
         ).toBe('/vulnerabilities/CVE-2021-44228');
     });
 
-    it('sends a package to the org-wide list with the name applied, encoded', () => {
+    it('opens the org-wide list on the package: name and its one version, encoded', () => {
         expect(
             resultHref({
                 kind: 'package',
@@ -29,12 +29,27 @@ describe('resultHref', () => {
                     type: 'library',
                     purlType: 'npm',
                     versionCount: 1,
+                    version: '7.24.0+build',
                     imageCount: 1,
                     workloadCount: 1,
                     containerCount: 1,
                 },
             }),
-        ).toBe('/packages?search=%40babel%2Fcore');
+        ).toBe('/packages?name=%40babel%2Fcore&version=7.24.0%2Bbuild');
+    });
+
+    it('opens the list on every version of a name that runs as several, or when an older server sends none', () => {
+        const item = {
+            name: 'libxml2',
+            type: 'library' as const,
+            purlType: 'apk',
+            versionCount: 2,
+            imageCount: 3,
+            workloadCount: 3,
+            containerCount: 4,
+        };
+        expect(resultHref({ kind: 'package', item: { ...item, version: null } })).toBe('/packages?name=libxml2');
+        expect(resultHref({ kind: 'package', item })).toBe('/packages?name=libxml2');
     });
 
     it('sends an image to its page', () => {

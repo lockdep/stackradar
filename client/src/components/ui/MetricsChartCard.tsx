@@ -6,7 +6,10 @@ import { ArrowRight, BarChart3 } from 'lucide-react';
 import { buildTimeAxis } from '@/lib/chart-time';
 import { formatDate } from '@/utils/formatters';
 import { CHART_AXIS_LINE, CHART_GRID, CHART_TICK, chartActiveDot } from '@/lib/chart-theme';
+import { TOTAL_RISK_HINT } from '@/lib/risk';
 import { chartTooltipProps } from './ChartTooltip';
+/* Aliased: Recharts' chart `Tooltip` is imported below. */
+import { Tooltip as Definition } from './Tooltip';
 import { TrendDelta, type TrendDeltaDirection } from './TrendDelta';
 import { ResponsiveContainer, ComposedChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Text } from 'recharts';
 
@@ -43,6 +46,12 @@ const TIME_KEY = '__t';
 export interface MetricsChartCardProps {
     title: string;
     description: string;
+    /**
+     * A definition behind the description, one hover away and marked with an
+     * ⓘ. Defaults to the Risk Score's sentence on the `riskScore` card — the
+     * one series whose unit is not a count of things — and to nothing else.
+     */
+    descriptionHint?: string;
     dataKey: keyof Pick<MetricsSnapshot, 'totalVulnerabilities' | 'totalWorkloads' | 'totalComponents' | 'riskScore'>;
     data: MetricsSnapshot[];
     deltaDirection?: TrendDeltaDirection;
@@ -151,6 +160,7 @@ export function MetricsChartCard({
     title,
     description,
     dataKey,
+    descriptionHint = dataKey === 'riskScore' ? TOTAL_RISK_HINT : undefined,
     data,
     deltaDirection = 'neutral',
     chartHeight = 140,
@@ -243,7 +253,17 @@ export function MetricsChartCard({
                 <p className="mt-1.5 text-3xl font-semibold text-ink leading-none">
                     {isEmpty ? '—' : latest.toLocaleString()}
                 </p>
-                <p className="mt-1.5 text-xs text-ink-muted">{description}</p>
+                <p className="mt-1.5 text-xs text-ink-muted">
+                    {/* Inside the card's link when there is one, so the trigger is
+                        not its own tab stop: the card's focus opens the bubble. */}
+                    {descriptionHint ? (
+                        <Definition text={descriptionHint} cue="icon" align="start" focusable={!href}>
+                            {description}
+                        </Definition>
+                    ) : (
+                        description
+                    )}
+                </p>
             </div>
             {isEmpty ? (
                 <div
@@ -371,7 +391,9 @@ export function MetricsChartCard({
         </>
     );
 
-    const cardClass = 'h-full bg-surface-raised rounded-md border border-edge p-5 flex flex-col gap-4';
+    // The full write-up is linked from the breakdown page the card opens, not
+    // from under the card: a line below one card of a row misaligns the row.
+    const cardClass = `h-full bg-surface-raised rounded-md border border-edge p-5 flex flex-col gap-4`;
     return href ? (
         <Link
             href={href}

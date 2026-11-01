@@ -192,6 +192,13 @@ export const CONTROL_FILTER_LABEL: Record<ControlFilter, string> = {
     all: 'All',
 };
 
+/** The scope as the filter bar's "Images" menu spells it, and as the blocks it scopes repeat it. */
+export const CONTROL_FILTER_IMAGES_LABEL: Record<ControlFilter, string> = {
+    yours: 'Organization images',
+    'third-party': 'Third-party images',
+    all: 'All images',
+};
+
 export const CONTROL_FILTER_HINT: Record<ControlFilter, string> = {
     yours: 'Images your organization builds, and the ones it has not yet said anything about.',
     'third-party': 'Images someone else builds: their one recommended action is the upstream upgrade.',

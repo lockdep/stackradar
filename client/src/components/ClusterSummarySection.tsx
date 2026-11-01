@@ -7,24 +7,58 @@ import { TotalRiskChip } from '@/components/ui';
 import { severityDotClass, type SeverityKey } from '@/components/ui/SeveritySparkline';
 import { AuthFailedBadge, AwaitingBadge } from '@/components/clusters/ClusterTable';
 import { ScannerDot, getScannerHealth, type ScannerHealth } from '@/components/clusters/ScannerDot';
+import { ScopeChip } from '@/components/dashboard/ScopeChip';
 import { useNow } from '@/hooks';
+import { type ControlFilter } from '@/lib/image-control';
 import { TOTAL_RISK_HINT, type RiskBand } from '@/lib/risk';
+import { type TierLens } from '@/lib/tier-lens';
 import { formatRelativeTime } from '@/utils/formatters';
-import type { Cluster } from '@/types/cluster';
+import type { Cluster, SeverityTierCounts } from '@/types/cluster';
 import type { Container } from '@/types/container';
 
 const SEVERITIES: SeverityKey[] = ['critical', 'high', 'medium', 'low'];
 
 type SeverityCounts = Record<SeverityKey, number>;
 
+const zeroCounts = (): SeverityCounts => ({ critical: 0, high: 0, medium: 0, low: 0 });
+
 interface ClusterRow {
     cluster: Cluster;
     /** Running containers in the cluster, from the live container rows. */
     containers: number;
-    /** Distinct findings by severity, counted once per image. */
-    severity: SeverityCounts;
+    /**
+     * Distinct findings by severity under the page's lens, counted once per
+     * image. Null while the lensed split is still on its way.
+     */
+    severity: SeverityCounts | null;
     /** False until at least one container in the cluster has a completed scan. */
     scanned: boolean;
+}
+
+/**
+ * The row's counts under the page's lens. The server's per-cluster split
+ * (`severityTierCounts.byCluster`, from the same response the exposure strip
+ * counts from) once it has arrived; until then the live sum from the
+ * container rows, but only under "All findings", where the two are the same
+ * number — under a lens the live rows carry no bucket split, so the row
+ * waits (null) rather than show the unlensed total beside a lensed strip. A
+ * server too old to send the split gets the live sum, the number it had.
+ */
+export function lensedSeverity(
+    clusterId: string,
+    live: SeverityCounts,
+    lens: TierLens,
+    lensedCounts: SeverityTierCounts | null | undefined,
+): SeverityCounts | null {
+    const split = lensedCounts?.byCluster;
+    if (split) {
+        const counts = split[clusterId];
+        const out = zeroCounts();
+        for (const s of SEVERITIES) out[s] = counts?.[s][lens] ?? 0;
+        return out;
+    }
+    if (lens === 'all' || lensedCounts) return live;
+    return null;
 }
 
 /* Worst band first when ranking: the total is a magnitude (ADR 0007), so two
@@ -50,16 +84,39 @@ const SCANNER_LABEL: Record<ScannerHealth, string> = {
  * ranked worst-first, and the numbers a reader compares — the score, the
  * severity counts — sit in fixed columns so the eye can run down them.
  *
- * Severity counts come from the caller's containers array (one source, one
- * refresh, no per-cluster fan-out); the Risk Score comes from the cluster
- * payload, where the server folded it over the same deployed images.
+ * Severity counts are under the page's lens and image scope, like the
+ * exposure strip's: the server's per-cluster split of the strip's own
+ * response (`lensedCounts`) where it has arrived, the caller's containers
+ * array (one source, one refresh, no per-cluster fan-out) under "All
+ * findings" meanwhile — see `lensedSeverity`. The strip said 262 critical
+ * while this row said 359 when the row summed every bucket under a lens that
+ * showed one; the header's chip names the lens so the two read as one count.
+ * The Risk Score comes from the cluster payload, where the server folded it
+ * over the same deployed images; it never reads the lens (ADR 0007).
  */
 export function ClusterSummarySection({
     clusters,
     containers: allContainers,
+    lens,
+    control,
+    where,
+    lensedCounts,
 }: {
+    /** The clusters to list — under a cluster scope, the page passes the one. */
     clusters: Cluster[];
     containers: Container[];
+    /** The page's findings lens — what the counts, and the chip, are under. */
+    lens: TierLens;
+    /** The page's image scope; the containers are already narrowed to it. */
+    control: ControlFilter;
+    /**
+     * The page's cluster / namespace scope in words, for the chip; the
+     * severity counts are that scope's (`lensedCounts` came back under it),
+     * the Risk Score is still the whole cluster's — it is the cluster payload's.
+     */
+    where?: string | null;
+    /** `severityTierCounts` of the page's `GET /api/vulnerabilities`; absent while in flight. */
+    lensedCounts: SeverityTierCounts | null | undefined;
 }) {
     // Re-renders on a schedule so the scanner dot and its age stay truthful.
     useNow();
@@ -96,7 +153,7 @@ export function ClusterSummarySection({
             return {
                 cluster,
                 containers: agg?.containers ?? 0,
-                severity: agg?.severity ?? { critical: 0, high: 0, medium: 0, low: 0 },
+                severity: lensedSeverity(cluster.id, agg?.severity ?? zeroCounts(), lens, lensedCounts),
                 scanned: agg?.scanned ?? false,
             };
         });
@@ -111,7 +168,7 @@ export function ClusterSummarySection({
                 a.cluster.name.localeCompare(b.cluster.name),
         );
         return built;
-    }, [clusters, allContainers]);
+    }, [clusters, allContainers, lens, lensedCounts]);
 
     if (rows.length === 0) return null;
 
@@ -121,11 +178,17 @@ export function ClusterSummarySection({
            summary above it, and without a rule the Clusters heading read as
            a fifth Trends card. */
         <section className="mt-8 border-t border-edge pt-6" aria-labelledby="dashboard-clusters-heading">
-            <div className="mb-3 flex items-baseline justify-between gap-4">
-                <h2 id="dashboard-clusters-heading" className="text-sm font-semibold text-ink-secondary">
-                    Clusters
-                    <span className="ml-1.5 font-normal tabular-nums text-ink-muted">{rows.length}</span>
-                </h2>
+            <div className="mb-3 flex items-center justify-between gap-4">
+                <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <h2 id="dashboard-clusters-heading" className="text-sm font-semibold text-ink-secondary">
+                        Clusters
+                        <span className="ml-1.5 font-normal tabular-nums text-ink-muted">{rows.length}</span>
+                    </h2>
+                    {/* The same chip, the same words, as the exposure strip's
+                        header: the counts on these rows are under the same two
+                        filters. */}
+                    <ScopeChip lens={lens} control={control} where={where} />
+                </div>
                 <Link
                     href="/clusters"
                     className="inline-flex items-center gap-1 rounded-sm text-xs text-ink-muted hover:text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-emphasis"
@@ -271,9 +334,33 @@ function ClusterRowItem({ row: { cluster, containers, severity, scanned } }: { r
  * cluster that is mostly red reads differently from one that is mostly grey
  * even when their totals match — and the counts beneath are what the reader
  * quotes. Zero counts are dimmed rather than dropped so the four columns stay
- * in the same place on every row.
+ * in the same place on every row. Null counts — the lensed split still on
+ * its way — draw the same four columns with placeholders, so the row holds
+ * its shape.
  */
-function SeverityMix({ counts }: { counts: SeverityCounts }) {
+function SeverityMix({ counts }: { counts: SeverityCounts | null }) {
+    if (!counts) {
+        return (
+            <div aria-busy="true">
+                <div className="h-1.5 w-full rounded-full bg-track" />
+                <dl className="mt-1.5 grid grid-cols-4 gap-x-2 text-xs">
+                    {SEVERITIES.map((s) => (
+                        <div key={s} className="flex items-center gap-1 text-ink-faint">
+                            <dt className="flex items-center">
+                                <span aria-hidden="true" className="size-1.5 rounded-full bg-ink-faint" />
+                                <span className="sr-only">{s}</span>
+                            </dt>
+                            <dd>
+                                <span className="inline-block h-3 w-5 animate-pulse rounded-sm bg-neutral-subtle align-middle">
+                                    <span className="sr-only">Loading</span>
+                                </span>
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            </div>
+        );
+    }
     const total = SEVERITIES.reduce((n, s) => n + counts[s], 0);
     return (
         <div>

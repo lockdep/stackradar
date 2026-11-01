@@ -105,9 +105,9 @@ type UnscannedContainer = {
      * Why the image has no SBOM, when the scanner has said — its stderr
      * classification off the inventory report. All three null while a scan is
      * simply still in flight. `scanErrorCode` is an open set
-     * (`registry_auth` | `registry_rate_limited` | `scan_error` today):
-     * render anything unrecognised as a generic scan failure, never as one of
-     * the specific states.
+     * (`registry_auth` | `registry_rate_limited` | `image_too_large` |
+     * `scan_error` today): render anything unrecognised as a generic scan
+     * failure, never as one of the specific states.
      */
     scanErrorCode: string | null;
     scanErrorHost: string | null;
@@ -190,7 +190,7 @@ type ClusterVulnerability = {
      * publishes none of its own; null otherwise, absent from an older server.
      */
     severitySource?: string | null;
-    /** On CISA KEV, or EPSS ≥ 0.1 — the rows the list puts first, whatever their severity. */
+    /** On CISA KEV, or EPSS ≥ 0.1 — the rows every lens keeps, whatever their severity; the KEV ones lead the default order. */
     exploited: boolean;
     /** Every finding behind the row is outside the requested lens; listed because it is exploited. */
     shownDespiteTier?: boolean;
@@ -281,6 +281,13 @@ export type ClusterVulnerabilityDetail = {
     fixes: { packageName: string; fixedVersion: string }[];
 };
 
+export type BandedSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+/** Findings per band and lens bucket, for the scope and for each of its clusters. Mirrors the server's `SeverityTierCounts`. */
+export type SeverityTierCounts = Record<BandedSeverity, TierCounts> & {
+    byCluster?: Record<string, Record<BandedSeverity, TierCounts>>;
+};
+
 /**
  * Response of `GET /api/clusters/:id/vulnerabilities` and of the org-wide
  * `GET /api/vulnerabilities` — the same page, scoped to one cluster or to
@@ -298,8 +305,14 @@ export type ClusterVulnerabilitiesResponse = {
     tierCounts?: TierCounts;
     /** Critical findings per lens bucket, under the search alone — what a lensed top-of-list leaves out. Absent from an older server. */
     criticalTierCounts?: TierCounts;
-    /** The same for each band, under the search alone — the Dashboard's severity cards under its lens. Absent from an older server. */
-    severityTierCounts?: Record<'critical' | 'high' | 'medium' | 'low', TierCounts>;
+    /**
+     * The same for each band, under the search alone — the Dashboard's
+     * severity cards under its lens — and the same split per cluster of the
+     * scope (`byCluster`, keyed by cluster id; a cluster with no findings has
+     * no entry), which the Dashboard's cluster rows count under the same
+     * lens. Absent from an older server; `byCluster` from an older one still.
+     */
+    severityTierCounts?: SeverityTierCounts;
     limit: number;
     offset: number;
 };
@@ -338,10 +351,24 @@ export type PackageOccurrences = {
     workloads: (ClusterPackageOccurrences['workloads'][number] & { clusterId: string; clusterName: string })[];
 };
 
-export type VulnerabilityOccurrences = Omit<PackageOccurrences, 'images'> & {
+export type VulnerabilityOccurrences = Omit<PackageOccurrences, 'images' | 'workloads'> & {
+    /**
+     * One entry per workload, folding its containers on affected images. The
+     * list row's Containers count counts containers, so an init and a main
+     * container on one image are two there and one row here; each row says how
+     * many it stands for. Both fields absent from an older server.
+     */
+    workloads: (PackageOccurrences['workloads'][number] & {
+        /** Running containers of the workload on an affected image. */
+        containerCount?: number;
+        /** Their names, sorted. */
+        containerNames?: string[];
+    })[];
     images: (PackageOccurrences['images'][number] & {
         /** Running containers on the image; 0 when it is scanned but in no inventory yet. Absent from an older server. */
         containerCount?: number;
+        /** The namespaces those containers run in, distinct and sorted; empty when nothing runs it. Absent from an older server. */
+        namespaces?: string[];
         /**
          * The package versions carrying the advisory in this image, with where
          * in its filesystem each was found and whether it came with the base

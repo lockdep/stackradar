@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { Badge, EntityIcon, LoadingBlock, RiskCell, TableCell, TableRow } from '@/components/ui';
+import { Badge, EntityIcon, LoadingBlock, RiskCell, TableCell, TableRow, Tooltip } from '@/components/ui';
 import { ContainerSeverityCell, ScanDot } from '@/components/containers';
 import { ImageControlTag, type ControlChoice } from '@/components/image-control';
 import { useResource } from '@/hooks';
@@ -10,6 +10,9 @@ import type { Image, ImageDeployment } from '@/types/container';
 import { shortDigest } from '@/utils/containerUtils';
 import { formatAge, formatDate, formatShortDate, isDigestLikeTag } from '@/utils/formatters';
 import { builtAt } from './image-sort';
+
+/** Why the Built column shows a dash rather than an age. */
+const NO_BUILD_DATE_HINT = 'No usable build date: the scanner did not report one, or the image carries a placeholder';
 
 /**
  * One image. The name is the repository; what follows it is what the
@@ -156,9 +159,11 @@ export function ImageRow({
                     {built ? (
                         <span title={`Built ${formatDate(built)}`}>{formatAge(built)}</span>
                     ) : (
-                        <span title="No usable build date: the scanner did not report one, or the image carries a placeholder">
+                        /* A dash alone reads as "nothing to say"; the dotted
+                           line says there is a reason, and the hover gives it. */
+                        <Tooltip text={NO_BUILD_DATE_HINT} align="end">
                             —
-                        </span>
+                        </Tooltip>
                     )}
                 </TableCell>
 

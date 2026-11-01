@@ -1,3 +1,4 @@
+import { packageHref } from '@/components/clusters/package-focus';
 import type { SearchHit } from './types';
 
 /**
@@ -6,8 +7,11 @@ import type { SearchHit } from './types';
  *
  * - vulnerability → the org's page for the advisory (any spelling resolves
  *   there, but we pass the server's canonical `vulnId`)
- * - package → the org-wide Packages list, searched (there is no per-package
- *   page; the list with the term applied *is* the package's page)
+ * - package → the org-wide Packages list opened on the package (there is
+ *   no per-package page; the list, narrowed to the name and unfolded on
+ *   the row, *is* the package's page). The row is exact when the hit
+ *   carries its one version; a name running as several versions opens
+ *   every row of the name
  * - image → the image page (`images.id`)
  * - container → the container page, whose unit is a `workload_containers` row
  * - cluster → the cluster page
@@ -17,7 +21,7 @@ export function resultHref(hit: SearchHit): string {
         case 'vulnerability':
             return vulnerabilityHref(hit.item.vulnId);
         case 'package':
-            return packagesSearchHref(hit.item.name);
+            return packageHref(hit.item.name, hit.item.version);
         case 'image':
             return `/images/${encodeURIComponent(hit.item.id)}`;
         case 'container':

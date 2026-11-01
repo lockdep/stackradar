@@ -46,6 +46,10 @@ router.get("/:id/alerts", alertsController.get);
 router.patch("/:id/alerts", alertsController.update);
 router.post("/:id/alerts/test", alertsController.test);
 
+// GET /api/organizations/:id/notifications/summary  Which channels exist and are on — any member.
+// Host and recipient count only; the URL and the addresses stay behind the owner/admin read above.
+router.get("/:id/notifications/summary", alertsController.summary);
+
 // GET /api/organizations/:id/members - List all members
 router.get("/:id/members", organizationController.getMembers);
 

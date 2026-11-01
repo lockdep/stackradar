@@ -98,9 +98,9 @@ export const images = pgTable(
          * upload for the digest** — never by an inventory report, because a
          * restarted scanner reports with an empty failure memory and that absence
          * must not erase a still-true error. `code` is an open set
-         * (`registry_auth` | `registry_rate_limited` | `scan_error` today); the
-         * UI renders an unknown code as a generic failure, so a newer scanner can
-         * add one without a server release. The host is stored so the coverage
+         * (`registry_auth` | `registry_rate_limited` | `image_too_large` |
+         * `scan_error` today); the UI renders an unknown code as a generic
+         * failure, so a newer scanner can add one without a server release. The host is stored so the coverage
          * card can name the registry; raw syft stderr never reaches the server —
          * the schema itself is what enforces that.
          */

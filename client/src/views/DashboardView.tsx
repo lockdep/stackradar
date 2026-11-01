@@ -15,13 +15,22 @@ import { TryCliCard } from '@/components/onboarding/TryCliCard';
 import {
     DashboardFilterBar,
     ImageOwnershipBanner,
+    LensHiddenNote,
     MostCritical,
     RecentMovement,
+    ScopeChip,
     indexFixes,
     mostCriticalUrl,
     movementUrl,
     type DashboardFilters,
 } from '@/components/dashboard';
+import {
+    isScoped,
+    readScope,
+    scopeWords,
+    writeScope,
+    type DashboardScope,
+} from '@/components/dashboard/dashboard-scope';
 import { usePollWhile, useResource, useRevalidateOnFocus } from '@/hooks';
 import { isAdminOrOwner, useOrganization } from '@/components/providers/OrganizationProvider';
 import { useRuntimeConfig } from '@/components/providers';
@@ -32,9 +41,10 @@ import type { ClusterVulnerabilitiesResponse } from '@/types/cluster';
 import type { Container } from '@/types/container';
 import type { MovementResponse } from '@/types/feed';
 import { CONTROL_FILTER_PARAM, matchesControlFilter } from '@/lib/image-control';
-import { readStoredLens, resolveLens, storeLens, withTierParam } from '@/lib/tier-lens';
+import { RISK_SCORE_SUBTITLE } from '@/lib/risk';
+import { readStoredLens, resolveLens, storeLens, withTierParam, type TierLens } from '@/lib/tier-lens';
 import type { FixesResponse } from '@/types/fixes';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
 
 /* `useSyncExternalStore` wants a subscription; storage never notifies. */
@@ -86,6 +96,20 @@ export function DashboardView() {
     const [chosen, setChosen] = useState<Partial<DashboardFilters>>({});
     const filters = useMemo(() => ({ ...defaults, ...chosen }), [defaults, chosen]);
     const { days, control, lens } = filters;
+    /* Where — the one filter that lives in the URL, as `/containers` keeps it
+       (`?cluster=`, `?namespace=`): "look at argocd" is a link a reader
+       pastes, and it has to survive a reload. `replace`, not `push`: a
+       narrowing refines the view rather than navigating to another. */
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const scope = useMemo(() => readScope(searchParams), [searchParams]);
+    const setScope = useCallback(
+        (next: DashboardScope) => {
+            const query = writeScope(new URLSearchParams(searchParams.toString()), next).toString();
+            router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+        },
+        [pathname, router, searchParams],
+    );
     const [isManualRefresh, setIsManualRefresh] = useState(false);
     const [snapshots, setSnapshots] = useState<OrgMetricsSnapshot[]>([]);
     const [containers, setContainers] = useState<Container[]>([]);
@@ -105,12 +129,23 @@ export function DashboardView() {
 
     /* History carries the page's filters like every live request: each
        snapshot records its counts per whose-image side and lens bucket, and
-       the server sums the cells the filter selects. */
-    const snapshotQuery = useMemo(() => {
+       the server sums the cells the filter selects. Under a cluster scope the
+       series is that cluster's own (`/api/metrics/clusters/:id/snapshots`,
+       the one its Overview tab draws). Nothing records history per
+       namespace, so a namespace scope keeps the organization's series and
+       the blocks that draw it say so. */
+    const snapshotUrl = useMemo(() => {
         const params = new URLSearchParams({ days: String(days) });
         if (control !== 'all') params.set(CONTROL_FILTER_PARAM, control);
-        return withTierParam(params, lens).toString();
-    }, [days, control, lens]);
+        const query = withTierParam(params, lens).toString();
+        return scope.clusterId && !scope.namespace
+            ? `/api/metrics/clusters/${encodeURIComponent(scope.clusterId)}/snapshots?${query}`
+            : `/api/metrics/snapshots?${query}`;
+    }, [days, control, lens, scope]);
+    /* Which request the snapshots on screen answered: a failed refetch of the
+       same series keeps the last good chart, a failed fetch of another
+       series (a stale cluster id, 404) must not show the previous one's. */
+    const snapshotsFrom = useRef<string | null>(null);
 
     const load = useCallback(
         async ({ silent = false } = {}) => {
@@ -126,12 +161,17 @@ export function DashboardView() {
                 const [containerData, { clusters: clusterData }, snapshotData] = await Promise.all([
                     apiFetch<Container[]>('/api/containers'),
                     apiFetch<{ clusters: Cluster[] }>('/api/clusters'),
-                    apiFetch<OrgMetricsSnapshot[]>(`/api/metrics/snapshots?${snapshotQuery}`).catch(() => null),
+                    apiFetch<OrgMetricsSnapshot[]>(snapshotUrl).catch(() => null),
                 ]);
                 if (id !== requestId.current) return;
                 setContainers(Array.isArray(containerData) ? containerData : []);
                 setClusters(Array.isArray(clusterData) ? clusterData : []);
-                if (snapshotData) setSnapshots(snapshotData);
+                if (snapshotData) {
+                    setSnapshots(snapshotData);
+                    snapshotsFrom.current = snapshotUrl;
+                } else if (snapshotsFrom.current !== snapshotUrl) {
+                    setSnapshots([]);
+                }
 
                 setLastUpdated(new Date());
                 setError(null);
@@ -143,7 +183,7 @@ export function DashboardView() {
                 if (id === requestId.current) setIsLoading(false);
             }
         },
-        [snapshotQuery],
+        [snapshotUrl],
     );
 
     /* Only the first load takes the page down to a spinner. A date-range
@@ -176,11 +216,51 @@ export function DashboardView() {
      * `scanned` stays a *container* count, because it is the numerator of a
      * coverage ratio whose denominator is containers.
      */
-    /* Whose images is answered in the browser for everything summed from the
-       container rows — the severity cards' fallback and the Clusters list. */
-    const scopedContainers = useMemo(
-        () => (control === 'all' ? containers : containers.filter((w) => matchesControlFilter(w.control, control))),
-        [containers, control],
+    /* Whose images, and where, are answered in the browser for everything
+       summed from the container rows — the severity cards' fallback and the
+       Clusters list. The rows carry their cluster and namespace, so the
+       scope is the same predicate the server applies to the ranked list. */
+    const scopedContainers = useMemo(() => {
+        let rows = containers;
+        if (scope.clusterId) rows = rows.filter((w) => w.clusterId === scope.clusterId);
+        if (scope.namespace) rows = rows.filter((w) => w.namespaceName === scope.namespace);
+        return control === 'all' ? rows : rows.filter((w) => matchesControlFilter(w.control, control));
+    }, [containers, control, scope]);
+
+    /* The scope menus' options: every cluster by name, and the namespaces
+       among the rows the cluster scope leaves — with a cluster chosen, that
+       cluster's; without one, every name in the organization (`default`
+       across clusters is a valid view). A stale `?cluster=` or `?namespace=`
+       stays listed, so the reader can see it and clear it. */
+    const clusterOptions = useMemo(() => {
+        const options = [...clusters]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((c) => ({ value: c.id, label: c.name }));
+        if (scope.clusterId && !options.some((o) => o.value === scope.clusterId)) {
+            options.push({ value: scope.clusterId, label: 'Unknown cluster' });
+        }
+        return options;
+    }, [clusters, scope.clusterId]);
+    const namespaceOptions = useMemo(() => {
+        const inCluster = scope.clusterId ? containers.filter((w) => w.clusterId === scope.clusterId) : containers;
+        const names = new Set(inCluster.map((w) => w.namespaceName));
+        if (scope.namespace) names.add(scope.namespace);
+        return [...names].sort((a, b) => a.localeCompare(b)).map((name) => ({ value: name, label: name }));
+    }, [containers, scope]);
+    /* With one namespace there is nothing to choose; a chosen one keeps the menu so it can be cleared. */
+    const showNamespaces = namespaceOptions.length > 1 || scope.namespace !== null;
+    const scopeClusterName = scope.clusterId ? (clusters.find((c) => c.id === scope.clusterId)?.name ?? null) : null;
+    /* The scope in words, on every block whose numbers are under it. */
+    const where = scopeWords(scope, scopeClusterName);
+    /* A different cluster usually has no namespace of the chosen name, so the
+       namespace goes — unless the rows say it exists there too. */
+    const handleClusterChange = useCallback(
+        (clusterId: string | null) => {
+            const rows = clusterId ? containers.filter((w) => w.clusterId === clusterId) : containers;
+            const keepNamespace = scope.namespace !== null && rows.some((w) => w.namespaceName === scope.namespace);
+            setScope({ clusterId, namespace: keepNamespace ? scope.namespace : null });
+        },
+        [containers, scope.namespace, setScope],
     );
 
     const live = useMemo(() => {
@@ -232,8 +312,12 @@ export function DashboardView() {
         revalidateOnFocus: true,
         fallbackError: 'Could not load recent changes',
     });
+    /* The ranked list and the counts the strip and the cluster rows read are
+       one response, under the page's scope: `GET /api/vulnerabilities` takes
+       `?cluster=` and `?namespace=`. */
+    const mostCriticalFilters = useMemo(() => ({ lens, control, within: scope }), [lens, control, scope]);
     const mostCritical = useResource<ClusterVulnerabilitiesResponse>(
-        showSeverity ? mostCriticalUrl({ lens, control }) : null,
+        showSeverity ? mostCriticalUrl(mostCriticalFilters) : null,
         { revalidateOnFocus: true, fallbackError: 'Could not load the most critical vulnerabilities' },
     );
 
@@ -251,7 +335,10 @@ export function DashboardView() {
        so the cards and the list above them are one query's answer. The
        container rows carry no per-bucket split: they stand in only while that
        response is on its way, and only under "All findings", where the two
-       are the same number (`db/findings.ts` defines both). */
+       are the same number (`db/findings.ts` defines both). Under a lens the
+       strip is drawn with its labels and placeholder figures until the
+       response lands (`null`), so it holds its place instead of appearing a
+       beat after the Trends tiles. */
     const lensedCounts = mostCritical.data?.severityTierCounts;
     const severityCounts = useMemo(() => {
         if (lensedCounts) {
@@ -277,6 +364,12 @@ export function DashboardView() {
         const startedAt = new Date(first.capturedAt);
         return startedAt.getTime() - windowStart > 86_400_000 ? startedAt : null;
     }, [isNarrowed, snapshots, days, lastUpdated]);
+
+    /* Remembered like a list's choice: it is the same standing view. */
+    const setLens = useCallback((next: TierLens) => {
+        storeLens(next);
+        setChosen((prev) => ({ ...prev, lens: next }));
+    }, []);
 
     const { refetch: refetchMovement } = movement;
     const { refetch: refetchMostCritical } = mostCritical;
@@ -328,6 +421,25 @@ export function DashboardView() {
                     defaults={defaults}
                     maxDays={getPlanHistoryDays(organization?.plan, edition)}
                     onChange={(next) => setChosen((prev) => ({ ...prev, ...next }))}
+                    /* Both halves: the state-held three and the URL-held scope. */
+                    onReset={() => {
+                        setChosen({});
+                        setScope({ clusterId: null, namespace: null });
+                    }}
+                    cluster={
+                        clusterOptions.length > 0
+                            ? { value: scope.clusterId, options: clusterOptions, onChange: handleClusterChange }
+                            : undefined
+                    }
+                    namespace={
+                        showNamespaces
+                            ? {
+                                  value: scope.namespace,
+                                  options: namespaceOptions,
+                                  onChange: (namespace) => setScope({ clusterId: scope.clusterId, namespace }),
+                              }
+                            : undefined
+                    }
                     onRefresh={() => void refreshAll()}
                     isRefreshing={isManualRefresh}
                     /* The tab's own gate: owners and admins, and the demo's read-only view. */
@@ -361,15 +473,33 @@ export function DashboardView() {
             {/* Each card deep-links into the org-wide Vulnerabilities page
                 filtered to its severity — the same list the cluster Overview's
                 cards open, over every cluster. */}
-            {showSeverity && severityCounts && (
-                <div>
+            {showSeverity && (
+                <section aria-labelledby="dashboard-exposure-heading">
                     <SeverityCards
-                        snapshots={snapshots}
-                        counts={severityCounts}
-                        /* The list opens under the page's filters, so it lists what the card counted. */
+                        /* The deltas and sparklines are the series' — the
+                           cluster's under a cluster scope; under a namespace
+                           scope there is no series for the counts shown, and an
+                           organization-wide trend beside a namespace's count
+                           would be read as its. */
+                        snapshots={scope.namespace ? [] : snapshots}
+                        counts={severityCounts ?? undefined}
+                        pending={severityCounts === null}
+                        titleId="dashboard-exposure-heading"
+                        /* Says what the four numbers are under — the same chip the
+                           Clusters section wears, so the two blocks' counts are
+                           visibly one count. */
+                        scope={<ScopeChip lens={lens} control={control} where={where} />}
+                        /* The list opens under the page's filters and scope, so it lists what the card counted. */
                         severityHref={(severity) =>
-                            `/vulnerabilities?severity=${severity}&tier=${lens}${control === 'all' ? '' : `&${CONTROL_FILTER_PARAM}=${control}`}`
+                            `/vulnerabilities?severity=${severity}&tier=${lens}${control === 'all' ? '' : `&${CONTROL_FILTER_PARAM}=${control}`}${scope.clusterId ? `&cluster=${encodeURIComponent(scope.clusterId)}` : ''}${scope.namespace ? `&namespace=${encodeURIComponent(scope.namespace)}` : ''}`
                         }
+                    />
+                    {/* What the lens hides, in the unit the Critical card counts,
+                        under the strip itself — not three blocks down. */}
+                    <LensHiddenNote
+                        lens={lens}
+                        counts={lensedCounts?.critical ?? mostCritical.data?.criticalTierCounts}
+                        onShowAll={() => setLens('all')}
                     />
                     {filteredHistoryStart && (
                         <p className="mt-2 text-xs text-ink-muted">
@@ -378,7 +508,7 @@ export function DashboardView() {
                                 : `History under these filters starts ${filteredHistoryStart.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, when per-filter recording began.`}
                         </p>
                     )}
-                </div>
+                </section>
             )}
 
             {isAwaitingScanner && <ClustersAwaitingScanner clusters={clusters} />}
@@ -423,7 +553,22 @@ export function DashboardView() {
                 X axis go without a title. */}
             {showTrends && (
                 <div className="mt-8 space-y-3">
-                    <h2 className="text-sm font-semibold text-ink-secondary">Trends</h2>
+                    <h2 className="text-sm font-semibold text-ink-secondary">
+                        Trends
+                        {/* Whose history: the cluster's own series under a
+                            cluster scope; under a namespace scope the
+                            organization's, said plainly — nothing records
+                            history per namespace. */}
+                        {scope.namespace ? (
+                            <span className="ml-1.5 font-normal text-ink-muted">
+                                · whole organization — history is not kept per namespace
+                            </span>
+                        ) : (
+                            scopeClusterName && (
+                                <span className="ml-1.5 font-normal text-ink-muted">· {scopeClusterName}</span>
+                            )
+                        )}
+                    </h2>
                     {/* The same four cards, in the same order, as the cluster
                         Overview's Trends — the org page is that page folded over
                         every cluster, and the reader moves between the two.
@@ -438,7 +583,7 @@ export function DashboardView() {
                             cluster Overview's Risk Score tab is behind its. */}
                         <MetricsChartCard
                             title="Risk Score"
-                            description="Sum of every finding's 0–100 contribution across all clusters"
+                            description={RISK_SCORE_SUBTITLE}
                             dataKey="riskScore"
                             data={snapshots}
                             deltaDirection="up-bad"
@@ -500,6 +645,9 @@ export function DashboardView() {
                 onIncludeLowerChange={setIncludeLower}
                 onShowEveryImage={() => setChosen((prev) => ({ ...prev, control: 'all' }))}
                 fixIndex={fixIndex}
+                /* `/api/feed/movement` takes no cluster or namespace: the block
+                   stays organization-wide under a scope and says so. */
+                orgWide={isScoped(scope)}
             />
 
             {/* What to look at first: the five
@@ -512,15 +660,12 @@ export function DashboardView() {
                 data={mostCritical.data}
                 error={mostCritical.error}
                 isRefreshing={mostCritical.isRefreshing}
-                filters={{ lens, control }}
-                onLensChange={(next) => {
-                    /* Remembered like a list's choice: it is the same standing view. */
-                    storeLens(next);
-                    setChosen((prev) => ({ ...prev, lens: next }));
-                }}
+                filters={mostCriticalFilters}
+                onLensChange={setLens}
                 onShowEveryImage={() => setChosen((prev) => ({ ...prev, control: 'all' }))}
                 fixIndex={fixIndex}
-                showClusterCount={clusters.length > 1}
+                /* One cluster in scope: "1" on every row says nothing. */
+                showClusterCount={clusters.length > 1 && !scope.clusterId}
             />
 
             {/* Last: the severity cards and the Trends are the org folded
@@ -528,7 +673,18 @@ export function DashboardView() {
                 is the same posture unfolded per cluster — the drill-down, so it
                 reads after the summary it breaks down. Ranked worst-first; each
                 row is the door to its cluster page. */}
-            {showClusters && <ClusterSummarySection clusters={clusters} containers={scopedContainers} />}
+            {showClusters && (
+                <ClusterSummarySection
+                    /* Under a cluster scope, that cluster alone; under a
+                       namespace scope every cluster, counted within it. */
+                    clusters={scope.clusterId ? clusters.filter((c) => c.id === scope.clusterId) : clusters}
+                    containers={scopedContainers}
+                    lens={lens}
+                    control={control}
+                    where={where}
+                    lensedCounts={lensedCounts}
+                />
+            )}
         </div>
     );
 }
