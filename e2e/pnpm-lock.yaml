@@ -15,8 +15,8 @@ importers:
         specifier: ^22
         version: 22.20.5
       prettier:
-        specifier: 3.8.1
-        version: 3.8.1
+        specifier: 3.9.10
+        version: 3.9.10
       typescript:
         specifier: ^5
         version: 5.9.3
@@ -41,8 +41,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  prettier@3.8.1:
-    resolution: {integrity: sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg==}
+  prettier@3.9.10:
+    resolution: {integrity: sha512-skGHTH1Yb9QvaTC4hWnRTzEYtCpApF0UMBPz+t/0ZPzP8ihefo/btKd+QA7pUE0fEwA1SbS/NmhyEcstdXOIdA==}
     engines: {node: '>=14'}
     hasBin: true
 
@@ -70,7 +70,7 @@ snapshots:
     dependencies:
       playwright-core: 1.64.1
 
-  prettier@3.8.1: {}
+  prettier@3.9.10: {}
 
   typescript@5.9.3: {}
 
