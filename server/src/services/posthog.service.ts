@@ -24,10 +24,9 @@ export interface ServerEventInput {
      * The organization id. Every server-side event is about an org, not a
      * browser: the founder signs up once, the org's clusters report in.
      * Using the org id makes the two events land on one PostHog person, so a
-     * funnel between them just works, and the dashboard's browser-side
-     * events (identified by user id) stay separate — joining the two
-     * would need the browser to alias to the org, which is deliberately
-     * not done so no email or user id ever leaves this process.
+     * funnel between them just works. The dashboard aliases the org id to
+     * the browser's person at sign-up (client `aliasOrganization`), so the
+     * browser-side events join too; no email or user id leaves this process.
      */
     distinctId: string;
     properties?: Record<string, unknown>;
@@ -50,10 +49,10 @@ export type ServerEventResult = { status: "sent" } | { status: "not_configured" 
  * shutdown that the job worker and API server would each have to wire.
  *
  * The browser SDKs on the marketing site and dashboard cannot see these
- * moments: the landing page is cookieless by design, so a visitor and the
- * account they create are never the same PostHog person, and a cluster
- * reporting in has no browser at all. This sender is how the funnel gets
- * its middle.
+ * moments: the account is created server-side and a cluster reporting in
+ * has no browser at all. This sender is how the funnel gets its middle; the
+ * client's `aliasOrganization` (lib/analytics.ts, since 2026-11-01) folds
+ * the org id these events key on into the browser's person.
  *
  * Every event is geo-disabled (the IP PostHog would see is this pod's) and
  * carries no email, user id, IP or user agent. Like `emailService` and

@@ -33,9 +33,10 @@ export type RedditConversionResult =
 
 /**
  * Reddit Ads Conversions API v3 — the server-to-server way to tell Reddit an
- * ad click converted, used instead of the Reddit Pixel so the marketing site
- * stays cookieless (the marketing site's PostHog provider explains
- * the stance).
+ * ad click converted, used instead of the Reddit Pixel so no third-party
+ * code runs on the marketing site and no third-party cookie is set (the
+ * only analytics cookie is our own first-party PostHog one, since
+ * 2026-11-01).
  *
  * Wire format, from Reddit's v3 guide (`POST /api/v3/pixels/{pixel}/conversion_events`):
  * a `data` wrapper holding the events, `event_at` as Unix milliseconds,
