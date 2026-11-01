@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
-import { ChevronRight, CircleCheck, ExternalLink, KeyRound, TriangleAlert } from 'lucide-react';
+import { ChevronRight, CircleCheck, ExternalLink, HardDrive, KeyRound, TriangleAlert } from 'lucide-react';
 import { Badge, CodeBlock, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui';
 import { useRuntimeConfig } from '@/components/providers';
 import { usePollWhile, useResource, useRevalidateOnFocus } from '@/hooks';
@@ -15,18 +15,27 @@ import {
     createRegistrySecretCommand,
     dockerConfigHelmCommand,
     dockerConfigValuesYaml,
+    EPHEMERAL_STORAGE_VALUE,
     groupByImage,
+    HELM_VALUES_DOCS_URL,
     pullSecretHelmCommand,
     pullSecretKnowledge,
     pullSecretsLookup,
     pullSecretValuesYaml,
     scannerInstallFor,
+    scannerValuePath,
+    SCRATCH_SIZE_VALUE,
+    scratchSizeHelmCommand,
+    scratchSizeValuesYaml,
     STATUS_ORDER,
+    TOO_LARGE_LABEL,
     type ImageGroup,
     type PullSecretKnowledge,
     type RowStatus,
     type ScannerInstall,
 } from './coverageRemediation';
+import { PRIVATE_REGISTRY_DOCS_URL } from './scannerInstall';
+import { ScannerTrustLinks } from './ScannerTrustLinks';
 
 /* Only ever polls while something is legitimately still in flight; see the
    `usePollWhile` call below. */
@@ -36,7 +45,6 @@ const STALE_AFTER_MS = 60_000;
 /* `useSyncExternalStore` wants a subscription; the URL hash never notifies. */
 const subscribeToNothing = () => () => {};
 
-const PRIVATE_REGISTRY_DOCS_URL = 'https://stackradar.io/docs/install/private-registries';
 const WORKLOAD_IDENTITY_DOCS_URL = `${PRIVATE_REGISTRY_DOCS_URL}#workload-identity`;
 
 function waitedFor(since: string): string {
@@ -59,6 +67,15 @@ function RowStatusBadge({ status, host }: { status: RowStatus; host: string | nu
             return (
                 <span className="shrink-0" title={host ? `The scanner cannot authenticate to ${host}` : undefined}>
                     <Badge variant="danger">auth failed</Badge>
+                </span>
+            );
+        case 'too_large':
+            return (
+                <span
+                    className="shrink-0"
+                    title="The image's compressed size is over what the scanner may unpack; raise its scratch and ephemeral-storage limits"
+                >
+                    <Badge variant="danger">{TOO_LARGE_LABEL}</Badge>
                 </span>
             );
         case 'scan_failed':
@@ -402,6 +419,67 @@ export function RegistryAuthRemediation({
 }
 
 /**
+ * The fix for an image the scanner refused to unpack. Like the registry
+ * block, one section rather than a line per row: the limits are per
+ * scanner, not per workload, so every too-large image is fixed by the same
+ * two values. Deliberately says nothing about credentials — the failure
+ * looks like "not scanned" from the containers list, and the one wrong
+ * turn is the pull-Secret remediation next to it.
+ */
+export function TooLargeRemediation({
+    groups,
+    install,
+}: {
+    /** The too-large images, as the card folded them. */
+    groups: ImageGroup[];
+    install: ScannerInstall;
+}) {
+    const containers = groups.flatMap((g) => g.containers);
+    const scratch = scannerValuePath(install, SCRATCH_SIZE_VALUE);
+    const storage = scannerValuePath(install, EPHEMERAL_STORAGE_VALUE);
+
+    return (
+        <section aria-label={TOO_LARGE_LABEL} className="border-b border-edge">
+            <div className="bg-danger-subtle px-5 py-3">
+                <div className="flex items-start gap-2.5">
+                    <HardDrive aria-hidden="true" className="mt-px size-4 shrink-0 text-danger" />
+                    <div className="min-w-0 flex-1 text-xs text-danger">
+                        <p className="font-medium">{TOO_LARGE_LABEL}</p>
+                        <p className="mt-1">
+                            {plural(containers.length, 'container')} on {plural(groups.length, 'image')}{' '}
+                            {containers.length === 1 ? 'runs an image' : 'run images'} whose compressed size is over
+                            what the scanner may unpack, so {containers.length === 1 ? 'it has' : 'they have'} no SBOM.
+                            Retrying does not change this and credentials play no part — the scanner&apos;s storage
+                            limits do.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+                <div className="space-y-1.5">
+                    <Label>How to fix</Label>
+                    <p className="text-xs text-ink-secondary">
+                        Raise <code className="font-mono text-ink">{scratch}</code>, the scratch volume syft unpacks
+                        each image into, above the compressed size of the largest image, and keep{' '}
+                        <code className="font-mono text-ink">{storage}</code>, the pod&apos;s ephemeral-storage limit,
+                        above that. Or exclude the image from scanning.
+                    </p>
+                    <Label>Add to your values</Label>
+                    <CodeBlock code={scratchSizeValuesYaml(install)} placeholders />
+                    <Label>Or apply with Helm</Label>
+                    <CodeBlock code={scratchSizeHelmCommand(install)} placeholders />
+                    <ChartVersionHint install={install} />
+                </div>
+                <p className="text-xs text-ink-muted">
+                    The scanner retries on its own; the error clears once the next scan uploads.{' '}
+                    <DocsLink href={HELM_VALUES_DOCS_URL}>Helm values reference</DocsLink>
+                </p>
+            </div>
+        </section>
+    );
+}
+
+/**
  * Which workloads this cluster is running that StackRadar has no SBOM for —
  * and, when the scanner has said, *why*.
  *
@@ -443,11 +521,15 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
 
     const groups = useMemo(() => groupByImage(rows), [rows]);
     const authGroups = groups.filter((g) => g.status === 'auth_failed');
+    const tooLargeGroups = groups.filter((g) => g.status === 'too_large');
     const otherGroups = groups.filter((g) => g.status !== 'auth_failed');
 
     const count = (...statuses: RowStatus[]) => rows.filter((r) => statuses.includes(r.status)).length;
     const blockedCount = count('auth_failed');
+    /* Too-large rows need an operator too, but the generic "failing" banner
+       below is about the unexplained kind — they get their own section. */
     const failedCount = count('scan_failed', 'stuck');
+    const tooLargeCount = count('too_large');
     const pendingCount = count('waiting', 'rate_limited');
 
     /* Polls only while something can genuinely resolve on its own — waiting
@@ -498,7 +580,7 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
                         discovered={coverage.discovered}
                         scanned={coverage.scanned}
                         blocked={blockedCount}
-                        failed={failedCount}
+                        failed={failedCount + tooLargeCount}
                     />
                 </div>
             </div>
@@ -510,6 +592,7 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
             ) : (
                 <>
                     {authGroups.length > 0 && <RegistryAuthRemediation groups={authGroups} install={install} />}
+                    {tooLargeGroups.length > 0 && <TooLargeRemediation groups={tooLargeGroups} install={install} />}
                     {failedCount > 0 && (
                         <div className="flex items-start gap-2.5 border-b border-edge bg-attention-subtle px-5 py-3">
                             <TriangleAlert aria-hidden="true" className="mt-px size-4 shrink-0 text-attention" />
@@ -535,7 +618,8 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
                             </TableHead>
                             <TableBody>
                                 {otherGroups.map((g) => {
-                                    const isFailed = g.status === 'scan_failed' || g.status === 'stuck';
+                                    const isFailed =
+                                        g.status === 'too_large' || g.status === 'scan_failed' || g.status === 'stuck';
                                     return (
                                         <TableRow key={g.key}>
                                             <TableCell className="w-1/3 max-w-0">
@@ -567,6 +651,15 @@ export function ClusterCoverageCard({ clusterId, className = '' }: { clusterId: 
                     )}
                 </>
             )}
+
+            {/* The card is the one place on the cluster page that is about
+                the scanner itself, so the questions an evaluator asks about
+                it are answered from here: what it sends, what it may read,
+                what it costs to run. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-edge px-5 py-3">
+                <span className="text-xs text-ink-muted">About the scanner</span>
+                <ScannerTrustLinks />
+            </div>
         </div>
     );
 }

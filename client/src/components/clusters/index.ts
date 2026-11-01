@@ -9,6 +9,7 @@ export { ClusterProvider, useCluster } from './ClusterContext';
 export { ClusterIdentityForm } from './ClusterIdentityForm';
 export { ScannerKeyPanel } from './ScannerKeyPanel';
 export { DangerZone } from './DangerZone';
+export { clusterSettingsAccess } from './clusterSettingsAccess';
 export { ClusterContainersProvider, useClusterContainers } from './ClusterContainersContext';
 export { ScannerDot, getScannerHealth } from './ScannerDot';
 export { VulnerabilityList } from './VulnerabilityList';

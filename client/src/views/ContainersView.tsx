@@ -15,6 +15,7 @@ import {
     SortableHeader,
 } from '@/components/ui';
 import {
+    AgeColumnLabel,
     ContainerRow,
     ContainerSeverityCell,
     ContainersCoverageStrip,
@@ -348,9 +349,7 @@ export function ContainersView() {
                                                 className="w-20"
                                             >
                                                 {/* Lens's Age, which a rollout also resets. */}
-                                                <span title="How long the container has run this exact image. Exposure across earlier images is on the container's page.">
-                                                    Age
-                                                </span>
+                                                <AgeColumnLabel />
                                             </SortableHeader>
                                             <SortableHeader
                                                 column="risk"

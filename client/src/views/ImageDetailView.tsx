@@ -4,7 +4,7 @@ import { baseImageLine, controlHeadline } from '@/lib/image-control';
 import { useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Download, Eye, Package, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Download, Eye, History, Package, ShieldAlert } from 'lucide-react';
 import { SiKubernetes } from 'react-icons/si';
 import {
     BaseUpgradePanel,
@@ -29,14 +29,16 @@ import {
 import type { ImageUpgrade } from '@/components/ui';
 import { VulnerabilitiesTab } from '@/components/container-detail';
 import { VulnerabilityList } from '@/components/clusters';
+import { ImageHistory } from '@/components/feed/ImageHistory';
 import { useResource } from '@/hooks';
 import type { Image, ImageDeployment } from '@/types/container';
 import { formatDate, formatRelativeTime, isDigestLikeTag } from '@/utils/formatters';
+import { runsInParts, summarizeRunsIn } from '@/lib/runs-in';
 import { sbomDocumentUrl } from '@/lib/sbom';
 
 type ImageDetail = Image & { deployments: ImageDeployment[] };
 
-type Tab = 'vulnerabilities' | 'components' | 'deployments';
+type Tab = 'vulnerabilities' | 'components' | 'workloads' | 'history';
 
 /**
  * An image: what is wrong with it, and everywhere it runs.
@@ -84,12 +86,23 @@ export function ImageDetailView({ imageId: id }: { imageId: string }) {
 
     const base = baseImageLine(image);
     const vulns = image.vulnerabilities;
-    const vulnTotal = vulns ? vulns.critical + vulns.high + vulns.medium + vulns.low : undefined;
+    /* Where it runs, folded for the header line; null until something has reported running it. */
+    const runsIn = summarizeRunsIn(image.deployments);
 
+    /* No count on the Vulnerabilities tab. The list under it counts findings
+       under the reader's lens, unscored ones included, and says so in its
+       heading badge; the only number this view has is the banded total above,
+       which is neither — three numbers for one word was a bug report. The
+       Workloads count is the table's own row count. "Workloads", not
+       "Deployments": the table lists StatefulSets and DaemonSets too, and
+       each row carries its kind. History is last: the present first, then
+       how it got here — the Feed scoped to this image, for "would this have
+       told me earlier?". */
     const tabs = [
-        { id: 'vulnerabilities' as Tab, name: 'Vulnerabilities', icon: ShieldAlert, count: vulnTotal },
+        { id: 'vulnerabilities' as Tab, name: 'Vulnerabilities', icon: ShieldAlert },
         { id: 'components' as Tab, name: 'Vulnerable components', icon: Package },
-        { id: 'deployments' as Tab, name: 'Deployments', icon: SiKubernetes, count: image.deployments.length },
+        { id: 'workloads' as Tab, name: 'Workloads', icon: SiKubernetes, count: image.deployments.length },
+        { id: 'history' as Tab, name: 'History', icon: History },
     ];
 
     return (
@@ -130,6 +143,26 @@ export function ImageDetailView({ imageId: id }: { imageId: string }) {
                             </span>
                         </h1>
                         <p className="mt-1 break-all font-mono text-xs text-ink-muted">{image.digest}</p>
+                        {/* Where it runs — namespaces, workloads, cluster — on
+                            the header, not three clicks down a tab: the
+                            question every route into this page arrives with.
+                            The line opens the Workloads tab, which has the
+                            rows. Left out until something has reported
+                            running the image; "0 workloads" would repeat the
+                            container count beside the tags. */}
+                        {runsIn && (
+                            <p className="mt-1 text-sm text-ink-secondary">
+                                Runs in{' '}
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveTab('workloads')}
+                                    title="Open the Workloads tab — every workload running this image"
+                                    className="cursor-pointer text-accent underline-offset-2 hover:underline"
+                                >
+                                    {runsInParts(runsIn, image.clusterName).join(' · ')}
+                                </button>
+                            </p>
+                        )}
                         {/* Where the base image ends, when something could say:
                             what the "Base image" findings below belong to. */}
                         {base && (
@@ -312,12 +345,12 @@ export function ImageDetailView({ imageId: id }: { imageId: string }) {
                 </Suspense>
             </TabPanel>
 
-            <TabPanel tabId="deployments" active={activeTab === 'deployments'}>
+            <TabPanel tabId="workloads" active={activeTab === 'workloads'}>
                 <p className="mb-3 text-sm text-ink-muted">
                     Everywhere this image runs. One change to the image lands in every row below.
                 </p>
                 <TableContainer variant="section">
-                    <Table aria-label="Deployments of this image">
+                    <Table aria-label="Workloads running this image">
                         <TableHead>
                             <TableHeader hideBelow="md">Namespace</TableHeader>
                             <TableHeader>Workload</TableHeader>
@@ -376,6 +409,10 @@ export function ImageDetailView({ imageId: id }: { imageId: string }) {
                         )}
                     </Table>
                 </TableContainer>
+            </TabPanel>
+
+            <TabPanel tabId="history" active={activeTab === 'history'}>
+                <ImageHistory imageId={image.id} />
             </TabPanel>
         </div>
     );

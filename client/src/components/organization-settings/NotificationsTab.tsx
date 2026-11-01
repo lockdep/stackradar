@@ -7,6 +7,7 @@ import { Badge, Button, LoadingBlock, RelativeTime, Spinner } from '@/components
 import { useResource } from '@/hooks';
 import { apiFetch, errorMessage } from '@/lib/api-client';
 import { useRuntimeConfig } from '@/components/providers';
+import { alertSummaryLine, alertSummaryPath, type AlertSummary } from '@/types/alerts';
 
 /**
  * Notifications — the two push channels the product has, one per card.
@@ -22,7 +23,11 @@ import { useRuntimeConfig } from '@/components/providers';
  *    drawn in the community edition, which sends no email.
  *
  * Both are organization-wide settings, not per person; only owners and
- * admins can change them, and the demo visitor sees them read-only.
+ * admins can change them, and the demo visitor sees them read-only. A
+ * member still sees *what the channels are* and whether they are on — from
+ * `GET …/notifications/summary`, which carries the webhook's host and a
+ * recipient count and nothing a member should not have (the URL, the
+ * addresses). Without it the demo visitor could not tell alerts go anywhere.
  */
 
 interface AlertSettings {
@@ -101,6 +106,11 @@ export function NotificationsTab({ orgId, canManage }: { orgId: string; canManag
         {
             fallbackError: 'Could not load the alert settings',
         },
+    );
+    // A member cannot read the settings; the summary is what they may know.
+    const { data: summary, error: summaryError } = useResource<AlertSummary>(
+        canManage ? null : alertSummaryPath(orgId),
+        { fallbackError: 'Could not load the alert channels' },
     );
     const { data: digestEnabled, refetch: refetchDigest } = useResource<boolean>(
         hasEmail ? `/api/organizations/${orgId}` : null,
@@ -193,8 +203,22 @@ export function NotificationsTab({ orgId, canManage }: { orgId: string; canManag
                     {!hasEmail &&
                         ' Messages go to the webhook you add below; email digests and routing are a StackRadar Cloud feature.'}
                 </p>
+                {/* The channels, named for every role — a member must be able to
+                    tell alerts have somewhere to go even without the settings. */}
+                <p className="text-sm text-ink mb-4">
+                    {hasEmail
+                        ? 'Delivered to a Slack incoming webhook and by email.'
+                        : 'Delivered to a Slack incoming webhook.'}
+                </p>
 
-                {!canManage && <p className="text-xs text-ink-muted">Only owners and admins can see or change this.</p>}
+                {!canManage && (
+                    <div className="text-sm">
+                        {summary && <p className="text-ink">{alertSummaryLine(summary)}</p>}
+                        {!summary && !summaryError && <LoadingBlock label="Loading…" className="py-2" />}
+                        {summaryError && <p className="text-danger">{summaryError}</p>}
+                        <p className="mt-2 text-xs text-ink-muted">Only owners and admins can change this.</p>
+                    </div>
+                )}
 
                 {canManage && !data && !error && <LoadingBlock label="Loading…" className="py-4" />}
                 {error && <p className="text-sm text-danger">{error}</p>}
@@ -435,7 +459,10 @@ export function NotificationsTab({ orgId, canManage }: { orgId: string; canManag
             {/* Weekly digest — on every cloud plan; the community edition sends no email. */}
             {hasEmail && (
                 <div className="rounded-md bg-surface-raised border border-edge p-6">
-                    <h3 className="text-lg font-medium text-ink mb-2">Weekly digest</h3>
+                    <h3 className="text-lg font-medium text-ink mb-2 flex items-center gap-2">
+                        <Mail className="size-5 text-ink-muted" aria-hidden="true" />
+                        Weekly digest email
+                    </h3>
                     <p className="text-sm text-ink-muted mb-4">
                         Every Monday, owners and admins get one email with the Risk Score and where it moved, the
                         findings to fix first, new CISA KEV matches and any registry the scanner cannot pull from. Off

@@ -286,9 +286,17 @@ export const activityFeedRepository = {
             limit: number;
             cursor?: { createdAt: Date; id: string } | null;
             clusterId?: string | null;
+            /**
+             * One image's history. An event's `image_id` is its subject — the
+             * digest a slot appeared on, left, or moved *onto* — so the move
+             * that took a slot *off* this image is found by the `from` side
+             * its payload carries. Org scoping stays: another org's image id
+             * matches nothing.
+             */
+            imageId?: string | null;
         },
     ): Promise<FeedPage> {
-        const { since, limit, cursor, clusterId } = options;
+        const { since, limit, cursor, clusterId, imageId } = options;
         const e = schema.activityEvents;
 
         const rows = await db
@@ -311,6 +319,9 @@ export const activityFeedRepository = {
                     inArray(e.type, FEED_EVENT_TYPES),
                     gte(e.createdAt, since),
                     clusterId ? eq(e.clusterId, clusterId) : undefined,
+                    imageId
+                        ? or(eq(e.imageId, imageId), sql`${e.payload} -> 'from' ->> 'imageId' = ${imageId}`)
+                        : undefined,
                     cursor
                         ? or(
                               lt(e.createdAt, cursor.createdAt),

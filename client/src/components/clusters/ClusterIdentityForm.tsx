@@ -5,8 +5,14 @@ import { apiFetch, errorMessage } from '@/lib/api-client';
 import { useCluster } from './ClusterContext';
 import { CLUSTER_NAME_HINT, CLUSTER_NAME_MAX_LENGTH, validateClusterName } from './newClusterWizard';
 
-/** The "General" settings section: renames the cluster in place. */
-export function ClusterIdentityForm() {
+/**
+ * The "General" settings section: renames the cluster in place.
+ *
+ * `readOnly` is the live demo: the field is shown disabled and there is no
+ * Save, so the page reads as what an admin sees without offering a write
+ * the server would refuse.
+ */
+export function ClusterIdentityForm({ readOnly = false }: { readOnly?: boolean }) {
     const { cluster, setClusterName } = useCluster();
 
     const [renameValue, setRenameValue] = useState(cluster.name);
@@ -49,8 +55,10 @@ export function ClusterIdentityForm() {
                     <div className="flex items-center gap-3">
                         <input
                             type="text"
+                            aria-label="Cluster name"
                             value={renameValue}
                             maxLength={CLUSTER_NAME_MAX_LENGTH}
+                            disabled={readOnly}
                             onChange={(e) => {
                                 setRenameValue(e.target.value);
                                 setRenameError(null);
@@ -59,38 +67,40 @@ export function ClusterIdentityForm() {
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') void handleRename();
                             }}
-                            className="block w-full max-w-sm rounded-md border border-edge-strong px-3 py-2 text-sm text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none"
+                            className="block w-full max-w-sm rounded-md border border-edge-strong px-3 py-2 text-sm text-ink focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted"
                         />
-                        <button
-                            type="button"
-                            onClick={handleRename}
-                            disabled={isRenaming || renameValue.trim() === cluster.name || !renameValue.trim()}
-                            className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-sm font-semibold text-surface shadow-resting hover:bg-ink/85 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors whitespace-nowrap"
-                        >
-                            {isRenaming ? (
-                                <svg
-                                    className="animate-spin size-4"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                    />
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    />
-                                </svg>
-                            ) : null}
-                            {isRenaming ? 'Saving…' : 'Save'}
-                        </button>
+                        {!readOnly && (
+                            <button
+                                type="button"
+                                onClick={handleRename}
+                                disabled={isRenaming || renameValue.trim() === cluster.name || !renameValue.trim()}
+                                className="inline-flex items-center gap-1.5 rounded-md bg-ink px-3 py-2 text-sm font-semibold text-surface shadow-resting hover:bg-ink/85 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors whitespace-nowrap"
+                            >
+                                {isRenaming ? (
+                                    <svg
+                                        className="animate-spin size-4"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                        fill="none"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <circle
+                                            className="opacity-25"
+                                            cx="12"
+                                            cy="12"
+                                            r="10"
+                                            stroke="currentColor"
+                                            strokeWidth="4"
+                                        />
+                                        <path
+                                            className="opacity-75"
+                                            fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                        />
+                                    </svg>
+                                ) : null}
+                                {isRenaming ? 'Saving…' : 'Save'}
+                            </button>
+                        )}
                     </div>
                     {renameError && <p className="mt-2 text-sm text-danger">{renameError}</p>}
                     {renameSuccess && <p className="mt-2 text-sm text-success">Cluster renamed successfully.</p>}

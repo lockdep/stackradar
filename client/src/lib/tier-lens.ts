@@ -21,6 +21,19 @@ export const TIER_LENS_LABEL: Record<TierLens, string> = {
     all: 'All',
 };
 
+/** The lens as the filter bar's "Findings" menu spells it, and as the blocks it scopes repeat it. */
+export const TIER_LENS_FINDINGS_LABEL: Record<TierLens, string> = {
+    application: 'Application findings',
+    base: 'Base image findings',
+    all: 'All findings',
+};
+
+/** Where a lens's findings live, in a sentence: "in application packages", "in base images". */
+export const TIER_LENS_BUCKET_NAME: Record<Exclude<TierLens, 'all'>, string> = {
+    application: 'application packages',
+    base: 'base images',
+};
+
 export const TIER_LENS_HINT: Record<TierLens, string> = {
     application: 'Dependencies your build added. Exploited findings in the base image are always shown.',
     base: 'Operating-system packages and the tooling that ships with the language (npm, pip, the JDK) — fixed by rebuilding on a newer base image.',
@@ -52,6 +65,40 @@ export function withTierParam(params: URLSearchParams, lens: TierLens): URLSearc
 }
 
 export type TierCounts = { application: number; base: number; all: number };
+
+/** The third bucket's name where the menu lists it beside the two lenses. */
+export const TIER_LENS_UNCLASSIFIED_LABEL = 'Unclassified findings';
+
+export const TIER_LENS_UNCLASSIFIED_HINT =
+    'Packages no scan has placed in the application or the base image yet. Listed under All findings only.';
+
+/**
+ * Findings in neither lens bucket — packages whose tier is unknown — which
+ * only "All" lists. Named so Application + Base image + Unclassified = All
+ * on the control that offers the three; without it the two lenses visibly
+ * fail to add up and the gap reads as a bug.
+ */
+export function unclassifiedFindings(counts: TierCounts): number {
+    return Math.max(0, counts.all - counts.application - counts.base);
+}
+
+/**
+ * What a lens leaves out of a count: the findings in the other bucket, and
+ * the ones in packages no scan has classified yet, which neither lens lists.
+ * Null under "All", and when nothing is outside the lens — the two cases a
+ * block has nothing to say about. Exploited findings pass every lens and are
+ * still counted here: the number is the bucket's, not the list's.
+ */
+export function hiddenByLens(
+    counts: TierCounts,
+    lens: TierLens,
+): { hidden: number; other: Exclude<TierLens, 'all'>; inOther: number; unclassified: number } | null {
+    if (lens === 'all') return null;
+    const hidden = counts.all - counts[lens];
+    if (hidden <= 0) return null;
+    const other = lens === 'application' ? 'base' : 'application';
+    return { hidden, other, inOther: counts[other], unclassified: hidden - counts[other] };
+}
 
 export function isTierLens(value: string | null | undefined): value is TierLens {
     return value != null && (TIER_LENSES as readonly string[]).includes(value);

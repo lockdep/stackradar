@@ -63,6 +63,18 @@ worst-finding urgency is still on every row — the band, the KEV badge, the
 `topFinding` in the tooltip — and every rollup carries `topFinding` precisely
 so a row can say what is driving it.
 
+**Addendum (2026-11-01): the vulnerability lists' default order is "on CISA
+KEV first, then by Risk Score".** Because the sum is a magnitude, an idle
+critical in ten images outsums a KEV-listed advisory in one, and the
+Dashboard's "Most critical" block — the top of `GET /api/vulnerabilities` —
+left the exploited one off the page. The default `ORDER BY` of that list
+(`vulnerability.repository.ts`, `queryVulnerabilityPage`) now leads with
+`bool_or(kev_listed_at IS NOT NULL) DESC` before `total_risk_score`. This
+changes nothing above: the score is still the sum, KEV is still a *state*
+rather than a bigger number, and the list says the rule and shows the sum on
+every row. An explicit `?sort=` (including `sort=score`) orders by that column
+alone.
+
 ## Consequences
 
 - **The fold composes.** A workload's score is the sum of its distinct images'

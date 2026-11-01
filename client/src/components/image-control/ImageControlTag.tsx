@@ -9,6 +9,7 @@ import {
     MENU_PANEL_CLASS,
     MENU_SEPARATOR_CLASS,
     MenuRadioItem,
+    Tooltip,
 } from '@/components/ui';
 import { controlReason, type ControlSignal, type ImageControl } from '@/lib/image-control';
 
@@ -35,6 +36,10 @@ const CHOICES: readonly { value: 'built' | 'third-party'; label: string; descrip
  * image: correcting one row corrects every image of that repository, in every
  * cluster, and the menu says so before the click. Without `onChange` the tag
  * is a plain badge whose hover says which signal decided.
+ *
+ * "Unconfirmed" is the one label a reader cannot unpack on their own — the
+ * other two name a party — so that tag alone carries a visible cue that a
+ * definition is there; every tag has the definition on hover and focus.
  */
 export function ImageControlTag({
     control,
@@ -56,11 +61,14 @@ export function ImageControlTag({
     const current = control ?? 'unknown';
     const reason = controlReason(detectedBy ?? null, detail ?? null);
 
+    const definition = `${TAG_LABEL[current]} — ${reason}`;
+    const cue = current === 'unknown' ? 'icon' : 'none';
+
     if (!onChange) {
         return (
-            <span title={`${TAG_LABEL[current]} — ${reason}`} className={`shrink-0 ${className}`}>
+            <Tooltip text={definition} cue={cue} align="start" className={`shrink-0 ${className}`}>
                 <Badge variant={TAG_VARIANT[current]}>{TAG_LABEL[current]}</Badge>
-            </span>
+            </Tooltip>
         );
     }
 
@@ -71,13 +79,15 @@ export function ImageControlTag({
             <Menu>
                 <MenuButton
                     aria-label={`${TAG_LABEL[current]} image: change who builds ${repository}`}
-                    title={`${TAG_LABEL[current]} — ${reason}. Click to change.`}
                     className="cursor-pointer rounded-sm focus:outline-none data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-accent"
                 >
-                    <Badge variant={TAG_VARIANT[current]}>
-                        {TAG_LABEL[current]}
-                        <ChevronDown aria-hidden className="ml-0.5 size-3" />
-                    </Badge>
+                    {/* The button is the tab stop; its focus opens the definition. */}
+                    <Tooltip text={definition} cue={cue} align="start" focusable={false}>
+                        <Badge variant={TAG_VARIANT[current]}>
+                            {TAG_LABEL[current]}
+                            <ChevronDown aria-hidden className="ml-0.5 size-3" />
+                        </Badge>
+                    </Tooltip>
                 </MenuButton>
                 <MenuItems
                     transition

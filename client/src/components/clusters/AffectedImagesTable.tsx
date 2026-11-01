@@ -16,7 +16,6 @@ import {
 } from '@/components/ui';
 /* The file, not the barrel: the dashboard's barrel imports this folder's. */
 import { FixCellHint, type FixIndex } from '@/components/dashboard/fix-hints';
-import { useResource } from '@/hooks';
 import { formatShortDigest } from '@/utils/formatters';
 import type { VulnerabilityOccurrences } from '@/types/cluster';
 
@@ -45,20 +44,23 @@ function packageFixFor(image: AffectedImage, packages: readonly AdvisoryPackage[
  * The images one advisory affects, by their full reference: what each has
  * installed, how many containers run it, and the move the upgrade list knows
  * for it — the unfolded row of the Dashboard's "Most critical" and of the
- * vulnerability lists. Fetched on mount from the caller's `/occurrences` url,
- * which carries the caller's filters, so the list is what the row's counts
- * counted. The containers themselves are the image page's and the
- * vulnerability page's business.
+ * vulnerability lists. The caller fetches the row's `/occurrences` (with its
+ * filters on, so the list is what the row's counts counted) and hands the
+ * images here, because the same list feeds the Facts line above the table;
+ * `images` undefined with no error is the fetch in flight. The containers
+ * themselves are the image page's and the vulnerability page's business.
  */
 export function AffectedImagesTable({
-    url,
+    images,
+    error,
     vulnId,
     packages,
     fixIndex,
     showCluster = true,
 }: {
-    /** The `/occurrences` request for the row — identity, lens and scope already on it. */
-    url: string;
+    /** The row's `/occurrences` images; undefined until the fetch lands. */
+    images: AffectedImage[] | undefined;
+    error: string | null;
     vulnId: string;
     /** The row's packages: where an image's fix version comes from when the upgrade list has no move. */
     packages: readonly AdvisoryPackage[];
@@ -67,10 +69,6 @@ export function AffectedImagesTable({
     showCluster?: boolean;
 }) {
     const [all, setAll] = useState(false);
-    const { data, error } = useResource<VulnerabilityOccurrences>(url, {
-        fallbackError: 'Could not load the affected images',
-    });
-    const images: AffectedImage[] | undefined = data?.images;
 
     const section = (body: React.ReactNode, count?: number) => (
         <section>
@@ -98,6 +96,10 @@ export function AffectedImagesTable({
 
     const shown = all ? images : images.slice(0, IMAGES_PREVIEW);
     const hidden = images.length - shown.length;
+    /* Where the containers run, beside how many: the namespace used to be
+       three clicks away (image page → Workloads tab → row). Drawn only when
+       the server sends it; an older one sends no `namespaces` on any image. */
+    const showNamespaces = images.some((image) => image.namespaces !== undefined);
 
     return section(
         <>
@@ -107,6 +109,7 @@ export function AffectedImagesTable({
                         <TableHeader className="w-full">Image</TableHeader>
                         <TableHeader hideBelow="md">Installed</TableHeader>
                         {showCluster && <TableHeader hideBelow="lg">Cluster</TableHeader>}
+                        {showNamespaces && <TableHeader hideBelow="md">Namespaces</TableHeader>}
                         <TableHeader align="end">Containers</TableHeader>
                         <TableHeader hideBelow="sm">
                             <span title="The move the upgrade list knows for the image, or why it has none. The image page has the recommendation in full.">
@@ -172,6 +175,20 @@ export function AffectedImagesTable({
                                                 <EntityIcon kind="cluster" className="size-3.5 text-ink-muted" />
                                                 {image.clusterName}
                                             </span>
+                                        </TableCell>
+                                    )}
+                                    {showNamespaces && (
+                                        <TableCell hideBelow="md" className="text-ink-muted">
+                                            {/* `argocd, monitoring` — muted: where, beside the count of how many. */}
+                                            {image.namespaces && image.namespaces.length > 0 ? (
+                                                <span
+                                                    title={`Namespaces running this image: ${image.namespaces.join(', ')}`}
+                                                >
+                                                    {image.namespaces.join(', ')}
+                                                </span>
+                                            ) : (
+                                                <span className="text-ink-faint">—</span>
+                                            )}
                                         </TableCell>
                                     )}
                                     <TableCell align="end" className="tabular-nums text-ink-secondary">

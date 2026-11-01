@@ -101,8 +101,9 @@ describe("cluster components (packages tab)", () => {
         expect(response.body.total).toBe(3);
         expect(response.body.packages).toHaveLength(3);
 
-        // Ordered by name: express, lodash, react.
-        const [express, lodash, react] = response.body.packages;
+        // Worst first: lodash is in two images and leads; express and react
+        // tie on every count and fall back to the name.
+        const [lodash, express, react] = response.body.packages;
         expect(express).toMatchObject({ name: "express", version: "4.18.0", imageCount: 1, workloadCount: 1 });
         // lodash is in both images — one row, spread of two, not two rows.
         expect(lodash).toMatchObject({ name: "lodash", version: "4.17.21", imageCount: 2, workloadCount: 2 });
@@ -194,7 +195,7 @@ describe("cluster components (packages tab)", () => {
             .set(authHeaders());
         expect(page1.status).toBe(200);
         expect(page1.body.total).toBe(3);
-        expect(page1.body.packages.map((p: { name: string }) => p.name)).toEqual(["express", "lodash"]);
+        expect(page1.body.packages.map((p: { name: string }) => p.name)).toEqual(["lodash", "express"]);
 
         const page2 = await request(app)
             .get(`/api/clusters/${testData.cluster.id}/components?limit=2&offset=2`)

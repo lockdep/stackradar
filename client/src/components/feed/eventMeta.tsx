@@ -73,8 +73,9 @@ export const FEED_LABEL: Record<ActivityEventType, string | null> = {
     'scan.findings-changed': null,
 };
 
-/** The scan line's verb turns on its cause; a first scan never reaches the page. */
+/** The scan line's verb turns on its cause. A first scan reaches only an image's own History tab. */
 export function scanLabel(p: FindingsChangedPayload): string {
+    if (p.cause === 'first-scan') return 'first scan';
     return p.cause === 'mirror' ? 'advisories changed' : 'SBOM replaced';
 }
 

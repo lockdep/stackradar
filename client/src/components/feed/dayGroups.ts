@@ -171,14 +171,25 @@ function rolloutKey(event: ContainerFeedEvent): string {
     ].join('|');
 }
 
+/**
+ * What a reader of the page asked. `firstScans`: the Feed drops an image's
+ * first scan (inventory, not change — see `isFirstScan`); one image's own
+ * history keeps it, because "when was this first scanned, and with what"
+ * is exactly the question that page answers.
+ */
+export interface FeedWorthyOptions {
+    firstScans?: boolean;
+}
+
 /** The events the page shows, in the order given. */
-export function feedWorthy(events: FeedEvent[]): FeedEvent[] {
+export function feedWorthy(events: FeedEvent[], options: FeedWorthyOptions = {}): FeedEvent[] {
     const completed = new Set(
         events.filter((e): e is ContainerFeedEvent => e.type === 'container.image-changed').map(rolloutKey),
     );
     return events.filter((event) => {
         if (event.type === 'scan.findings-changed') {
-            return !isFirstScan(event.payload) && !isSilentScan(event.payload);
+            if (isFirstScan(event.payload)) return options.firstScans === true;
+            return !isSilentScan(event.payload);
         }
         if (event.type === 'container.rollout-started') return !completed.has(rolloutKey(event));
         return !isScheduledChurn(event);
@@ -295,9 +306,9 @@ function summarise(events: FeedEvent[]): DaySummary {
 }
 
 /** Events newest first in, day groups newest first out. */
-export function groupByDay(events: FeedEvent[]): DayGroup[] {
+export function groupByDay(events: FeedEvent[], options: FeedWorthyOptions = {}): DayGroup[] {
     const groups = new Map<string, { date: Date; events: FeedEvent[] }>();
-    for (const event of feedWorthy(events)) {
+    for (const event of feedWorthy(events, options)) {
         const date = new Date(event.createdAt);
         const key = localDayKey(date);
         let group = groups.get(key);

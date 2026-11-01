@@ -98,6 +98,7 @@ export function RecentMovement({
     onIncludeLowerChange,
     onShowEveryImage,
     fixIndex,
+    orgWide = false,
 }: {
     enabled: boolean;
     /** The response of {@link movementUrl} under `filters`, fetched by the page. */
@@ -109,6 +110,12 @@ export function RecentMovement({
     /** Drops the page's image scope — offered when it is what emptied the block. */
     onShowEveryImage: () => void;
     fixIndex: FixIndex;
+    /**
+     * The page is narrowed to a cluster or namespace and this block is not:
+     * `GET /api/feed/movement` takes no such parameter, so the block says it
+     * is the whole organization rather than let the reader assume otherwise.
+     */
+    orgWide?: boolean;
 }) {
     const { control, includeLower } = filters;
     const [expanded, setExpanded] = useState(false);
@@ -182,6 +189,14 @@ export function RecentMovement({
                     <p className="mt-1 text-sm text-ink-muted">
                         Running images that picked up {includeLower ? '' : 'critical or high '}findings in this period,{' '}
                         {SORT_PHRASE[sort.column][sort.direction]}.
+                        {orgWide && (
+                            <span
+                                className="ml-1"
+                                title="New findings are recorded per image across the organization; this block has no cluster or namespace scope."
+                            >
+                                Whole organization — the cluster and namespace scope does not apply here.
+                            </span>
+                        )}
                     </p>
                 </div>
                 <Link

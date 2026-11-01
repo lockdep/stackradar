@@ -1,5 +1,6 @@
-import { ShieldAlert } from 'lucide-react';
+import { Tooltip } from './Tooltip';
 import {
+    KEV_HINT,
     riskBand,
     explainRisk,
     RISK_SCALE_HINT,
@@ -140,29 +141,38 @@ export function KevBadge({
     count,
     dueDate,
     ransomware,
+    focusable = false,
 }: {
     count?: number;
     dueDate?: string | null;
     ransomware?: string | null;
+    /**
+     * Whether the badge is its own tab stop. Off by default: most badges sit
+     * inside a row, link or menu option, where a nested focusable is invalid
+     * and the enclosing control's focus opens the bubble instead.
+     */
+    focusable?: boolean;
 }) {
     if (count !== undefined && count <= 0) return null;
 
     const detail = [
-        'Confirmed exploited in the wild (CISA KEV)',
-        dueDate ? `CISA remediation due ${new Date(dueDate).toISOString().slice(0, 10)}` : null,
-        ransomware === 'Known' ? 'Used in known ransomware campaigns' : null,
+        KEV_HINT,
+        dueDate ? `CISA remediation due ${new Date(dueDate).toISOString().slice(0, 10)}.` : null,
+        ransomware === 'Known' ? 'Used in known ransomware campaigns.' : null,
     ]
         .filter(Boolean)
-        .join(' · ');
+        .join(' ');
 
     return (
-        <span
-            title={detail}
-            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-danger-subtle px-1.5 py-px text-[11px] font-medium text-danger ring-1 ring-inset ring-danger-muted"
-        >
-            <ShieldAlert aria-hidden="true" className="size-3" />
-            KEV{count !== undefined && count > 1 ? ` ×${count}` : ''}
-        </span>
+        <Tooltip text={detail} cue="none" focusable={focusable}>
+            {/* Same geometry as the severity badge — square corners, same
+                padding and type — in the outlined danger colours, so it reads
+                as a sibling mark rather than a second "critical". The word is
+                the mark; it needs no icon. */}
+            <span className="inline-flex shrink-0 items-center px-1 py-px text-xs font-medium uppercase tracking-wide text-danger bg-danger-subtle ring-1 ring-inset ring-danger-muted">
+                KEV{count !== undefined && count > 1 ? ` ×${count}` : ''}
+            </span>
+        </Tooltip>
     );
 }
 
@@ -173,13 +183,12 @@ export function KevBadge({
  * question the reader only asks once they have decided to look: the number
  * orders the list, the advisory id explains one row of it.
  *
- * KEV here is an icon *leading* the chip, not the full {@link KevBadge}
+ * KEV here is a bare word *leading* the chip, not the full {@link KevBadge}
  * trailing it. The cell lives in right-aligned columns, where anything after
  * the chip pushes the score off the column's shared right edge — and a column
  * of totals that doesn't line up can't be scanned, which is the one job the
- * column has. The icon carries the same danger colour and tooltip; the badge
- * with its label stays for the detail surfaces, where nothing is aligned
- * under it.
+ * column has. The mark carries the same danger colour and tooltip; the badge
+ * stays for the detail surfaces, where nothing is aligned under it.
  */
 export function RiskCell({ risk }: { risk: RiskRollup | null }) {
     if (!risk) return <TotalRiskChip score={null} />;
@@ -197,13 +206,16 @@ export function RiskCell({ risk }: { risk: RiskRollup | null }) {
     return (
         <span className="inline-flex items-center gap-1.5">
             {risk.kevCount > 0 && (
-                <span
-                    title={`${risk.kevCount} confirmed exploited in the wild (CISA KEV)`}
-                    className="inline-flex shrink-0 text-danger"
+                <Tooltip
+                    text={`${risk.kevCount} confirmed exploited in the wild. ${KEV_HINT}`}
+                    cue="none"
+                    focusable={false}
                 >
-                    <ShieldAlert aria-hidden="true" className="size-3.5" />
-                    <span className="sr-only">{risk.kevCount} on CISA KEV</span>
-                </span>
+                    <span className="inline-flex shrink-0 text-[10px] font-semibold uppercase tracking-wide text-danger">
+                        KEV
+                        <span className="sr-only"> {risk.kevCount} on CISA KEV</span>
+                    </span>
+                </Tooltip>
             )}
             <TotalRiskChip score={risk.score} band={risk.band} title={title} />
         </span>

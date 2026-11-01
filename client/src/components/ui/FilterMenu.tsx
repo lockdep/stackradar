@@ -45,6 +45,7 @@ export function FilterMenu<T extends string | number>({
     narrowed = false,
     align = 'start',
     footerLink,
+    note,
 }: {
     /** The filter's name — the menu heading, and the button's accessible label with the value. */
     label: string;
@@ -59,6 +60,12 @@ export function FilterMenu<T extends string | number>({
     align?: 'start' | 'end';
     /** A last item under a separator: where what the options mean is managed. */
     footerLink?: { href: string; label: string; icon?: ReactNode } | undefined;
+    /**
+     * A counted bucket that is not a choice, drawn under the options in their
+     * layout but muted and inert — so a set of counts that should add up to
+     * the widest option visibly does.
+     */
+    note?: { label: string; count: number; description?: string | undefined } | undefined;
 }) {
     const selected = options.find((option) => option.value === value);
     return (
@@ -125,6 +132,22 @@ export function FilterMenu<T extends string | number>({
                             </MenuItem>
                         );
                     })}
+                    {note && (
+                        /* Not a MenuItem: it takes no focus and does nothing on
+                           click, and a screen reader hears it as the text it is. */
+                        <p
+                            aria-disabled="true"
+                            className={`${MENU_ITEM_CLASS} cursor-default items-start text-ink-muted hover:bg-transparent`}
+                        >
+                            <span className="min-w-0 flex-1 text-left">
+                                <span className="block">{note.label}</span>
+                                {note.description && <span className="block text-xs">{note.description}</span>}
+                            </span>
+                            <span className="mt-0.5 shrink-0 text-xs tabular-nums">{note.count.toLocaleString()}</span>
+                            {/* The check slot, kept so the count lines up with the options'. */}
+                            <span className="mt-0.5 size-4 shrink-0" />
+                        </p>
+                    )}
                 </MenuSection>
                 {footerLink && (
                     <>
