@@ -376,8 +376,8 @@ export default async function LoginPage({
                             Security advisories, synced hourly from OSV.dev
                         </p>
                         <p className="mt-3 text-base leading-6 text-ink-muted">
-                            Every image your pods run is re-checked against each new one as it lands, with EPSS and
-                            the CISA KEV catalogue deciding what to fix first. No rescan.
+                            Every image your pods run is re-checked against each new one as it lands, with EPSS and the
+                            CISA KEV catalogue deciding what to fix first. No rescan.
                         </p>
                     </div>
                 </div>
