@@ -3,13 +3,16 @@ import { z } from "zod";
 /**
  * `GET /api/feed`. `days` is clamped to the plan's
  * history window by the controller, like the metrics endpoints; `cursor` is
- * the opaque keyset the previous page returned.
+ * the opaque keyset the previous page returned. `image` narrows the page to
+ * one image's history — the image page's History tab; an image is one
+ * cluster's (ADR 0006), so the two filters never both apply.
  */
 export const feedQuerySchema = z.object({
     days: z.coerce.number().int().positive().max(730).default(30),
     limit: z.coerce.number().int().positive().max(500).default(200),
     cursor: z.string().min(1).max(200).optional(),
     cluster: z.string().uuid().optional(),
+    image: z.string().uuid().optional(),
 });
 
 /** The bands a movement row can be filtered on — the scored four; rows never exist on `unscored` alone. */

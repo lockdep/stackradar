@@ -13,6 +13,9 @@ test.describe.configure({ mode: 'serial', timeout: 3 * 60_000 });
 
 test.describe('inventory reports are full-set replacements', () => {
     test.afterAll(async () => {
+        // Hooks do not inherit the describe's timeout; the restore may wait
+        // out the inventory endpoint's rate limit like any report.
+        test.setTimeout(3 * 60_000);
         await reportInventory({ nginxDigest: await nginxDigest() });
     });
 
@@ -36,7 +39,7 @@ test.describe('inventory reports are full-set replacements', () => {
 
         await page.goto('/containers');
         await expect(page.getByRole('row').filter({ hasText: nginx.workload }).first()).toBeVisible();
-        await expect(page.getByRole('button', { name: /^1\/2 scanned$/ })).toBeVisible();
+        await expect(page.getByRole('button', { name: /^1\/3 scanned$/ })).toBeVisible();
     });
 });
 

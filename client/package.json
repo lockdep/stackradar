@@ -44,9 +44,9 @@
     "@headlessui/react": "^2.2.10",
     "@node-rs/argon2": "2.2.2",
     "drizzle-kit": "^0.31.11",
-    "drizzle-orm": "^0.45.2",
+    "drizzle-orm": "^0.45.4",
     "lucide-react": "^0.577.0",
-    "next": "16.4.2",
+    "next": "16.4.3",
     "next-auth": "5.0.0-beta.32",
     "pino": "^10.4.0",
     "postgres": "^3.4.7",
@@ -69,6 +69,6 @@
     "prettier": "3.9.10",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }

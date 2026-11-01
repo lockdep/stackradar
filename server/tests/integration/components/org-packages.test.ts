@@ -137,6 +137,48 @@ describe("org-wide packages", () => {
         });
     });
 
+    it("lists worst first: most findings, then most images, then most containers, then name", async () => {
+        const { imageA, imageB, lodashA, reactA } = await seedTwoClusters();
+        const db = getTestDb();
+        const [sbomA] = await db.select().from(schema.sboms).where(eq(schema.sboms.imageId, imageA.id));
+        const [sbomB] = await db.select().from(schema.sboms).where(eq(schema.sboms.imageId, imageB.id));
+        // In both images, no findings: more widespread than react, less urgent.
+        await component(sbomA!.id, "zlib", "1.3.1");
+        await component(sbomB!.id, "zlib", "1.3.1");
+        // Alphabetically first, and last by every count that matters.
+        await component(sbomA!.id, "aaa-first", "0.0.1");
+        // react: one image, two findings. lodash: two images, one finding.
+        await finding(reactA.id, "CVE-2024-0001", "high");
+        await finding(reactA.id, "CVE-2024-0002", "medium");
+        await finding(lodashA.id, "CVE-2024-0003", "critical");
+
+        const response = await request(app).get("/api/components").set(authHeaders());
+
+        expect(response.status).toBe(200);
+        expect(response.body.packages.map((p: { name: string }) => p.name)).toEqual([
+            "react",
+            "lodash",
+            "zlib",
+            "aaa-first",
+        ]);
+        // The rank is the number the row's own cell sums to.
+        expect(response.body.packages[0].vulnCounts).toEqual({ critical: 0, high: 1, medium: 1, low: 0 });
+        expect(response.body.packages[1].vulnCounts).toEqual({ critical: 1, high: 0, medium: 0, low: 0 });
+
+        // Paging walks the same order, so the second page starts where the
+        // first stopped rather than at the alphabet.
+        const page2 = await request(app).get("/api/components?limit=2&offset=2").set(authHeaders());
+        expect(page2.body.packages.map((p: { name: string }) => p.name)).toEqual(["zlib", "aaa-first"]);
+
+        // Under the images filter the rank is counted over the same images
+        // the cells are: lodash's only finding is in image A, which is now
+        // third-party, so among "yours" it is a zero-finding row again.
+        await db.update(schema.images).set({ control: "third-party" }).where(eq(schema.images.id, imageA.id));
+        const yours = await request(app).get("/api/components?control=yours").set(authHeaders());
+        expect(yours.body.packages.map((p: { name: string }) => p.name)).toEqual(["lodash", "zlib"]);
+        expect(yours.body.packages[0].vulnCounts).toEqual({ critical: 0, high: 0, medium: 0, low: 0 });
+    });
+
     it("counts a finding once per identity across clusters, and a tab's clusterCount is 1", async () => {
         const { clusterA, lodashA, lodashB } = await seedTwoClusters();
         await finding(lodashA.id, "CVE-2024-0001", "high");

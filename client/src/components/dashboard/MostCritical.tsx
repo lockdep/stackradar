@@ -15,29 +15,48 @@ import {
     TableHeader,
     TableRow,
     TierLensEmpty,
+    TotalRiskChip,
     VulnerabilityBadge,
 } from '@/components/ui';
 import { AffectedImagesTable, ExploitationCell, FixCell, VulnerabilityDialog } from '@/components/clusters';
+import { useResource } from '@/hooks';
 import { type ControlFilter } from '@/lib/image-control';
-import { SHOWN_DESPITE_LENS_LABEL, TIER_LENS_HINT, withTierParam, type TierLens } from '@/lib/tier-lens';
-import type { ClusterVulnerabilitiesResponse } from '@/types/cluster';
-import { type FixIndex } from './fix-hints';
+import {
+    SHOWN_DESPITE_LENS_LABEL,
+    TIER_LENS_BUCKET_NAME,
+    TIER_LENS_HINT,
+    hiddenByLens,
+    withTierParam,
+    type TierLens,
+} from '@/lib/tier-lens';
+import type { ClusterVulnerabilitiesResponse, VulnerabilityOccurrences } from '@/types/cluster';
+import { fixShippedLine, scannedFixCount, type FixIndex } from './fix-hints';
+import { withinParams, type DashboardScope } from './dashboard-scope';
 import { vulnTitle } from '@/lib/vuln-title';
 
 type Vulnerability = ClusterVulnerabilitiesResponse['vulnerabilities'][number];
-/** The two filters every request of the block carries. */
-export type MostCriticalFilters = { lens: TierLens; control: ControlFilter };
+/** The filters every request of the block carries: the two menus, and the page's cluster / namespace scope when it has one. */
+export type MostCriticalFilters = { lens: TierLens; control: ControlFilter; within?: DashboardScope };
 
-type LensChip = Exclude<TierLens, 'all'>;
-
-/** A query with both filters on it; `all` of either sends nothing. */
-function withFilters(params: URLSearchParams, { lens, control }: MostCriticalFilters): URLSearchParams {
+/** A query with every filter on it; `all` of any sends nothing. */
+function withFilters(params: URLSearchParams, { lens, control, within }: MostCriticalFilters): URLSearchParams {
     if (control !== 'all') params.set('control', control);
+    withinParams(params, within);
     return withTierParam(params, lens);
 }
 
 /** How many advisories the block shows — the top of the Vulnerabilities page, not the page. */
 const MOST_CRITICAL_ROWS = 3;
+
+/** The "Adds" column's header hint: the number the rank reads, and how it is built. */
+const ADDS_HINT =
+    'What the advisory adds to your Risk Score: each finding’s 0–100 contribution, once per running image carrying it';
+
+/** The cell's hint, with the row's own numbers — the same sentence the Vulnerabilities page's score carries. */
+function addsTitle(vuln: Vulnerability, total: number): string {
+    const findings = `${vuln.findingCount.toLocaleString()} ${vuln.findingCount === 1 ? 'finding adds' : 'findings add'}`;
+    return `${findings} ${total.toLocaleString()} to the Risk Score — what fixing ${vuln.vulnId} everywhere takes off it`;
+}
 
 /** Where the block's list is read from — the page fetches it, under the scope it shares with the other block. */
 export const mostCriticalUrl = (filters: MostCriticalFilters) =>
@@ -48,11 +67,16 @@ export const mostCriticalUrl = (filters: MostCriticalFilters) =>
  * most deserve attention, one row per advisory.
  *
  * The top of `GET /api/vulnerabilities`, in the server's order and with no
- * client-side sort: by the advisory's Risk Score, the sum of what its
- * findings add — so the block always shows exactly the rows the
- * Vulnerabilities page shows first under the same lens. "Most critical" is
- * that ranking, not the severity band: exploitation is inside each
- * contribution, so an idle critical sits below a medium under attack.
+ * client-side sort: anything on CISA KEV first, then by the advisory's Risk
+ * Score, the sum of what its findings add across the images carrying it — so
+ * the block always shows exactly the rows the Vulnerabilities page shows
+ * first under the same lens. "Most critical" is that ranking, not the
+ * severity band: exploitation is inside each contribution, so an idle
+ * critical sits below a medium under attack. The header says the rule and
+ * every row shows its number ("Adds"), so "why is this first?" has an answer
+ * on the page: the sum is a magnitude (ADR 0007), and a reader comparing a
+ * KEV in one image with an idle critical in ten needs both facts to see why
+ * the KEV leads on a smaller number.
  *
  * A row leads with what the advisory is about — its own summary — and
  * carries the id under it: `GHSA-2xp9-vwfh-vxw4` tells a reader nothing,
@@ -139,8 +163,11 @@ export function MostCritical({
                             <span className="text-xs font-normal text-ink-muted">· right now</span>
                         </span>
                     </h2>
+                    {/* The rule, where the ranking is: the sum is a magnitude,
+                        so the row on top is not always the biggest number. */}
                     <p className="mt-1 text-sm text-ink-muted">
-                        The vulnerabilities to look at first: the ones that add the most to your Risk Score.
+                        Ranked by the Risk Score they add across running images (per-finding 0–100 × images carrying
+                        it). Anything on CISA KEV comes first.
                     </p>
                 </div>
                 <Link
@@ -184,7 +211,15 @@ export function MostCritical({
                         variant="section"
                         className={isRefreshing ? 'opacity-60 transition-opacity' : 'transition-opacity'}
                     >
-                        <Table aria-label="Most critical vulnerabilities across all clusters" density="condensed">
+                        <Table
+                            aria-label={
+                                /* The name says the span: the page's cluster / namespace scope, or every cluster. */
+                                filters.within?.clusterId || filters.within?.namespace
+                                    ? 'Most critical vulnerabilities in the chosen scope'
+                                    : 'Most critical vulnerabilities across all clusters'
+                            }
+                            density="condensed"
+                        >
                             <TableHead>
                                 <TableHeader srOnly className="w-8">
                                     Affected images
@@ -210,6 +245,12 @@ export function MostCritical({
                                 {/* Whose images sits against how many: the owner
                                     describes the count beside it, not the advisory. */}
                                 <TableHeader hideBelow="lg">Affected image built by</TableHeader>
+                                {/* The number the rank reads, beside the count
+                                    that multiplies it. Never hidden: it is the
+                                    answer to "why is this row here". */}
+                                <TableHeader align="end" title={ADDS_HINT}>
+                                    Adds
+                                </TableHeader>
                                 <TableHeader align="end">Images</TableHeader>
                                 <TableHeader hideBelow="md" align="end">
                                     Containers
@@ -243,12 +284,12 @@ export function MostCritical({
 }
 
 /**
- * What the lens is leaving out, in the unit the severity cards below count:
- * critical findings outside the lens. Opening on Application is right —
- * it is what the reader's build controls — but three rows with one critical
- * above a card saying 340 reads as a contradiction until the block says where
- * the rest are. Silent under "every finding", and when nothing critical is
- * outside the lens.
+ * What the lens is leaving out of the ranking: the critical findings outside
+ * it. The exposure strip at the top of the page already says how many and
+ * where (`LensHiddenNote`, from the same `criticalTierCounts`, so the two
+ * never disagree); this line says only what that means for *this* block —
+ * they are not ranked here unless exploited — and offers the other lenses.
+ * Silent under "every finding", and when nothing critical is outside the lens.
  */
 function HiddenByLens({
     lens,
@@ -260,29 +301,24 @@ function HiddenByLens({
     onLensChange: (next: TierLens) => void;
 }) {
     if (lens === 'all' || !counts) return null;
-    const other: LensChip = lens === 'application' ? 'base' : 'application';
-    /* Everything outside the lens — the other bucket, and the packages no
-       scan has classified yet, which neither lens lists. */
-    const hidden = counts.all - counts[lens];
-    if (hidden <= 0) return null;
-    const name: Record<LensChip, string> = { application: 'application packages', base: 'base images' };
-    const unclassified = hidden - counts[other];
+    const gap = hiddenByLens(counts, lens);
+    if (!gap) return null;
     return (
         <p className="mt-2 text-xs text-ink-muted">
-            Ranked over {name[lens]} only.{' '}
+            Ranked over {TIER_LENS_BUCKET_NAME[lens]} only — the{' '}
             <span className="text-ink-secondary">
-                {hidden.toLocaleString()} more critical {hidden === 1 ? 'finding is' : 'findings are'} not ranked here
-            </span>
-            , unless exploited: {counts[other].toLocaleString()} in {name[other]}
-            {unclassified > 0 && <>, {unclassified.toLocaleString()} in packages not classified yet</>}.{' '}
-            {counts[other] > 0 && (
+                {gap.hidden.toLocaleString()} critical {gap.hidden === 1 ? 'finding' : 'findings'} the lens hides
+            </span>{' '}
+            (counted above) {gap.hidden === 1 ? 'is' : 'are'} not ranked here. Exploited ones are listed regardless of
+            the lens.{' '}
+            {gap.inOther > 0 && (
                 <>
                     <button
                         type="button"
-                        onClick={() => onLensChange(other)}
+                        onClick={() => onLensChange(gap.other)}
                         className="cursor-pointer text-accent hover:underline"
                     >
-                        Rank {name[other]}
+                        Rank {TIER_LENS_BUCKET_NAME[gap.other]}
                     </button>
                     {' · '}
                 </>
@@ -418,6 +454,21 @@ function VulnerabilityRow({
                 <TableCell hideBelow="lg" className="text-xs whitespace-nowrap text-ink-secondary">
                     {owner ? <span title={owner.title}>{owner.label}</span> : <span className="text-ink-muted">—</span>}
                 </TableCell>
+                <TableCell align="end" className="text-xs">
+                    {/* The row's sum, same chip and colour as the Vulnerabilities
+                        page's Risk Score column: every row here is something to fix. */}
+                    {vuln.totalRiskScore == null ? (
+                        <span className="text-ink-muted" title="No finding behind this row is scored">
+                            —
+                        </span>
+                    ) : (
+                        <TotalRiskChip
+                            score={vuln.totalRiskScore}
+                            band="critical"
+                            title={addsTitle(vuln, vuln.totalRiskScore)}
+                        />
+                    )}
+                </TableCell>
                 <TableCell align="end" className="text-xs font-medium tabular-nums text-ink">
                     {vuln.imageCount.toLocaleString()}
                 </TableCell>
@@ -438,16 +489,8 @@ function VulnerabilityRow({
             {expanded && (
                 <TableRow className="bg-surface-muted">
                     {/* Mounted only while unfolded, so the fetch happens on demand. */}
-                    <TableCell colSpan={showClusterCount ? 8 : 7} className="pl-4 sm:pl-10">
-                        <div className="space-y-4 pt-2 pb-5">
-                            <Facts vuln={vuln} />
-                            {/* Under the block's two filters, so the list is what the row's counts counted. */}
-                            <AffectedImagesTable
-                                url={`/api/vulnerabilities/occurrences?${withFilters(new URLSearchParams({ identity: vuln.identity }), filters)}`}
-                                vulnId={vuln.vulnId}
-                                packages={vuln.packages}
-                                fixIndex={fixIndex}
-                            />
+                    <TableCell colSpan={showClusterCount ? 9 : 8} className="pl-4 sm:pl-10">
+                        <Unfolded vuln={vuln} filters={filters} fixIndex={fixIndex}>
                             <Link
                                 href={href}
                                 onClick={openInDialog}
@@ -456,11 +499,49 @@ function VulnerabilityRow({
                                 Every package, container and how long each has been exposed
                                 <ArrowRight aria-hidden="true" className="size-3" />
                             </Link>
-                        </div>
+                        </Unfolded>
                     </TableCell>
                 </TableRow>
             )}
         </Fragment>
+    );
+}
+
+/**
+ * The body of an unfolded row. It owns the one `/occurrences` fetch — under
+ * the block's two filters, so the list is what the row's counts counted —
+ * because two things read it: the Facts line counting how many affected
+ * images have a scanned fix, and the table listing them. One fetch, one
+ * list, so the count and the rows cannot disagree.
+ */
+function Unfolded({
+    vuln,
+    filters,
+    fixIndex,
+    children,
+}: {
+    vuln: Vulnerability;
+    filters: MostCriticalFilters;
+    fixIndex: FixIndex;
+    children: React.ReactNode;
+}) {
+    const occurrences = useResource<VulnerabilityOccurrences>(
+        `/api/vulnerabilities/occurrences?${withFilters(new URLSearchParams({ identity: vuln.identity }), filters)}`,
+        { fallbackError: 'Could not load the affected images' },
+    );
+    const images = occurrences.data?.images;
+    return (
+        <div className="space-y-4 pt-2 pb-5">
+            <Facts vuln={vuln} images={images} fixIndex={fixIndex} />
+            <AffectedImagesTable
+                images={images}
+                error={occurrences.error}
+                vulnId={vuln.vulnId}
+                packages={vuln.packages}
+                fixIndex={fixIndex}
+            />
+            {children}
+        </div>
     );
 }
 
@@ -513,11 +594,34 @@ function findingLayer(vuln: Vulnerability): Where | null {
 }
 
 /**
- * The two lines between "what is it" (the row) and "where is it" (the
- * images): what is known about exploitation, and which version fixes it.
- * All from the row — no fetch — so the unfold opens with its answer in place.
+ * The lines between "what is it" (the row) and "where is it" (the images):
+ * what is known about exploitation, which version fixes it, and — once the
+ * images have landed — in how many of them that fix has actually been
+ * scanned. The first two come from the row alone, so the unfold opens with
+ * its answer in place; the third waits on the same fetch as the table under
+ * it, and is the bridge between the row's "Fix published" and the table's
+ * per-image "No newer image yet".
  */
-function Facts({ vuln }: { vuln: Vulnerability }) {
+function Facts({
+    vuln,
+    images,
+    fixIndex,
+}: {
+    vuln: Vulnerability;
+    /** The row's `/occurrences` images; undefined while they load. */
+    images: VulnerabilityOccurrences['images'] | undefined;
+    fixIndex: FixIndex;
+}) {
+    const shipped = images
+        ? fixShippedLine(
+              vuln.fixAvailable,
+              scannedFixCount(
+                  fixIndex,
+                  images.map((image) => image.id),
+              ),
+              images.length,
+          )
+        : null;
     /* One line per package name: the versions running, then the fix the
        advisories state for it. */
     const byName = new Map<string, { purlType: string | null | undefined; installed: string[]; fixed: string[] }>();
@@ -581,6 +685,17 @@ function Facts({ vuln }: { vuln: Vulnerability }) {
                     </span>
                 ))}
             </span>
+            {/* Published is the advisory's fact; shipped is this fleet's. The
+                line is omitted when no fix is published — "no fix stated"
+                above already says so — and while the images load. */}
+            {shipped && (
+                <>
+                    <span className="text-ink-muted">Fix</span>
+                    <span className="text-ink-secondary" title={shipped.title}>
+                        {shipped.text}
+                    </span>
+                </>
+            )}
             <span className="text-ink-muted">Record</span>
             <a
                 href={osvUrl}

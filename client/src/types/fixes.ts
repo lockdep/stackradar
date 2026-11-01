@@ -79,7 +79,7 @@ export interface FixListItem {
 
 export interface NoRecommendationItem {
     imageId: string;
-    /** `third-party` rows are the folded "Waiting on upstream" group. */
+    /** `third-party` rows are the images the lists show as "No newer image yet" (`waitingOnUpstream` counts them). */
     control?: 'built' | 'third-party';
     subject: string;
     currentTag: string | null;

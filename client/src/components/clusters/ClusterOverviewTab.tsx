@@ -15,6 +15,7 @@ import { useResource, useRevalidateOnFocus } from '@/hooks';
 import { useOrganization } from '@/components/providers/OrganizationProvider';
 import { useRuntimeConfig } from '@/components/providers';
 import { getPlanHistoryDays } from '@/components/organization-settings/constants';
+import { RISK_SCORE_SUBTITLE } from '@/lib/risk';
 import { ClusterCoverageCard } from './ClusterCoverageCard';
 import type { MetricsSnapshot } from '@/components/ui';
 import type { Container } from '@/types/container';
@@ -153,7 +154,7 @@ export function ClusterOverviewTab({
                         a static card above the fold that could only say "now". */}
                     <MetricsChartCard
                         title="Risk Score"
-                        description="Sum of every finding's 0–100 contribution across scanned images"
+                        description={RISK_SCORE_SUBTITLE}
                         dataKey="riskScore"
                         data={snapshots}
                         deltaDirection="up-bad"

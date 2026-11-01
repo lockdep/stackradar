@@ -1,6 +1,6 @@
 import type { Capabilities } from '@/lib/edition';
 import type { ClusterCoverage } from '@/types/cluster';
-import { SCANNER_HELM_CHART } from './scannerInstall';
+import { DOCS_BASE_URL, SCANNER_HELM_CHART } from './scannerInstall';
 
 /**
  * The pure half of the Coverage card: what a row without an SBOM *is*, how
@@ -30,20 +30,28 @@ export const STUCK_AFTER_MS = 30 * 60_000;
  * outranks the elapsed-time heuristic — a known failure needs no 30-minute
  * wait, and a known-transient one must never be called stuck.
  */
-export type RowStatus = 'auth_failed' | 'scan_failed' | 'stuck' | 'waiting' | 'rate_limited';
+export type RowStatus = 'auth_failed' | 'too_large' | 'scan_failed' | 'stuck' | 'waiting' | 'rate_limited';
 
 export const STATUS_ORDER: Record<RowStatus, number> = {
     auth_failed: 0,
-    scan_failed: 1,
-    stuck: 2,
-    waiting: 3,
-    rate_limited: 4,
+    too_large: 1,
+    scan_failed: 2,
+    stuck: 3,
+    waiting: 4,
+    rate_limited: 5,
 };
 
 export function classifyRow(w: UnscannedContainer, now: number = Date.now()): RowStatus {
     switch (w.scanErrorCode) {
         case 'registry_auth':
             return 'auth_failed';
+        case 'image_too_large':
+            /* Decided before the pull: the image's compressed size is over
+               what the scanner may unpack. A Helm value fixes it, nothing
+               about credentials does, so it must never fold into the auth
+               group — and retrying never resolves it, so never into the
+               transient one either. */
+            return 'too_large';
         case 'registry_rate_limited':
             /* Transient and self-healing via the scanner's own retry. Showing
                the credentials remediation here would be wrong and would train
@@ -233,6 +241,49 @@ export function dockerConfigValuesYaml(install: ScannerInstall): string {
 
 export function dockerConfigHelmCommand(install: ScannerInstall): string {
     return helmUpgrade(install, [`--set ${valuePrefix(install)}dockerConfigSecret=${SCANNER_REGISTRY_SECRET}`]);
+}
+
+/** The row label for an image the scanner refused to unpack; the e2e suite selects by it. */
+export const TOO_LARGE_LABEL = 'Too large to scan';
+
+/** The scanner chart's reference, which documents both values below. */
+export const HELM_VALUES_DOCS_URL = `${DOCS_BASE_URL}/helm-values`;
+
+/**
+ * The two scanner-chart values an `image_too_large` failure is about, as the
+ * standalone chart names them. The scratch volume at `/tmp` is where syft
+ * unpacks an image's layers, and the pod's ephemeral-storage limit bounds
+ * that volume plus the container's logs — so the second has to stay above
+ * the first, and both above the compressed size of the largest image.
+ */
+export const SCRATCH_SIZE_VALUE = 'watcher.scratchSizeLimit';
+export const EPHEMERAL_STORAGE_VALUE = 'watcher.resources.limits.ephemeral-storage';
+
+export const SCRATCH_SIZE_PLACEHOLDER = '<scratch-size>';
+export const EPHEMERAL_STORAGE_PLACEHOLDER = '<storage-limit>';
+
+/** A value's full path in the chart that carries the scanner (`scanner.` deep for the bundled subchart). */
+export function scannerValuePath(install: ScannerInstall, value: string): string {
+    return `${valuePrefix(install)}${value}`;
+}
+
+export function scratchSizeValuesYaml(install: ScannerInstall): string {
+    const inner = install.kind === 'bundled' ? '  ' : '';
+    const body = [
+        `${inner}watcher:`,
+        `${inner}  scratchSizeLimit: ${SCRATCH_SIZE_PLACEHOLDER}`,
+        `${inner}  resources:`,
+        `${inner}    limits:`,
+        `${inner}      ephemeral-storage: ${EPHEMERAL_STORAGE_PLACEHOLDER}`,
+    ].join('\n');
+    return install.kind === 'bundled' ? `scanner:\n${body}` : body;
+}
+
+export function scratchSizeHelmCommand(install: ScannerInstall): string {
+    return helmUpgrade(install, [
+        `--set ${scannerValuePath(install, SCRATCH_SIZE_VALUE)}=${SCRATCH_SIZE_PLACEHOLDER}`,
+        `--set ${scannerValuePath(install, EPHEMERAL_STORAGE_VALUE)}=${EPHEMERAL_STORAGE_PLACEHOLDER}`,
+    ]);
 }
 
 /**

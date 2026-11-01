@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { apiTierParam, lensHref, resolveLens, withTierParam } from './tier-lens';
+import { apiTierParam, hiddenByLens, lensHref, resolveLens, withTierParam } from './tier-lens';
 
 describe('resolveLens', () => {
     it('opens on Application when nothing says otherwise', () => {
@@ -43,5 +43,27 @@ describe('the API parameter', () => {
         expect(apiTierParam('all')).toBeNull();
         expect(withTierParam(new URLSearchParams({ limit: '50' }), 'all').toString()).toBe('limit=50');
         expect(withTierParam(new URLSearchParams(), 'application').get('tier')).toBe('application,main');
+    });
+});
+
+describe('hiddenByLens — what a lens leaves out of a count', () => {
+    it('splits the gap into the other bucket and the packages no scan has classified', () => {
+        expect(hiddenByLens({ application: 262, base: 90, all: 359 }, 'application')).toEqual({
+            hidden: 97,
+            other: 'base',
+            inOther: 90,
+            unclassified: 7,
+        });
+        expect(hiddenByLens({ application: 12, base: 5, all: 17 }, 'base')).toEqual({
+            hidden: 12,
+            other: 'application',
+            inOther: 12,
+            unclassified: 0,
+        });
+    });
+
+    it('has nothing to say under All, or when the lens hides nothing', () => {
+        expect(hiddenByLens({ application: 1, base: 1, all: 2 }, 'all')).toBeNull();
+        expect(hiddenByLens({ application: 5, base: 0, all: 5 }, 'application')).toBeNull();
     });
 });

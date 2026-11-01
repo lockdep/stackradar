@@ -75,6 +75,27 @@ export const alertsController = {
         }
     },
 
+    /**
+     * @route GET /api/organizations/:id/notifications/summary
+     *
+     * Any member of the org: what the channels are and whether they are on,
+     * so a member (the demo visitor is one) can see that alerts go somewhere
+     * without being shown where exactly. Only the webhook's host and a
+     * recipient count leave here — never the URL, never an address.
+     */
+    async summary(req: Request, res: Response, next: NextFunction) {
+        try {
+            const id = req.params["id"]!;
+            const role = req.auth?.userId ? await organizationRepository.getUserRole(id, req.auth.userId) : null;
+            if (!role) throw new AppError(403, "Not a member of this organization");
+            const org = await loadOrg(id);
+            const recipients = await (cloudHooks.alertEmail?.recipients(org.id) ?? Promise.resolve([]));
+            res.json(alertService.summaryView(org, recipients.length));
+        } catch (error) {
+            next(error);
+        }
+    },
+
     /** @route PATCH /api/organizations/:id/alerts */
     async update(req: Request, res: Response, next: NextFunction) {
         try {

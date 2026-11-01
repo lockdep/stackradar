@@ -168,6 +168,82 @@ describe("org-wide vulnerabilities", () => {
         });
     });
 
+    it("splits every band's bucket counts per cluster, and the clusters sum to the totals", async () => {
+        const db = getTestDb();
+        const { clusterA, clusterB, lodashA, lodashB, reactA } = await seedTwoClusters();
+        // Cluster A: a critical in an application package and a high in the
+        // base image. Cluster B: the same critical, but in its base image.
+        await db.update(schema.components).set({ fromBase: false }).where(eq(schema.components.id, lodashA.id));
+        await db.update(schema.components).set({ fromBase: true }).where(eq(schema.components.id, reactA.id));
+        await db.update(schema.components).set({ fromBase: true }).where(eq(schema.components.id, lodashB.id));
+        const critical = await advisory({ vulnId: "CVE-2024-0001", severityLevel: "critical", cvssScore: 9.8 });
+        await finding(lodashA.id, critical.id);
+        await finding(lodashB.id, critical.id);
+        const high = await advisory({ vulnId: "CVE-2024-0002", severityLevel: "high", cvssScore: 8.1 });
+        await finding(reactA.id, high.id);
+        // A third cluster with nothing running has no entry rather than zeroes.
+        const idle = await createCluster(db, testData.org.id);
+
+        const response = await request(app).get("/api/vulnerabilities").set(authHeaders());
+
+        expect(response.status).toBe(200);
+        const counts = response.body.severityTierCounts;
+        expect(counts.critical).toMatchObject({ application: 1, base: 1, all: 2 });
+        expect(counts.high).toMatchObject({ application: 0, base: 1, all: 1 });
+        expect(Object.keys(counts.byCluster).sort()).toEqual([clusterA.id, clusterB.id].sort());
+        expect(counts.byCluster[idle.id]).toBeUndefined();
+        expect(counts.byCluster[clusterA.id]).toEqual({
+            critical: { application: 1, base: 0, all: 1 },
+            high: { application: 0, base: 1, all: 1 },
+            medium: { application: 0, base: 0, all: 0 },
+            low: { application: 0, base: 0, all: 0 },
+        });
+        expect(counts.byCluster[clusterB.id]).toEqual({
+            critical: { application: 0, base: 1, all: 1 },
+            high: { application: 0, base: 0, all: 0 },
+            medium: { application: 0, base: 0, all: 0 },
+            low: { application: 0, base: 0, all: 0 },
+        });
+        // The split is a partition of the totals: every band, every bucket.
+        for (const band of ["critical", "high", "medium", "low"]) {
+            for (const bucket of ["application", "base", "all"]) {
+                const perCluster = Object.values(counts.byCluster) as Record<string, Record<string, number>>[];
+                const summed = perCluster.reduce((n, c) => n + c[band]![bucket]!, 0);
+                expect(summed).toBe(counts[band][bucket]);
+            }
+        }
+    });
+
+    it("keeps the per-cluster split unlensed under ?tier= and narrows it with ?cluster=", async () => {
+        const db = getTestDb();
+        const { clusterA, clusterB, lodashA, lodashB } = await seedTwoClusters();
+        await db.update(schema.components).set({ fromBase: false }).where(eq(schema.components.id, lodashA.id));
+        await db.update(schema.components).set({ fromBase: true }).where(eq(schema.components.id, lodashB.id));
+        const critical = await advisory({ vulnId: "CVE-2024-0001", severityLevel: "critical", cvssScore: 9.8 });
+        await finding(lodashA.id, critical.id);
+        await finding(lodashB.id, critical.id);
+
+        const [unlensed, lensed, oneCluster] = await Promise.all([
+            request(app).get("/api/vulnerabilities").set(authHeaders()),
+            request(app).get("/api/vulnerabilities?tier=application,main").set(authHeaders()),
+            request(app).get(`/api/vulnerabilities?cluster=${clusterB.id}`).set(authHeaders()),
+        ]);
+
+        // The lens folds the list, never the counts the lens control chooses between.
+        expect(lensed.body.severityTierCounts).toEqual(unlensed.body.severityTierCounts);
+        expect(lensed.body.severityTierCounts.byCluster[clusterB.id].critical).toEqual({
+            application: 0,
+            base: 1,
+            all: 1,
+        });
+        // One cluster asked about: one entry, and the totals are its.
+        expect(Object.keys(oneCluster.body.severityTierCounts.byCluster)).toEqual([clusterB.id]);
+        expect(oneCluster.body.severityTierCounts.critical).toEqual(
+            oneCluster.body.severityTierCounts.byCluster[clusterB.id].critical,
+        );
+        expect(oneCluster.body.severityTierCounts.byCluster[clusterA.id]).toBeUndefined();
+    });
+
     it("says where a row's findings sit: every lens bucket and image control behind it", async () => {
         const db = getTestDb();
         const { imageA, imageB, lodashA, lodashB, reactA } = await seedTwoClusters();
@@ -296,6 +372,7 @@ describe("org-wide vulnerabilities", () => {
                 high: { application: 0, base: 0, all: 0 },
                 medium: { application: 0, base: 0, all: 0 },
                 low: { application: 0, base: 0, all: 0 },
+                byCluster: {},
             },
             limit: 50,
             offset: 0,
@@ -327,6 +404,53 @@ describe("org-wide vulnerabilities", () => {
             ["CVE-2024-0002", true],
             ["CVE-2024-0001", false],
         ]);
+    });
+
+    /**
+     * The default order is KEV first, then the Risk Score the advisory adds.
+     * The score is a sum over images (ADR 0007), so a widely deployed idle
+     * critical outsums a KEV in one image; the exploited one still leads.
+     * An explicit `?sort=` — `score` included — orders by that column alone.
+     */
+    it("puts a KEV-listed advisory in one image above a bigger total in many, unless a column is chosen", async () => {
+        const { lodashA, lodashB, reactA } = await seedTwoClusters();
+        // CVSS 9.8 × cbrt(0.5) ≈ 77 per finding, in two images: adds ~154.
+        const spread = await advisory({
+            vulnId: "CVE-2024-0001",
+            severityLevel: "critical",
+            cvssScore: 9.8,
+            epssScore: 0.5,
+        });
+        // CVSS 5.3 × KEV 1.0 = 53, in one image: adds 53.
+        const kev = await advisory({
+            vulnId: "CVE-2024-0002",
+            severityLevel: "medium",
+            cvssScore: 5.3,
+            epssScore: 0.01,
+            kevListedAt: new Date("2024-01-10T00:00:00Z"),
+        });
+        await finding(lodashA.id, spread.id);
+        await finding(lodashB.id, spread.id);
+        await finding(reactA.id, kev.id);
+
+        type Row = { vulnId: string; totalRiskScore: number };
+        const ids = (body: { vulnerabilities: Row[] }) => body.vulnerabilities.map((v) => v.vulnId);
+
+        const ranked = await request(app).get("/api/vulnerabilities").set(authHeaders());
+        expect(ranked.status).toBe(200);
+        expect(ids(ranked.body)).toEqual(["CVE-2024-0002", "CVE-2024-0001"]);
+        const total = new Map<string, number>(
+            (ranked.body.vulnerabilities as Row[]).map((v) => [v.vulnId, v.totalRiskScore]),
+        );
+        expect(total.get("CVE-2024-0001")).toBeGreaterThan(total.get("CVE-2024-0002")!);
+
+        const byScore = await request(app).get("/api/vulnerabilities?sort=score").set(authHeaders());
+        expect(byScore.status).toBe(200);
+        expect(ids(byScore.body)).toEqual(["CVE-2024-0001", "CVE-2024-0002"]);
+
+        const byCvss = await request(app).get("/api/vulnerabilities?sort=cvss&order=asc").set(authHeaders());
+        expect(byCvss.status).toBe(200);
+        expect(ids(byCvss.body)).toEqual(["CVE-2024-0002", "CVE-2024-0001"]);
     });
 
     describe("cluster and namespace filters", () => {
@@ -435,6 +559,37 @@ describe("org-wide vulnerabilities", () => {
             expect(response.body.containers.map((c: { namespaceName: string }) => c.namespaceName)).toEqual([
                 "staging",
             ]);
+        });
+
+        it("names each image's namespaces, distinct and sorted, and narrows them with ?namespace=", async () => {
+            const seeded = await seedScoped();
+            // A second workload in `staging` on the same image: one namespace, not two entries.
+            await seedRunningImage(getTestDb(), testData.org.id, seeded.clusterA.id, {
+                image: seeded.imageA,
+                namespace: "staging",
+                workloadName: "api-staging-canary",
+            });
+
+            const everywhere = await request(app)
+                .get("/api/vulnerabilities/occurrences?identity=CVE-2024-0001")
+                .set(authHeaders());
+            expect(everywhere.status).toBe(200);
+            const namespacesOf = Object.fromEntries(
+                everywhere.body.images.map((i: { id: string; namespaces: string[] }) => [i.id, i.namespaces]),
+            );
+            expect(namespacesOf[seeded.imageA.id]).toEqual(["default", "staging"]);
+            expect(namespacesOf[seeded.imageB.id]).toEqual(["default"]);
+
+            const staging = await request(app)
+                .get("/api/vulnerabilities/occurrences?identity=CVE-2024-0001&namespace=staging")
+                .set(authHeaders());
+            expect(staging.status).toBe(200);
+            expect(staging.body.images).toHaveLength(1);
+            expect(staging.body.images[0]).toMatchObject({
+                id: seeded.imageA.id,
+                containerCount: 2,
+                namespaces: ["staging"],
+            });
         });
     });
 

@@ -17,8 +17,11 @@ import { LoadingBlock } from '@/components/ui';
  *
  * `?search=` seeds the list: the Dashboard's search box lands here with the
  * term already applied, so "find every copy of log4j-core" is one keystroke
- * and one page. Needs a Suspense boundary above it for that read and for the
- * list's images filter.
+ * and one page. `?name=` (+ `?version=`) is the palette's package hit: the
+ * list seeds its search with the name and opens that row, so "which image
+ * has libxml2 2.13.9" is answered on arrival (`PackageList`). Needs a
+ * Suspense boundary above it for those reads and for the list's images
+ * filter.
  */
 export function PackagesView() {
     const { organization } = useOrganization();

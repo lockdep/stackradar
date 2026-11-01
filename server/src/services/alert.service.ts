@@ -13,7 +13,7 @@ import {
     renderTestAlertSlack,
     type AlertMessageInput,
 } from "../lib/alert-message.js";
-import { maskWebhookUrl, postSlackWebhook } from "../lib/slack-webhook.js";
+import { maskWebhookUrl, postSlackWebhook, webhookHost } from "../lib/slack-webhook.js";
 import { cloudHooks, type ChannelOutcome } from "../lib/cloud-hooks.js";
 import { planHasAlerts } from "../config/plans.js";
 import { alertRepository, type AlertOrg } from "../repositories/alert.repository.js";
@@ -24,6 +24,28 @@ const log = createLogger("alert.service");
 /** Defaults for the debounce (`lib/alert-batch.ts` `shouldSendNow`); the worker overrides from env. */
 export const DEFAULT_ALERT_QUIET_MS = 10 * 60 * 1000;
 export const DEFAULT_ALERT_MAX_DELAY_MS = 60 * 60 * 1000;
+
+/**
+ * What any member may know about the alert channels — `GET
+ * /api/organizations/:id/notifications/summary`. The settings view above is
+ * owners and admins only because it carries the recipients' addresses and the
+ * masked webhook; this carries neither. `host` is the webhook's host alone
+ * (`lib/slack-webhook.ts` `webhookHost`), `recipientCount` a number. The
+ * client's copy is `client/src/types/alerts.ts`, gated by
+ * `scripts/check-cross-app-constants.mjs`.
+ */
+export interface AlertSummary {
+    /** The plan gate — alerts are a Pro and Business feature on the cloud. */
+    available: boolean;
+    /** Whether the email channel exists at all (`edition.alerting === "full"`). */
+    emailChannel: boolean;
+    emailEnabled: boolean;
+    /** Owners and admins the email channel reaches; 0 where there is no email channel. */
+    recipientCount: number;
+    webhookConfigured: boolean;
+    /** The webhook's host, e.g. `hooks.slack.com`; null when none is set. Never the URL. */
+    webhookHost: string | null;
+}
 
 export interface AlertPassOptions {
     quietMs: number;
@@ -95,6 +117,19 @@ export const alertService = {
                 masked: org.alertSlackWebhookUrl ? maskWebhookUrl(org.alertSlackWebhookUrl) : null,
             },
             quietMinutes: Math.round(DEFAULT_ALERT_QUIET_MS / 60_000),
+        };
+    },
+
+    /** The member-readable channel summary ({@link AlertSummary}); the controller supplies the count. */
+    summaryView(org: AlertOrg, recipientCount: number): AlertSummary {
+        const emailChannel = cloudHooks.alertEmail != null;
+        return {
+            available: planHasAlerts(org.plan),
+            emailChannel,
+            emailEnabled: emailChannel && org.alertEmailEnabled,
+            recipientCount: emailChannel ? recipientCount : 0,
+            webhookConfigured: org.alertSlackWebhookUrl != null,
+            webhookHost: org.alertSlackWebhookUrl ? webhookHost(org.alertSlackWebhookUrl) : null,
         };
     },
 

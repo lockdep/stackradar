@@ -48,6 +48,7 @@
  *       MovementImage  server/src/lib/recent-movement.ts ⇄ client/src/types/feed.ts
  *         (the client adds the fields the controller joins; they are
  *         named in RESPONSE_SHAPES so a new extra is a deliberate entry)
+ *       AlertSummary  server/src/services/alert.service.ts ⇄ client/src/types/alerts.ts
  *
  * No dependencies; runs on bare node from a bare checkout:
  *
@@ -314,6 +315,10 @@ const RESPONSE_SHAPES = [
         client: { file: "client/src/types/feed.ts", name: "MovementImage" },
         // What the feed controller joins onto each row before it leaves the server.
         clientExtras: ["clusterName", "registry", "control", "runsIn"],
+    },
+    {
+        server: { file: "server/src/services/alert.service.ts", name: "AlertSummary" },
+        client: { file: "client/src/types/alerts.ts", name: "AlertSummary" },
     },
 ];
 

@@ -228,8 +228,10 @@ migration. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) § "The product laye
 
 **Activity feed**: `activity_events` carries **changes, never inventory** —
 one event per change, never one per finding. The Feed page (`/feed`,
-`GET /api/feed`) is its reader; day grouping and the folding of repeats
-happen in the view. Two write sites feed it: the inventory report diffs the cluster's containers per
+`GET /api/feed`) is its reader, and the image page's History tab is the same
+page scoped to one image (`GET /api/feed?image=`, which also finds the moves
+*off* that digest by the `from` side of their payload); day grouping and the
+folding of repeats happen in the view. Two write sites feed it: the inventory report diffs the cluster's containers per
 **slot** (workload + container name) against the state it is about to
 replace (`lib/container-slots.ts`, pure; `container-history.repository.ts`
 inside the inventory transaction) and records intervals in

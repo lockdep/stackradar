@@ -20,6 +20,12 @@ export interface StatCell {
     href?: string;
     /** Accessible name and tooltip for that link, e.g. "See all critical vulnerabilities". */
     hrefTitle?: string;
+    /**
+     * The number is still on its way: the label and the cell's place are
+     * drawn, the value is a placeholder of the same height, so the block
+     * neither disappears nor shifts when it lands. `value` is ignored.
+     */
+    pending?: boolean;
 }
 
 /**
@@ -39,6 +45,10 @@ function cellBorders(i: number, count: number) {
 export interface StatPanelProps {
     /** Section heading above the panel. Omit for a bare panel. */
     title?: string;
+    /** The heading's `id`, for a section that labels itself by it. */
+    titleId?: string;
+    /** Rendered inline after the title — a chip saying what the numbers count under. Not a control. */
+    titleAside?: ReactNode;
     /** Rendered right-aligned on the heading row (e.g. a DaysFilter). */
     action?: ReactNode;
     cells: StatCell[];
@@ -76,10 +86,19 @@ function CellContent({ cell, variant }: { cell: StatCell; variant: 'panel' | 'ca
                     )}
                 </div>
                 <div className="mt-1.5 flex items-baseline gap-2">
-                    <p className="text-2xl leading-none font-semibold text-ink tabular-nums">
-                        {cell.value.toLocaleString()}
-                    </p>
-                    {cell.delta !== undefined && <TrendDelta delta={cell.delta} direction={cell.deltaDirection} />}
+                    {cell.pending ? (
+                        /* `h-6` is the figure's line: `text-2xl` at `leading-none`. */
+                        <span className="inline-block h-6 w-12 animate-pulse rounded-sm bg-neutral-subtle">
+                            <span className="sr-only">Loading</span>
+                        </span>
+                    ) : (
+                        <p className="text-2xl leading-none font-semibold text-ink tabular-nums">
+                            {cell.value.toLocaleString()}
+                        </p>
+                    )}
+                    {cell.delta !== undefined && !cell.pending && (
+                        <TrendDelta delta={cell.delta} direction={cell.deltaDirection} />
+                    )}
                 </div>
             </div>
             {/* Inset, not bled to the cell edge: full-bleed sparklines in
@@ -107,7 +126,7 @@ function CellContent({ cell, variant }: { cell: StatCell; variant: 'panel' | 'ca
  * row matches the `MetricsChartCard` grids (same `gap-4`, same `rounded-md`)
  * on surfaces that place them side by side.
  */
-export function StatPanel({ title, action, cells, variant = 'panel' }: StatPanelProps) {
+export function StatPanel({ title, titleId, titleAside, action, cells, variant = 'panel' }: StatPanelProps) {
     if (cells.length === 0) return null;
 
     const renderCell = (cell: StatCell, className: string) => (
@@ -131,7 +150,14 @@ export function StatPanel({ title, action, cells, variant = 'panel' }: StatPanel
         <div>
             {(title || action) && (
                 <div className="mb-3 flex items-center justify-between gap-4">
-                    {title && <h2 className="text-sm font-semibold text-ink-secondary">{title}</h2>}
+                    {title && (
+                        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <h2 id={titleId} className="text-sm font-semibold text-ink-secondary">
+                                {title}
+                            </h2>
+                            {titleAside}
+                        </div>
+                    )}
                     {action}
                 </div>
             )}

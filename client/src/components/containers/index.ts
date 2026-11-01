@@ -9,3 +9,4 @@ export { ContainerSeverityCell } from './ContainerSeverityCell';
 export { ScopeSelect } from './ScopeSelect';
 export { useContainersView } from './useContainersView';
 export { ContainersLoading, ContainersError, ContainersEmpty, ContainersNoResults } from './ContainersEmptyState';
+export { AgeColumnLabel } from './AgeColumnLabel';

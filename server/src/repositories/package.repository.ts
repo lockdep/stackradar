@@ -209,31 +209,94 @@ function hasMatchingFinding(
     return sql`(${schema.components.name}, coalesce(${schema.components.version}, '')) IN ${affected}`;
 }
 
-/** One page of `(name, version)` groups, with spread counts and a representative component. */
-function fetchPackagePage(where: ReturnType<typeof packagesWhere>, limit: number, offset: number) {
+/**
+ * The finding count behind each `(name, version)` group of a scope — the
+ * list's primary sort key. Distinct identities of `collapsedFindings` under
+ * the list's own image scope, grouped the way the page is, so a row's rank
+ * is the same number its Vulnerabilities cell sums to (`fetchPackageDetails`
+ * counts the same rows per band). The collapse is one scan of the scope,
+ * which the detail fetch already pays on every page; this is a second pass
+ * over it, not a new kind of cost.
+ */
+function packageFindingCounts(scope: PackageScope, control: PackageControlFilter | undefined) {
+    const findings = collapsedFindings(scopedDeployedImages(scope, control));
+    const carrier = alias(schema.components, "ranked_component");
+    return db
+        .select({
+            name: carrier.name,
+            // The row unit is (name, version) and a null version is part of
+            // it; spelled as '' so the join key compares equal. Aliases of
+            // their own: Drizzle reads a subquery's SQL field back by its
+            // bare alias, and `version` alone is ambiguous in the outer join.
+            version: sql<string>`coalesce(${carrier.version}, '')`.as("pkg_version"),
+            findings: countDistinct(findings.identity).as("pkg_findings"),
+        })
+        .from(findings)
+        .innerJoin(carrier, eq(findings.componentId, carrier.id))
+        .groupBy(carrier.name, carrier.version)
+        .as("package_findings");
+}
+
+/**
+ * One page of `(name, version)` groups, with spread counts and a representative component.
+ *
+ * Worst first: the groups with the most findings, then the most images,
+ * then the most containers, then the name — so an incident reader lands on
+ * the package to look at rather than on `acl`. Name and version close the
+ * order so paging is stable.
+ */
+function fetchPackagePage(
+    scope: PackageScope,
+    control: PackageControlFilter | undefined,
+    where: ReturnType<typeof packagesWhere>,
+    limit: number,
+    offset: number,
+) {
+    const ranked = packageFindingCounts(scope, control);
+    /* Constant within a group (the join key is the group key), so any
+       aggregate reads it back; `max` is the cheap one. */
+    const findingCount = sql<number>`coalesce(max(${ranked.findings}), 0)`;
+    const imageCount = countDistinct(schema.images.id);
+    // LEFT JOIN, not inner: an image can be uploaded before
+    // any inventory references it. Its packages are real and
+    // must list; count(DISTINCT) ignores the join's nulls, so
+    // such a group reports zero workloads rather than
+    // disappearing.
+    const workloadCount = countDistinct(schema.workloadContainers.workloadId);
+    const containerCount = countDistinct(schema.workloadContainers.id);
+
     return db
         .select({
             name: schema.components.name,
             version: schema.components.version,
             purl: sql<string | null>`min(${schema.components.purl})`,
             representativeId: sql<string>`min(${schema.components.id}::text)`,
-            imageCount: countDistinct(schema.images.id),
-            // LEFT JOIN, not inner: an image can be uploaded before
-            // any inventory references it. Its packages are real and
-            // must list; count(DISTINCT) ignores the join's nulls, so
-            // such a group reports zero workloads rather than
-            // disappearing.
-            workloadCount: countDistinct(schema.workloadContainers.workloadId),
-            containerCount: countDistinct(schema.workloadContainers.id),
+            imageCount,
+            workloadCount,
+            containerCount,
             clusterCount: countDistinct(schema.images.clusterId),
+            findingCount,
         })
         .from(schema.components)
         .innerJoin(schema.sboms, eq(schema.components.sbomId, schema.sboms.id))
         .innerJoin(schema.images, eq(schema.sboms.imageId, schema.images.id))
         .leftJoin(schema.workloadContainers, eq(schema.workloadContainers.imageId, schema.images.id))
+        .leftJoin(
+            ranked,
+            and(
+                eq(ranked.name, schema.components.name),
+                eq(ranked.version, sql`coalesce(${schema.components.version}, '')`),
+            ),
+        )
         .where(where)
         .groupBy(schema.components.name, schema.components.version)
-        .orderBy(asc(schema.components.name), asc(schema.components.version))
+        .orderBy(
+            desc(findingCount),
+            desc(imageCount),
+            desc(containerCount),
+            asc(schema.components.name),
+            asc(schema.components.version),
+        )
         .limit(limit)
         .offset(offset);
 }
@@ -411,7 +474,10 @@ export const packageRepository = {
             hasMatchingFinding(scope, options.control, options.severities, options.kev),
         );
 
-        const [rows, total] = await Promise.all([fetchPackagePage(where, limit, offset), countPackageGroups(where)]);
+        const [rows, total] = await Promise.all([
+            fetchPackagePage(scope, options.control, where, limit, offset),
+            countPackageGroups(where),
+        ]);
         if (rows.length === 0) {
             return { packages: [], total, limit, offset };
         }

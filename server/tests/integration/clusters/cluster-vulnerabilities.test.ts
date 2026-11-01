@@ -523,6 +523,7 @@ describe("cluster vulnerabilities tab", () => {
                 high: { application: 0, base: 0, all: 0 },
                 medium: { application: 0, base: 0, all: 0 },
                 low: { application: 0, base: 0, all: 0 },
+                byCluster: {},
             },
             limit: 50,
             offset: 0,

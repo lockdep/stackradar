@@ -2,7 +2,7 @@
 
 import { Fragment, useCallback, useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, Gauge, RefreshCw, TriangleAlert } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Gauge, RefreshCw, TriangleAlert } from 'lucide-react';
 import {
     Button,
     KevBadge,
@@ -26,7 +26,7 @@ import { apiFetch } from '@/lib/api-client';
 import { CONTROL_FILTERS, CONTROL_FILTER_HINT, CONTROL_FILTER_LABEL } from '@/lib/image-control';
 import { withTierParam, type TierCounts, type TierLens } from '@/lib/tier-lens';
 import { PAGE_SIZE } from '@/lib/constants';
-import { TOTAL_RISK_HINT } from '@/lib/risk';
+import { RISK_SCORE_DOCS_LABEL, RISK_SCORE_DOCS_URL, TOTAL_RISK_HINT } from '@/lib/risk';
 import { formatShortDigest } from '@/utils/formatters';
 import { shortDigest } from '@/utils/containerUtils';
 import type { ClusterRiskScoreFinding, ClusterRiskScoreImage, ClusterRiskScoreResponse } from '@/types/cluster';
@@ -252,16 +252,30 @@ export function RiskScoreBreakdown({
                         </p>
                     )}
                 </div>
-                <Button
-                    variant="secondary"
-                    onClick={handleRefresh}
-                    loading={isRefreshing}
-                    title="Refresh Risk Score breakdown"
-                    className="shrink-0 pl-2 pr-2"
-                >
-                    {!isRefreshing && <RefreshCw aria-hidden="true" className="size-3.5" />}
-                    <span className="sr-only">Refresh</span>
-                </Button>
+                <div className="flex shrink-0 items-center gap-3">
+                    {/* The whole model, written up once: this page is where the
+                        number is taken apart, so this is where its formula belongs
+                        (the Dashboard card keeps a one-line subtitle). */}
+                    <a
+                        href={RISK_SCORE_DOCS_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hidden items-center gap-1 text-xs text-ink-muted hover:text-accent hover:underline sm:inline-flex"
+                    >
+                        {RISK_SCORE_DOCS_LABEL}
+                        <ExternalLink aria-hidden="true" className="size-3" />
+                    </a>
+                    <Button
+                        variant="secondary"
+                        onClick={handleRefresh}
+                        loading={isRefreshing}
+                        title="Refresh Risk Score breakdown"
+                        className="pl-2 pr-2"
+                    >
+                        {!isRefreshing && <RefreshCw aria-hidden="true" className="size-3.5" />}
+                        <span className="sr-only">Refresh</span>
+                    </Button>
+                </div>
             </div>
 
             {error && (
