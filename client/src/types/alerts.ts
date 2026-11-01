@@ -19,6 +19,9 @@ export interface AlertSummary {
     webhookHost: string | null;
 }
 
+/** Where every Slack incoming webhook lives; Slack has no other host for them. */
+const SLACK_WEBHOOK_HOST = 'hooks.slack.com';
+
 /** The path the summary is read from, for `useResource`. */
 export function alertSummaryPath(orgId: string): string {
     return `/api/organizations/${orgId}/notifications/summary`;
@@ -26,14 +29,15 @@ export function alertSummaryPath(orgId: string): string {
 
 /**
  * One line saying where alerts go: "Enabled · Slack: hooks.slack.com · email
- * to 3 owners and admins", or what stands in its way. A Slack host is named
- * Slack; any other incoming webhook (Teams, Mattermost, Discord) is a webhook.
+ * to 3 owners and admins", or what stands in its way. Slack's one webhook
+ * host is named Slack — an exact match, so a look-alike host is not; any
+ * other incoming webhook (Teams, Mattermost, Discord) is a webhook.
  */
 export function alertSummaryLine(s: AlertSummary): string {
     if (!s.available) return 'Not included in this plan';
     const parts: string[] = [];
     if (s.webhookConfigured && s.webhookHost) {
-        const label = s.webhookHost.endsWith('hooks.slack.com') ? 'Slack' : 'Webhook';
+        const label = s.webhookHost === SLACK_WEBHOOK_HOST ? 'Slack' : 'Webhook';
         parts.push(`${label}: ${s.webhookHost}`);
     }
     if (s.emailChannel && s.emailEnabled) {

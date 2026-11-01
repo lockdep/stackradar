@@ -129,6 +129,15 @@ describe('alertSummaryLine', () => {
         );
     });
 
+    it('names Slack only for Slack’s exact host, never a look-alike', () => {
+        expect(alertSummaryLine({ ...SUMMARY, webhookHost: 'evilhooks.slack.com' })).toContain(
+            'Webhook: evilhooks.slack.com',
+        );
+        expect(alertSummaryLine({ ...SUMMARY, webhookHost: 'hooks.slack.com.example' })).toContain(
+            'Webhook: hooks.slack.com.example',
+        );
+    });
+
     it('calls a non-Slack host a webhook and counts one recipient in the singular', () => {
         expect(alertSummaryLine({ ...SUMMARY, webhookHost: 'acme.webhook.office.com', recipientCount: 1 })).toBe(
             'Enabled · Webhook: acme.webhook.office.com · email to 1 owner or admin',
