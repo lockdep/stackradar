@@ -17,6 +17,7 @@ description: >-
 | `ghcr.io/lockdep/stackradar-client:<version>` | same | same |
 | `…:snapshot` of both | `.github/workflows/snapshot.yaml` on every merge to `main` | `dev/docker-compose.yml` |
 | Helm chart `oci://ghcr.io/lockdep/helm-charts/stackradar` | the `lockdep/helm-charts` repository | self-hosted installs (`docs/self-hosting/helm.md`) |
+| Chart bump pull request in `lockdep/helm-charts` (`appVersion` to the new release) | the `chart` job of `publish.yaml` via `scripts/release-bump-chart.mjs`; needs `HELM_CHARTS_TOKEN` | the maintainer: merge, then run that repository's Helm Release workflow |
 
 Versioned tags are never rebuilt; `RELEASING.md` is the process. The
 scanner is its own chart and repository (`lockdep/stackradar-scanner`).

@@ -18,6 +18,11 @@ name: Publish
 # version (release.yaml committed it), and the workflow refuses to continue
 # if it does not, so the version syft reads out of the image is the one on
 # the tin.
+#
+# The one version it does move lives in another repository: the last job
+# opens the pull request in lockdep/helm-charts that bumps the chart's
+# `appVersion` to this release (what `helm install` runs and what Artifact
+# Hub shows as the app version), when the HELM_CHARTS_TOKEN secret is set.
 
 on:
   push:
@@ -351,6 +356,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # release notes, assets, un-draft
+    outputs:
+      # The migrations this release adds, as `server/<file> client/<file>`,
+      # for the chart bump's UPGRADING.md entry.
+      migrations: ${{ steps.notes.outputs.migrations }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ github.ref_name }}
@@ -389,6 +398,7 @@ jobs:
       # not remembered), then the generated notes from the pull requests'
       # labels (.github/release.yml).
       - name: Compose the release notes
+        id: notes
         run: |
           set -euo pipefail
           server_digest="$(cut -d' ' -f2 out/digest-server.txt)"
@@ -401,6 +411,12 @@ jobs:
           fi
           server_migrations="$(git diff --name-only --diff-filter=A "${range}" -- 'server/drizzle/*.sql' | sed 's|^server/drizzle/||' || true)"
           client_migrations="$(git diff --name-only --diff-filter=A "${range}" -- 'client/drizzle/*.sql' | sed 's|^client/drizzle/||' || true)"
+
+          # The same list, one line, for the chart job.
+          migrations=""
+          for f in ${server_migrations}; do migrations+="server/${f} "; done
+          for f in ${client_migrations}; do migrations+="client/${f} "; done
+          echo "migrations=${migrations% }" >> "$GITHUB_OUTPUT"
 
           {
             echo "## Images"
@@ -460,3 +476,125 @@ jobs:
           gh release edit "${TAG}" --notes-file notes.md
           gh release edit "${TAG}" --draft=false --latest="${LATEST}"
           echo "Published ${TAG}: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG}" >> "$GITHUB_STEP_SUMMARY"
+
+  # The chart's `appVersion` is what `helm install` runs by default and what
+  # Artifact Hub shows as the app version, and only a chart release from
+  # lockdep/helm-charts moves it. This job opens that repository's bump pull
+  # request (`appVersion`, the chart's own `version`, the
+  # `artifacthub.io/images` annotation, an UPGRADING.md entry and the
+  # helm-docs README; scripts/release-bump-chart.mjs) so the post-release
+  # step is a review and a merge, not a thing to remember. Stable releases
+  # that are the highest version only: a prerelease or a bugfix of an older
+  # minor must never move the chart, and the script refuses to move
+  # `appVersion` backwards on its own account. Without the HELM_CHARTS_TOKEN
+  # secret the job says so and exits 0, so a fork is never blocked by someone
+  # else's chart.
+  chart:
+    name: Open the chart bump pull request
+    needs: [verify, publish]
+    if: needs.verify.outputs.latest == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # the writing happens in the other repository, with its own token
+    env:
+      VERSION: ${{ needs.verify.outputs.version }}
+      MIGRATIONS: ${{ needs.publish.outputs.migrations }}
+    steps:
+      - name: Check for the chart repository token
+        id: token
+        env:
+          HELM_CHARTS_TOKEN: ${{ secrets.HELM_CHARTS_TOKEN }}
+        run: |
+          if [[ -z "${HELM_CHARTS_TOKEN}" ]]; then
+            echo "HELM_CHARTS_TOKEN is not set: no chart bump to open. RELEASING.md has the manual steps."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.token.outputs.enabled == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Check out lockdep/helm-charts
+        if: steps.token.outputs.enabled == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lockdep/helm-charts
+          token: ${{ secrets.HELM_CHARTS_TOKEN }}
+          path: helm-charts
+
+      # `changed=false` when the chart already carries this appVersion (a
+      # hand bump, a re-run): then nothing below runs and nothing is opened.
+      - name: Bump the chart
+        if: steps.token.outputs.enabled == 'true'
+        id: bump
+        run: node scripts/release-bump-chart.mjs helm-charts/charts/stackradar "${VERSION}" --migrations "${MIGRATIONS}"
+
+      # The chart README is generated from the chart by helm-docs. Best
+      # effort: that repository's Helm Docs workflow regenerates it after
+      # the merge in any case.
+      - name: Regenerate the chart README
+        if: steps.bump.outputs.changed == 'true'
+        working-directory: helm-charts
+        run: make docs || echo "::warning::helm-docs failed; the Helm Docs workflow in lockdep/helm-charts regenerates the README after the merge."
+
+      - name: Write the pull request body
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          CHART_VERSION: ${{ steps.bump.outputs.chart_version }}
+          PREVIOUS_CHART_VERSION: ${{ steps.bump.outputs.previous_chart_version }}
+          PREVIOUS_APP_VERSION: ${{ steps.bump.outputs.previous_app_version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Bumps the chart for [StackRadar ${VERSION}](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/v${VERSION}): \`appVersion\` from ${PREVIOUS_APP_VERSION} to ${VERSION}, chart \`version\` from ${PREVIOUS_CHART_VERSION} to ${CHART_VERSION}, the \`artifacthub.io/images\` annotation, an UPGRADING.md entry and the helm-docs README. Nothing in the templates or values changed. Opened by [publish.yaml](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
+            echo
+            echo "## Schema migrations"
+            echo
+            if [[ -z "${MIGRATIONS}" ]]; then
+              echo "None: rolling back to the previous chart version is a full rollback."
+            else
+              echo "The app release applies these at start-up (\`MIGRATE_ON_START\`); a migrated database does not roll back by rolling back the chart:"
+              echo
+              for m in ${MIGRATIONS}; do printf -- "- \`%s\`\n" "${m}"; done
+            fi
+            echo
+            echo "## Before merging"
+            echo
+            echo "- [ ] The UPGRADING.md entry is right. It says no value was renamed, removed or re-defaulted, which is true of this diff; if ${VERSION} needs a chart change (a new value, a renamed environment variable), add it to this pull request and to the entry."
+            echo "- [ ] Helm CI is green."
+            echo "- [ ] After the merge, run the **Helm Release** workflow. Artifact Hub reads the new \`appVersion\` from the published chart."
+          } > "${RUNNER_TEMP}/chart-pr.md"
+          cat "${RUNNER_TEMP}/chart-pr.md"
+
+      # The same action the chart repository's own Helm Docs workflow uses.
+      # Commits as github-actions[bot], signed off; the pull request is
+      # opened as the token's owner.
+      - name: Open the pull request
+        if: steps.bump.outputs.changed == 'true'
+        id: pr
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          path: helm-charts
+          token: ${{ secrets.HELM_CHARTS_TOKEN }}
+          branch: chore/stackradar-${{ steps.bump.outputs.chart_version }}
+          delete-branch: true
+          signoff: true
+          commit-message: "Release chart ${{ steps.bump.outputs.chart_version }}: StackRadar ${{ env.VERSION }}"
+          title: "Release chart ${{ steps.bump.outputs.chart_version }}: StackRadar ${{ env.VERSION }}"
+          body-path: ${{ runner.temp }}/chart-pr.md
+
+      - name: Summarise
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          PR_URL: ${{ steps.pr.outputs.pull-request-url }}
+          CHART_VERSION: ${{ steps.bump.outputs.chart_version }}
+        run: |
+          {
+            echo "## Chart bump"
+            echo
+            echo "[${PR_URL}](${PR_URL}) bumps the chart to \`${CHART_VERSION}\` with \`appVersion\` \`${VERSION}\`. Review it, merge it, then run the chart repository's Helm Release workflow."
+          } >> "$GITHUB_STEP_SUMMARY"
