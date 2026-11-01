@@ -1,6 +1,6 @@
 {
   "name": "client",
-  "version": "0.3.0",
+  "version": "0.4.0-snapshot",
   "private": true,
   "description": "StackRadar web UI and BFF (Next.js) in front of the API server",
   "license": "AGPL-3.0-only",
