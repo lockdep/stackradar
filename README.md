@@ -37,7 +37,7 @@ StackRadar is open source under AGPL-3.0. Self-host it with one
 `helm install`, or use the hosted version at
 [app.stackradar.io](https://app.stackradar.io).
 
-![The StackRadar dashboard: critical, high, medium and low counts with their seven-day trend, and the Risk Score, vulnerability, container and package trends across the organisation](docs/images/dashboard.png)
+![The StackRadar dashboard with sample data: critical, high, medium and low vulnerability counts with their 30-day trends, and the running images that picked up new vulnerabilities, with their cluster, namespace, when, and the fix](docs/images/dashboard.png)
 
 ## Features
 
