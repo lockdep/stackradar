@@ -64,6 +64,8 @@ StackRadar is open source under AGPL-3.0. Self-host it with one
   not on the list.
 - **CycloneDX in and out.** Upload an SBOM by hand, download the stored SBOM
   of any image.
+- **Findings as CSV.** Any vulnerability list, under its filters, downloads
+  as one row per finding for a ticket or a spreadsheet.
 - **Sign-in your way.** Local username and password, any OpenID Connect
   provider, GitHub or Google.
 - **One Postgres, migrations on boot, no telemetry.**

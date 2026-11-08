@@ -9,9 +9,19 @@
  * neutral word rather than producing `-abcd1234.cyclonedx.json`.
  */
 export function sbomDocumentFilename(repository: string | null, digest: string | null): string {
+    return `${imageFileStem(repository, digest)}.cyclonedx.json`;
+}
+
+/** `<image>-<digest8>`, the two halves above without an extension — the findings export names its file by it too. */
+export function imageFileStem(repository: string | null, digest: string | null): string {
     const lastSegment = repository?.split("/").filter(Boolean).pop() ?? "";
-    const image = lastSegment.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "image";
+    const image = fileStem(lastSegment) || "image";
     const hex = digest?.replace(/^sha256:/, "").slice(0, 8) ?? "";
     const digest8 = /^[0-9a-f]{8}$/i.test(hex) ? hex.toLowerCase() : "unknown";
-    return `${image}-${digest8}.cyclonedx.json`;
+    return `${image}-${digest8}`;
+}
+
+/** `text` reduced to filename-safe characters, runs of anything else becoming one hyphen; empty when nothing survives. */
+export function fileStem(text: string): string {
+    return text.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 }

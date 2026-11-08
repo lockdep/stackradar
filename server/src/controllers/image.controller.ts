@@ -15,6 +15,8 @@ import {
 import { REPORTED_SEVERITIES } from "../db/findings.js";
 import { createLogger, createQueryTimer } from "../lib/logger.js";
 import { asAuthed } from "../middleware/auth.js";
+import { sendFindingsCsv } from "../services/findings-export.service.js";
+import { imageFileStem } from "../lib/sbom-filename.js";
 
 const log = createLogger("image-controller");
 
@@ -174,23 +176,34 @@ export const imageController = {
                 .map((s) => s.trim().toLowerCase())
                 .filter((s) => s === "unscored" || (REPORTED_SEVERITIES as readonly string[]).includes(s));
 
+            const options = {
+                severities,
+                kev: query.kev === "true",
+                search: query.search,
+                tiers: parseTierParam(query.tier),
+                sort: query.sort,
+                order: query.order,
+                limit: query.limit,
+                offset: query.offset,
+            };
+
+            if (query.format === "csv") {
+                /* The file is named after the image, so this one path reads
+                   it — and checks the org first, or the name would leak. */
+                const image = await time("findImage", imageRepository.findById(id));
+                if (!image || image.orgId !== orgId) {
+                    throw new AppError(404, "Image not found");
+                }
+                const scopeName = imageFileStem(image.repository, image.digest);
+                await time("exportFindingsCsv", sendFindingsCsv(res, { orgId, imageId: id }, options, scopeName));
+                return;
+            }
+
             /* The org is in the scope itself, so another org's image id
                lists nothing — no separate ownership read. */
             const page = await time(
                 "findVulnerabilities",
-                vulnerabilityRepository.findVulnerabilities(
-                    { orgId, imageId: id },
-                    {
-                        severities,
-                        kev: query.kev === "true",
-                        search: query.search,
-                        tiers: parseTierParam(query.tier),
-                        sort: query.sort,
-                        order: query.order,
-                        limit: query.limit,
-                        offset: query.offset,
-                    },
-                ),
+                vulnerabilityRepository.findVulnerabilities({ orgId, imageId: id }, options),
             );
 
             res.json(page);

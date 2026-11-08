@@ -28,6 +28,7 @@ import { getPlanLimits } from "../config/plans.js";
 import { isUniqueViolationOn } from "../lib/pg-errors.js";
 import { apiKeyVault, ApiKeyVaultError } from "../lib/api-key-vault.js";
 import { asAuthed } from "../middleware/auth.js";
+import { sendFindingsCsv } from "../services/findings-export.service.js";
 
 const log = createLogger("cluster.controller");
 
@@ -341,24 +342,28 @@ export const clusterController = {
                 .map((s) => s.trim().toLowerCase())
                 .filter((s) => s === "unscored" || (REPORTED_SEVERITIES as readonly string[]).includes(s));
 
+            const options = {
+                severities,
+                kev: query.kev === "true",
+                search: query.search,
+                tiers: parseTierParam(query.tier),
+                control: query.control,
+                /* The cluster is the path's; `?cluster=` means nothing here. */
+                within: { namespace: query.namespace },
+                sort: query.sort,
+                order: query.order,
+                limit: query.limit,
+                offset: query.offset,
+            };
+
+            if (query.format === "csv") {
+                await time("exportFindingsCsv", sendFindingsCsv(res, { clusterId: cluster.id }, options, cluster.name));
+                return;
+            }
+
             const page = await time(
                 "findVulnerabilities",
-                vulnerabilityRepository.findVulnerabilities(
-                    { clusterId: cluster.id },
-                    {
-                        severities,
-                        kev: query.kev === "true",
-                        search: query.search,
-                        tiers: parseTierParam(query.tier),
-                        control: query.control,
-                        /* The cluster is the path's; `?cluster=` means nothing here. */
-                        within: { namespace: query.namespace },
-                        sort: query.sort,
-                        order: query.order,
-                        limit: query.limit,
-                        offset: query.offset,
-                    },
-                ),
+                vulnerabilityRepository.findVulnerabilities({ clusterId: cluster.id }, options),
             );
 
             res.json(page);

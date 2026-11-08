@@ -86,6 +86,11 @@ export const clusterVulnerabilitiesQuerySchema = z.object({
         .optional()
         .catch(undefined),
     order: z.enum(["asc", "desc"]).optional().catch(undefined),
+    /* `csv` downloads every finding the filters match, one row each, in
+       place of the JSON page (`services/findings-export.service.ts`). The
+       file has its own order and no pages, so `sort`, `order`, `limit` and
+       `offset` are not read. Anything else is the page. */
+    format: z.enum(["json", "csv"]).optional().catch(undefined),
     ...kevQueryField,
     ...tierQueryField,
     ...controlQueryField,
