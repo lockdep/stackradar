@@ -439,7 +439,9 @@ export const jobService = {
                     componentsScanned: scanComponentsScanned,
                     delta: scanDelta,
                 });
-                await updateSnapshotsForScan(job);
+                if (job.type !== "scheduled_scan") {
+                    await updateSnapshotsForScan(job);
+                }
             }
         } catch (error) {
             if (error instanceof OsvMirrorNotReadyError) {
