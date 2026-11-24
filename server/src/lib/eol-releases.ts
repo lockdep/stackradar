@@ -42,7 +42,7 @@
  * below, kept exported (and knip-ignored via this tag) so refreshing the
  * table means updating it, reviewed like the data edit it documents.
  */
-export const EOL_DATA_AS_OF = "2026-08-16";
+export const EOL_DATA_AS_OF = "2026-10-24";
 
 /**
  * `family → release → date security fixes end`, families spelled as OSV
@@ -68,12 +68,14 @@ const EOL_DATES: Record<string, Record<string, string>> = {
         "3.19": "2025-11-01",
         "3.20": "2026-04-01",
         "3.21": "2026-11-01",
-        "3.22": "2027-05-31",
+        "3.22": "2027-05-01",
+        "3.23": "2027-11-01",
+        "3.24": "2028-06-01",
     },
     // Debian: the date LTS ends — the last point a free security fix ships.
     Debian: {
         "8": "2020-06-30",
-        "9": "2022-06-30",
+        "9": "2022-07-01",
         "10": "2024-06-30",
         "11": "2026-08-31",
         "12": "2028-06-30",
@@ -82,18 +84,21 @@ const EOL_DATES: Record<string, Record<string, string>> = {
     // Ubuntu: end of standard support. Pro/ESM coverage is recognised by the
     // ecosystem string itself (`Ubuntu:Pro:…`), not by these dates.
     Ubuntu: {
-        "14.04": "2019-04-25",
-        "16.04": "2021-04-30",
+        "14.04": "2019-04-02",
+        "16.04": "2021-04-02",
         "18.04": "2023-05-31",
         "20.04": "2025-05-31",
         "21.10": "2022-07-14",
         "22.04": "2027-06-01",
         "22.10": "2023-07-20",
-        "23.04": "2024-01-25",
-        "23.10": "2024-07-11",
+        "23.04": "2024-01-20",
+        "23.10": "2024-07-12",
         "24.04": "2029-05-31",
-        "24.10": "2025-07-11",
-        "25.04": "2026-01-31",
+        "24.10": "2025-07-10",
+        "25.04": "2026-01-17",
+        "25.10": "2026-07-01",
+        "26.04": "2031-05-29",
+        "26.10": "2027-07-01",
     },
 };
 
