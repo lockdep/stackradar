@@ -3,6 +3,9 @@
 # Majors are left to a human in every ecosystem: a Next.js or Drizzle major
 # is a migration, not an update. The seven-day cooldown skips releases that
 # get yanked in their first week.
+# Each entry groups all of its updates into a single pull request per week,
+# so a week of dependency updates arrives as one reviewable change per
+# ecosystem instead of one pull request per package.
 version: 2
 updates:
 - package-ecosystem: npm
@@ -12,6 +15,10 @@ updates:
   cooldown:
     default-days: 7
   labels: [ "dependencies" ]
+  groups:
+    server-npm:
+      patterns:
+      - "*"
   ignore:
   - dependency-name: "*"
     update-types:
@@ -23,6 +30,10 @@ updates:
   cooldown:
     default-days: 7
   labels: [ "dependencies" ]
+  groups:
+    client-npm:
+      patterns:
+      - "*"
   ignore:
   - dependency-name: "*"
     update-types:
@@ -34,6 +45,10 @@ updates:
   cooldown:
     default-days: 7
   labels: [ "dependencies" ]
+  groups:
+    e2e-npm:
+      patterns:
+      - "*"
   ignore:
   - dependency-name: "*"
     update-types:
@@ -47,6 +62,10 @@ updates:
   cooldown:
     default-days: 7
   labels: [ "dependencies" ]
+  groups:
+    docker-images:
+      patterns:
+      - "*"
   ignore:
   - dependency-name: "*"
     update-types:
@@ -58,3 +77,7 @@ updates:
   cooldown:
     default-days: 7
   labels: [ "dependencies" ]
+  groups:
+    github-actions:
+      patterns:
+      - "*"
