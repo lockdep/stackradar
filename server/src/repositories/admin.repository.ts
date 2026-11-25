@@ -12,7 +12,8 @@ import {
     isActiveAdvisory,
     isWithdrawnAdvisory,
     isActiveAffectedPackage,
-    isUnscoredAdvisory,
+    mirrorAdvisoryCounts,
+    activeAffectedPackageCount,
     EMPTY_SEVERITY,
     addSeverity,
     componentCountsBySbom,
@@ -254,29 +255,17 @@ export const adminRepository = {
     },
 
     async getVulnerabilityStats() {
-        const [totalRow, withdrawnRow, unscoredRow, severityRows, affectedPkgRow] = await Promise.all([
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isActiveAdvisory()),
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isWithdrawnAdvisory()),
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isUnscoredAdvisory()),
-            db
-                .select({ level: schema.vulnerabilities.severityLevel, total: count() })
-                .from(schema.vulnerabilities)
-                .where(isActiveAdvisory())
-                .groupBy(schema.vulnerabilities.severityLevel),
-            db.select({ total: count() }).from(schema.vulnerabilityAffectedPackages).where(isActiveAffectedPackage()),
+        const [advisories, affectedPackagesTotal] = await Promise.all([
+            mirrorAdvisoryCounts(),
+            activeAffectedPackageCount(),
         ]);
 
-        const bySeverity: Record<string, number> = {};
-        for (const row of severityRows) {
-            bySeverity[row.level ?? "unknown"] = Number(row.total);
-        }
-
         return {
-            total: Number(totalRow[0]?.total ?? 0),
-            withdrawn: Number(withdrawnRow[0]?.total ?? 0),
-            bySeverity,
-            withoutCvssScore: Number(unscoredRow[0]?.total ?? 0),
-            affectedPackagesTotal: Number(affectedPkgRow[0]?.total ?? 0),
+            total: advisories.total,
+            withdrawn: advisories.withdrawn,
+            bySeverity: advisories.bySeverity,
+            withoutCvssScore: advisories.withoutCvssScore,
+            affectedPackagesTotal,
         };
     },
 
@@ -289,7 +278,7 @@ export const adminRepository = {
      */
     async getWithdrawnStats(): Promise<AdminWithdrawnStats> {
         const [advisoryRow, staleRow, driftRow] = await Promise.all([
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isWithdrawnAdvisory()),
+            mirrorAdvisoryCounts(),
 
             db
                 .select({
@@ -327,7 +316,7 @@ export const adminRepository = {
         ]);
 
         return {
-            advisories: Number(advisoryRow[0]?.total ?? 0),
+            advisories: advisoryRow.withdrawn,
             staleFindings: {
                 links: Number(staleRow[0]?.links ?? 0),
                 components: Number(staleRow[0]?.components ?? 0),

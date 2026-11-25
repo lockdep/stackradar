@@ -246,3 +246,48 @@ describe("admin mirror figures exclude withdrawn advisories", () => {
         expect(stats.vulnerabilities.affectedPackagesTotal).toBe(2);
     });
 });
+
+describe("the admin page's whole-mirror scans", () => {
+    it("reports every generation, and which one is live, from one pass", async () => {
+        await seedWithdrawnScenario();
+
+        const osv = await adminStatusRepository.getOsvStatus();
+
+        // No osv_sync_state row: generation 1 — the column default — is live.
+        expect(osv.generations).toEqual([
+            { generation: 1, rowCount: 3, isCurrent: true },
+            { generation: 2, rowCount: 1, isCurrent: false },
+        ]);
+    });
+
+    it("counts only the live generation's usable rows as the entry total", async () => {
+        await seedWithdrawnScenario();
+
+        // Generation 1 holds three rows, one flagged withdrawn. The generation 2
+        // row is not withdrawn either, and must not be added.
+        const stats = await adminRepository.getVulnerabilityStats();
+        expect(stats.affectedPackagesTotal).toBe(2);
+        expect((await adminStatusRepository.getSystemStats()).vulnerabilities.affectedPackagesTotal).toBe(2);
+    });
+
+    it("shares one scan between callers that overlap, and never serves it afterwards", async () => {
+        await seedWithdrawnScenario();
+        const { mirrorAdvisoryCounts, affectedPackageGenerationCounts } =
+            await import("../../../src/repositories/admin-helpers.js");
+
+        // A reload while the first load is still scanning must join it, not
+        // start a second pass over the mirror.
+        const first = mirrorAdvisoryCounts();
+        expect(mirrorAdvisoryCounts()).toBe(first);
+        const firstGenerations = affectedPackageGenerationCounts();
+        expect(affectedPackageGenerationCounts()).toBe(firstGenerations);
+        expect((await first).total).toBe(1);
+        await firstGenerations;
+
+        // Settled means forgotten: the next caller reads the database again.
+        await getTestDb().delete(schema.componentVulnerabilities);
+        await getTestDb().delete(schema.vulnerabilities);
+        expect((await mirrorAdvisoryCounts()).total).toBe(0);
+        expect(await affectedPackageGenerationCounts()).toEqual([]);
+    });
+});
