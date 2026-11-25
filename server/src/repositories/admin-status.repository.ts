@@ -5,7 +5,7 @@
  * past `requireAdmin`.
  */
 
-import { count, countDistinct, sql, isNull, isNotNull, desc, asc, eq, and, inArray } from "drizzle-orm";
+import { count, countDistinct, sql, isNull, desc, asc, eq, and, inArray } from "drizzle-orm";
 import { db, schema } from "../db/index.js";
 import { isFeedStale, FEED_STALE_AFTER_HOURS } from "../lib/feed-health.js";
 import type { JobStatus } from "../db/schema/jobs.js";
@@ -14,10 +14,9 @@ import { config } from "../config/index.js";
 import { ECOSYSTEMS_ENV_VAR, parseEcosystems } from "../osv-sync/ecosystems.js";
 
 import {
-    isActiveAdvisory,
-    isWithdrawnAdvisory,
-    isActiveAffectedPackage,
-    isUnscoredAdvisory,
+    mirrorAdvisoryCounts,
+    affectedPackageGenerationCounts,
+    activeAffectedPackageCount,
     IMAGE_STATE_FILTERS,
 } from "./admin-helpers.js";
 
@@ -399,11 +398,8 @@ export const adminStatusRepository = {
             jobStatusRows,
             jobTypeRows,
             jobHealth,
-            vulnCountRow,
-            withdrawnVulnRow,
-            unscoredVulnRow,
-            vulnSeverityRows,
-            affectedPkgRow,
+            advisoryCounts,
+            affectedPackagesTotal,
             sbomRow,
             componentRow,
             componentVulnRow,
@@ -437,19 +433,12 @@ export const adminStatusRepository = {
 
             queueHealth(),
 
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isActiveAdvisory()),
+            // One scan of `vulnerabilities` and one of the affected-package
+            // table, each shared with whichever other tab is asking at the
+            // same moment — see admin-helpers.ts.
+            mirrorAdvisoryCounts(),
 
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isWithdrawnAdvisory()),
-
-            db.select({ total: count() }).from(schema.vulnerabilities).where(isUnscoredAdvisory()),
-
-            db
-                .select({ level: schema.vulnerabilities.severityLevel, total: count() })
-                .from(schema.vulnerabilities)
-                .where(isActiveAdvisory())
-                .groupBy(schema.vulnerabilities.severityLevel),
-
-            db.select({ total: count() }).from(schema.vulnerabilityAffectedPackages).where(isActiveAffectedPackage()),
+            activeAffectedPackageCount(),
 
             db.select({ total: count() }).from(schema.sboms),
 
@@ -492,11 +481,6 @@ export const adminStatusRepository = {
             byType[row.type] = Number(row.total);
         }
 
-        const bySeverity: Record<string, number> = {};
-        for (const row of vulnSeverityRows) {
-            bySeverity[row.level ?? "unknown"] = Number(row.total);
-        }
-
         return {
             organizations: {
                 total: Number(orgRows[0]?.total ?? 0),
@@ -512,11 +496,11 @@ export const adminStatusRepository = {
                 health: jobHealth,
             },
             vulnerabilities: {
-                total: Number(vulnCountRow[0]?.total ?? 0),
-                withdrawn: Number(withdrawnVulnRow[0]?.total ?? 0),
-                bySeverity,
-                withoutCvssScore: Number(unscoredVulnRow[0]?.total ?? 0),
-                affectedPackagesTotal: Number(affectedPkgRow[0]?.total ?? 0),
+                total: advisoryCounts.total,
+                withdrawn: advisoryCounts.withdrawn,
+                bySeverity: advisoryCounts.bySeverity,
+                withoutCvssScore: advisoryCounts.withoutCvssScore,
+                affectedPackagesTotal,
             },
             sboms: {
                 total: Number(sbomRow[0]?.total ?? 0),
@@ -560,19 +544,7 @@ export const adminStatusRepository = {
                 })
                 .from(schema.osvSyncFailures)
                 .groupBy(schema.osvSyncFailures.errorType),
-            // Unscoped by generation on purpose — the one query in the codebase that
-            // is. Every other reader must call isCurrentGeneration(); this one exists
-            // precisely to show what the others are hiding: a rebuild's progress, or
-            // rows orphaned by one that died. Grouping on the indexed generation
-            // column keeps it to an index-only scan, and this is an admin page.
-            db
-                .select({
-                    generation: schema.vulnerabilityAffectedPackages.generation,
-                    total: count(),
-                })
-                .from(schema.vulnerabilityAffectedPackages)
-                .groupBy(schema.vulnerabilityAffectedPackages.generation)
-                .orderBy(asc(schema.vulnerabilityAffectedPackages.generation)),
+            affectedPackageGenerationCounts(),
         ]);
 
         const state = stateRows[0] ?? null;
@@ -592,12 +564,6 @@ export const adminStatusRepository = {
             if (bucket === failed) byType[row.errorType] = total;
         }
 
-        // Falls back to the column default rather than to "nothing is current" when
-        // the state row is missing, matching currentGeneration()'s COALESCE — so a
-        // fresh database shows generation 1 as live instead of flagging every row
-        // as orphaned.
-        const currentGen = state?.affectedPkgGeneration ?? 1;
-
         return {
             state: state
                 ? {
@@ -615,10 +581,14 @@ export const adminStatusRepository = {
                   }
                 : null,
             configuredEcosystems: parseEcosystems(process.env[ECOSYSTEMS_ENV_VAR], edition),
-            generations: generationRows.map((g) => ({
-                generation: g.generation,
-                rowCount: Number(g.total),
-                isCurrent: g.generation === currentGen,
+            // `isCurrent` is decided in SQL against currentGeneration(), whose
+            // COALESCE falls back to the column default when the state row is
+            // missing — so a fresh database shows generation 1 as live instead
+            // of flagging every row as orphaned.
+            generations: generationRows.map(({ generation, rowCount, isCurrent }) => ({
+                generation,
+                rowCount,
+                isCurrent,
             })),
             recentRuns: recentRuns.map((r) => ({
                 id: r.id,
@@ -640,22 +610,14 @@ export const adminStatusRepository = {
     },
 
     async getFeedsStatus(): Promise<AdminFeedsStatus> {
-        const [epssRows, kevRows, ahRows, epssScoredRow, kevListedRow, ahPackagesRow, attributionsRow] =
-            await Promise.all([
-                db.select().from(schema.epssSyncState).limit(1),
-                db.select().from(schema.kevSyncState).limit(1),
-                db.select().from(schema.artifactHubSyncState).limit(1),
-                db
-                    .select({ total: count() })
-                    .from(schema.vulnerabilities)
-                    .where(isNotNull(schema.vulnerabilities.epssScore)),
-                db
-                    .select({ total: count() })
-                    .from(schema.vulnerabilities)
-                    .where(isNotNull(schema.vulnerabilities.kevListedAt)),
-                db.select({ total: count() }).from(schema.artifactHubPackages),
-                db.select({ total: count() }).from(schema.chartAttributions),
-            ]);
+        const [epssRows, kevRows, ahRows, advisoryCounts, ahPackagesRow, attributionsRow] = await Promise.all([
+            db.select().from(schema.epssSyncState).limit(1),
+            db.select().from(schema.kevSyncState).limit(1),
+            db.select().from(schema.artifactHubSyncState).limit(1),
+            mirrorAdvisoryCounts(),
+            db.select({ total: count() }).from(schema.artifactHubPackages),
+            db.select({ total: count() }).from(schema.chartAttributions),
+        ]);
 
         const epss = epssRows[0] ?? null;
         const kev = kevRows[0] ?? null;
@@ -676,7 +638,7 @@ export const adminStatusRepository = {
                       }
                     : null,
                 stale: isFeedStale(epss?.lastSyncedAt),
-                advisoriesWithScore: Number(epssScoredRow[0]?.total ?? 0),
+                advisoriesWithScore: advisoryCounts.withEpssScore,
             },
             kev: {
                 state: kev
@@ -692,7 +654,7 @@ export const adminStatusRepository = {
                       }
                     : null,
                 stale: isFeedStale(kev?.lastSyncedAt),
-                advisoriesListed: Number(kevListedRow[0]?.total ?? 0),
+                advisoriesListed: advisoryCounts.kevListed,
             },
             artifactHub: {
                 state: ah
